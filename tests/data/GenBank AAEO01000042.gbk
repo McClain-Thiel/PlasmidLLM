@@ -1,0 +1,93 @@
+LOCUS       GenBank_AAEO01000042            3380 bp    DNA     linear   BCT 03-JUN-2004
+DEFINITION  Bacillus anthracis str. A1055 plasmid pXO2 cont271, whole genome
+            shotgun sequence.
+ACCESSION   GenBank_AAEO01000042 AAEO01000000
+VERSION     GenBank_AAEO01000042.1
+DBLINK      BioProject: PRJNA10795
+            BioSample: SAMN02435882
+KEYWORDS    WGS.
+SOURCE      Bacillus anthracis str. A1055
+  ORGANISM  Bacillus anthracis str. A1055
+            Bacteria; Bacillota; Bacilli; Bacillales; Bacillaceae; Bacillus;
+            Bacillus cereus group.
+REFERENCE   1  (bases 1 to 3380)
+  AUTHORS   Ravel,J., Rasko,D.A., Shumway,M.F., Jiang,L., Cer,R.Z.,
+            Federova,N.B., Wilson,M., Stanley,S., Decker,S., Read,T.D.,
+            Salzberg,S. and Fraser,C.M.
+  TITLE     Bacillus anthracis comparative genomics
+  JOURNAL   Unpublished
+REFERENCE   2  (bases 1 to 3380)
+  AUTHORS   Ravel,J., Rasko,D.A., Shumway,M.F., Jiang,L., Cer,R.Z.,
+            Federova,N.B., Wilson,M., Stanley,S., Decker,S., Read,T.D.,
+            Salzberg,S. and Fraser,C.M.
+  TITLE     Direct Submission
+  JOURNAL   Submitted (02-JUN-2004) Microbial Genomics, The Institute for
+            Genomic Research, 9712 Medical Center Drive, Rockville, MD 20850,
+            USA
+FEATURES             Location/Qualifiers
+     source          1..3380
+                     /organism="Bacillus anthracis str. A1055"
+                     /mol_type="genomic DNA"
+                     /strain="A1055"
+                     /db_xref="taxon:280355"
+                     /plasmid="pXO2"
+ORIGIN      
+        1 agactatgta tctgttgaag aaattgcaaa agttacaatg tatatagagg caagtaggct
+       61 tcgttatact agtaattata aaaaggtatt acttgtcaca ggagaaagtg aaagttgggc
+      121 agagtatcta gctgctactt tggcaaaaag gtttggtgat aaaatacaaa tttcaactgt
+      181 tttttttgct aaaaagagtg atcacgatgt taatgctgac ttaggttcaa cccctattat
+      241 atgtattaat tctatcccta cagaacgcga ttacaccaat atacagtatt atctagattt
+      301 acaagatggt tagtatcaat aatatagaaa aagccacttt gtaagcttta ttttgttatt
+      361 gtttttgatt ttatttaaaa tgaagtaact atatatattt ataagaagtt tcctgaatag
+      421 gggtacttcc tgatgttttt agtttttcta gggtttacta taagtataaa tggtgagtaa
+      481 taaatggatt gttctttgta aaatggaaaa atatctaagc tgctaagtaa ttttttctaa
+      541 atatcagtat acaaaaagga gattttttag tttactttga ttactcaagg tccttatgta
+      601 ggaatatctg ggtgggagag cgtgaattta aaggggaaaa ctaaatcata ctatttccta
+      661 aaatagtatg atttagttag ggggaagtgt tgatagtgcc ctatttaagg gtgcacttca
+      721 ttcatattca tgcaattttt ttatgaatat gaatgaagtg catattatat ggcgatattc
+      781 ctgctttata atcactatat tcctactttg taattttaat tttatagcat aaaacgatta
+      841 ttttagctta cttgtcttgg gcttataaca tgtattagta tttcactttt tgaaaataga
+      901 aatactaatc ttttttgtag cttttataca agtcaaatta tactggggtg gattgagtgt
+      961 ttaaatatat atttgttctc ttagtacagc ataaaattca tctttacaag taactttaaa
+     1021 aatataagat attgtttata actaatttaa tagagataat gacagaaaaa gaaacattta
+     1081 ttgttttagt acccatgata ttcgggggtt actgaaagat aaatctattt ataaaaatat
+     1141 aaaaatataa aaattataaa agataaatat tttatttatt gaatattatt caattcatga
+     1201 ttgaagtcat agataatacg atttcaagaa tgaaaattaa ctaaaaaaac tctcttagca
+     1261 agtgaaatta ttttaattta agctatgtat tttattgctt aaaattaagg aaggagcaat
+     1321 gaaaatattg ttctaaaata aaggaggtta ttgtatgaaa aagagataaa gactttagcg
+     1381 ggtatatgtg tattatcatc atctttgctg tcaaatacag cctctaataa tacaactgta
+     1441 aaggcagaag agagaaacta tgaatgaaaa aatataaaat ggggtaagtg atggacttcc
+     1501 aggatattat ttttctgatg atggatataa aaatagaaat ttatcaagat gaaaaagata
+     1561 tggaaaaaac agaagtagca gtaaaaacag aaaagacagc tatccctttt aaatgggaaa
+     1621 acccattgga agatacgtat actaaaatgg gatattctga gagctctcca ataagtgcag
+     1681 ggggcacgtt tatgggctag aaataataaa ggagatgcgt atgctgtagc aaaagtaagt
+     1741 aggattaaat ttaagatctg aaactacgac acaccatagt gttctactta gaaaaccatt
+     1801 taaaatacta gataatttga aaaataaata taagtttaca tcagatatta aagattataa
+     1861 gagtcgtgtt tcaattggta ttggtaaatt agaagaagat ggtacgatgt ccattattag
+     1921 acgtgtgaat tcttataaat tccaaaatag gctagaacta acaatttata atctgaattt
+     1981 tatcatttag taatgaacca tttaatttta attaatatac actaacttaa ttttgataat
+     2041 tatatatttg ttttatacag atatagatac ttaaggagag gtttgaaaat gtcttttttt
+     2101 caattaaata ttgatgcttt tcgagttatc aatgatttag gtaaacaata ttcgtttcta
+     2161 aactcattca tgatattttt agcggaatat atggtatata ttttaggctt agttattata
+     2221 gctttttggt caactaggtc taaaaaaata ggatgatgat tatacaagcg gtgtttgctt
+     2281 tcatgactgc tgagataatt ggaaagctac tagggaaatt gcatttgaat tatcaaccat
+     2341 ttgcagtatt acctgatgtt aataaactcg ctgatcatgt agtggataat tcatttccta
+     2401 gtgatcacac gattctattt ttttcaattt gtgtttcagt taagctcgtt cataaaaagg
+     2461 ctgggttgtt attgcttgta attgcattct gtgtgggtat ctctcgtatt tgggtcgggg
+     2521 ttcattatcc ttttgatgtt gcaacaggcg ccttaatagg gagtatttca gctttatttt
+     2581 catattggat agtaccaaaa attaaattta ttacacaaat acttaatctt tatgaaagag
+     2641 tagagcaata tgttttacca ttaaaaagta aatcgaagga attataatta taaataagaa
+     2701 ggggtcccat ctcatgtcca tcaagctaaa caagtaactt actagatatg aaacgattct
+     2761 tggttcaaaa ctagtaattg atagaaaagt aggcatgcta aagaagccta ttaaaacgtg
+     2821 attttttcgc taggcagctt atctatgctt cactgtcgtt ttatacacaa tccctagaat
+     2881 atcaaagacg gtcatcttct tatacctatg acatttacga ccgttctttt tgagcagctg
+     2941 ataaaggcga tgcaaaattt ttaaaagttt ttctgtgcca acggctatcg cttgaaacag
+     3001 taatggaaag taatctttaa tcatataaat cgctttgtat tcactcagct cctgtttttt
+     3061 cttttcaagc agaaactgac gcatttgaaa catcgtagaa gaacagagga gaatgccgat
+     3121 gagttgtcca tataaatggc actctaggcg ttctcttttt atattttgac attcatcaat
+     3181 tttaaagagt gacttccacg ttttaaacaa aatttcaatc tgccaacgaa gtgaatataa
+     3241 tggatgcacg tagttcatcg gtacttcttc tagcgacgtg ttcgtgatat atacattcat
+     3301 gcccattaaa cgtttacttt tatccttcat gacaatgcct ttcttctttt cacgtatcgc
+     3361 ttggtttttc agacgtgttt
+//
+

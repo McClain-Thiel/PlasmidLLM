@@ -1,0 +1,46 @@
+[project]
+name = "plasmid-pretraining"
+version = "0.1.0"
+description = "Metaflow pipeline for plasmid backbone pretraining data"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "metaflow>=2.12",
+    "biopython>=1.83",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    "tqdm>=4.66",
+    "scikit-learn>=1.3",
+    "pydantic-settings>=2.11.0",
+    "plasmidkit",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1",
+]
+hf = [
+    "datasets>=2.16",
+]
+
+[project.scripts]
+plasmid-flow = "plasmid_pretraining.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plasmid_pretraining"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.uv.sources]
+plasmidkit = { git = "https://github.com/McClain-Thiel/plasmid-kit", rev = "8db21d88fa8d00119e990ab22f81c4820faaffec" }
