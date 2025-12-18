@@ -1,0 +1,324 @@
+{
+  "id": "9714b9ce-f015-4857-9936-83d8213a689f",
+  "seq_hash": "68f7924530d3aaa21980aafe3beebaa225c1b316783084223e27d65956c388e5",
+  "original_id": "GenBank_AADR01000058.1",
+  "original_name": "GenBank_AADR01000058",
+  "filename": "GenBank AADR01000058.1.gbk",
+  "length": 12896,
+  "gc_content": 0.3489454094292804,
+  "topology": "linear",
+  "organism": "Listeria monocytogenes serotype 4b str. H7858",
+  "description": "Listeria monocytogenes serotype 4b str. H7858 strain 4b H7858 plasmid pLM80 cont506, whole genome shotgun sequence",
+  "host": null,
+  "plasmid_type": null,
+  "copy_number": null,
+  "resistance_markers": [
+    "spectinomycin",
+    "chloramphenicol"
+  ],
+  "reporter_genes": [],
+  "tags": [],
+  "cds_count": 13,
+  "gene_count": 13,
+  "has_origin": false,
+  "genbank_features": [
+    {
+      "type": "gene",
+      "start": 82,
+      "end": 505,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0081",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 82,
+      "end": 505,
+      "strand": 1,
+      "gene": null,
+      "product": "site-specific recombinase, resolvase family",
+      "locus_tag": "LMOh7858_pLM80_0081",
+      "note": "identified by match to protein family HMM PF00239; match to protein family HMM PF02796"
+    },
+    {
+      "type": "gene",
+      "start": 778,
+      "end": 1138,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0082",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 778,
+      "end": 1138,
+      "strand": 1,
+      "gene": null,
+      "product": "cadmium efflux system accessory protein",
+      "locus_tag": "LMOh7858_pLM80_0082",
+      "note": "identified by match to protein family HMM PF01022"
+    },
+    {
+      "type": "gene",
+      "start": 1134,
+      "end": 3252,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0083",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 1134,
+      "end": 3252,
+      "strand": 1,
+      "gene": null,
+      "product": "cation-transporting ATPase, E1-E2 family",
+      "locus_tag": "LMOh7858_pLM80_0083",
+      "note": "identified by match to protein family HMM PF00122; match to protein family HMM PF00403; match to protein family HMM PF00702; match to protein family HMM TIGR01494; match to protein family HMM TIGR01512; match to protein family HMM TIGR01525"
+    },
+    {
+      "type": "gene",
+      "start": 3484,
+      "end": 3865,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0084",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 3484,
+      "end": 3865,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein",
+      "locus_tag": "LMOh7858_pLM80_0084",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 3896,
+      "end": 4460,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0085",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 3896,
+      "end": 4460,
+      "strand": -1,
+      "gene": null,
+      "product": "site-specific recombinase, phage integrase family",
+      "locus_tag": "LMOh7858_pLM80_0085",
+      "note": "identified by match to protein family HMM PF00589"
+    },
+    {
+      "type": "misc_feature",
+      "start": 3896,
+      "end": 4460,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0085",
+      "note": "putative prophage LamdbaSa2"
+    },
+    {
+      "type": "gene",
+      "start": 4459,
+      "end": 5140,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0086",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 4459,
+      "end": 5140,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase-like protein",
+      "locus_tag": "LMOh7858_pLM80_0086",
+      "note": "identified by match to protein family HMM PF00665"
+    },
+    {
+      "type": "gene",
+      "start": 5359,
+      "end": 6265,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0087",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 5359,
+      "end": 6265,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein",
+      "locus_tag": "LMOh7858_pLM80_0087",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 6286,
+      "end": 6739,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0088",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 6286,
+      "end": 6739,
+      "strand": 1,
+      "gene": null,
+      "product": "pli0065",
+      "locus_tag": "LMOh7858_pLM80_0088",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 6900,
+      "end": 7245,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0089",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 6900,
+      "end": 7245,
+      "strand": 1,
+      "gene": null,
+      "product": "pli0066",
+      "locus_tag": "LMOh7858_pLM80_0089",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 7232,
+      "end": 8513,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0090",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 7232,
+      "end": 8513,
+      "strand": 1,
+      "gene": null,
+      "product": "ImpB/MucB/SamB family protein",
+      "locus_tag": "LMOh7858_pLM80_0090",
+      "note": "identified by match to protein family HMM PF00817"
+    },
+    {
+      "type": "gene",
+      "start": 8869,
+      "end": 9202,
+      "strand": -1,
+      "gene": "pXO2-40",
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0091",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 8869,
+      "end": 9202,
+      "strand": -1,
+      "gene": "pXO2-40",
+      "product": "unknown",
+      "locus_tag": "LMOh7858_pLM80_0091",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 9194,
+      "end": 10076,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0092",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 9194,
+      "end": 10076,
+      "strand": -1,
+      "gene": null,
+      "product": "replication-associated protein",
+      "locus_tag": "LMOh7858_pLM80_0092",
+      "note": "identified by match to protein family HMM PF00991"
+    },
+    {
+      "type": "gene",
+      "start": 10702,
+      "end": 12352,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "LMOh7858_pLM80_0093",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 10702,
+      "end": 12352,
+      "strand": 1,
+      "gene": null,
+      "product": "plasmid replication protein",
+      "locus_tag": "LMOh7858_pLM80_0093",
+      "note": null
+    }
+  ],
+  "annotations": {
+    "topology": "linear",
+    "data_file_division": "BCT",
+    "date": "04-MAY-2004",
+    "accessions": [
+      "GenBank_AADR01000058",
+      "AADR01000000"
+    ],
+    "sequence_version": 1,
+    "keywords": [
+      "WGS"
+    ],
+    "source": "Listeria monocytogenes serotype 4b str. H7858",
+    "organism": "Listeria monocytogenes serotype 4b str. H7858",
+    "taxonomy": [
+      "Bacteria",
+      "Bacillota",
+      "Bacilli",
+      "Bacillales",
+      "Listeriaceae",
+      "Listeria"
+    ],
+    "references": [
+      "location: [0:12896]\nauthors: Nelson,K.E., Fouts,D.E., Mongodin,E.F., Ravel,J., DeBoy,R.T., Kolonay,J.F., Rasko,D.A., Angiuoli,S.V., Gill,S.R., Paulsen,I.T., Peterson,J., White,O., Nelson,W.C., Nierman,W., Beanan,M.J., Brinkac,L.M., Daugherty,S.C., Dodson,R.J., Durkin,A.S., Madupu,R., Haft,D.H., Selengut,J., Van Aken,S., Khouri,H., Fedorova,N., Forberger,H., Tran,B., Kathariou,S., Wonderling,L.D., Uhlich,G.A., Bayles,D.O., Luchansky,J.B. and Fraser,C.M.\ntitle: Whole genome comparisons of serotype 4b and 1/2a strains of the food-borne pathogen Listeria monocytogenes reveal new insights into the core genome components of this species\njournal: Nucleic Acids Res. 32 (8), 2386-2395 (2004)\nmedline id: \npubmed id: 15115801\ncomment: \n",
+      "location: [0:12896]\nauthors: Nelson,K.E., Fouts,D., Mongodin,E., Ravel,J., DeBoy,R., Rasko,D., Kolonay,J., Angiuoli,S., Gill,S., Paulsen,I., Peterson,J., White,O., Nelson,W., Nierman,W., Van Aken,S., Khouri,H., Fedorova,N., Forberger,H., Tran,B. and Fraser,C.\ntitle: Direct Submission\njournal: Submitted (23-APR-2004) The Institute for Genomic Research, 9712 Medical Center Dr., Rockville, MD 20850, USA\nmedline id: \npubmed id: \ncomment: \n"
+    ],
+    "molecule_type": "DNA"
+  }
+}

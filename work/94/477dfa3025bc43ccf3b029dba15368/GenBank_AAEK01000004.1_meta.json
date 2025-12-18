@@ -1,0 +1,3753 @@
+{
+  "id": "ffe3b924-cf66-405e-a5d8-bb1cfc3a3cf0",
+  "seq_hash": "d61f371680ef8e41340f1e12cf541a2ca12decf8b50da0e73d9d25420194eaa0",
+  "original_id": "GenBank_AAEK01000004.1",
+  "original_name": "GenBank_AAEK01000004",
+  "filename": "GenBank AAEK01000004.1.gbk",
+  "length": 218094,
+  "gc_content": 0.3177483103615872,
+  "topology": "linear",
+  "organism": "Bacillus cereus G9241",
+  "description": "Bacillus cereus G9241 plasmid pBC218 cont1893, whole genome shotgun sequence",
+  "host": null,
+  "plasmid_type": "mammalian_expression",
+  "copy_number": null,
+  "resistance_markers": [
+    "erythromycin",
+    "tetracycline",
+    "zeocin",
+    "chloramphenicol",
+    "streptomycin",
+    "ampicillin"
+  ],
+  "reporter_genes": [
+    "luciferase"
+  ],
+  "tags": [],
+  "cds_count": 184,
+  "gene_count": 185,
+  "has_origin": false,
+  "genbank_features": [
+    {
+      "type": "gene",
+      "start": 117,
+      "end": 3135,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0001",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 117,
+      "end": 3135,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase",
+      "locus_tag": "BCE_G9241_pBC218_0001",
+      "note": "identified by match to protein family HMM PF01526"
+    },
+    {
+      "type": "gene",
+      "start": 3235,
+      "end": 3817,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0002",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 3235,
+      "end": 3817,
+      "strand": 1,
+      "gene": null,
+      "product": "resolvase, N terminal domain family",
+      "locus_tag": "BCE_G9241_pBC218_0002",
+      "note": "identified by match to protein family HMM PF00239; match to protein family HMM PF02796"
+    },
+    {
+      "type": "gene",
+      "start": 4133,
+      "end": 5225,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0003",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 4133,
+      "end": 5225,
+      "strand": 1,
+      "gene": null,
+      "product": "spore germination protein superfamily",
+      "locus_tag": "BCE_G9241_pBC218_0003",
+      "note": "identified by match to protein family HMM PF03845"
+    },
+    {
+      "type": "gene",
+      "start": 5268,
+      "end": 6747,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0004",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 5268,
+      "end": 6747,
+      "strand": 1,
+      "gene": null,
+      "product": "Bacillus/Clostridium GerA spore germination protein superfamily",
+      "locus_tag": "BCE_G9241_pBC218_0004",
+      "note": "identified by match to protein family HMM PF03323"
+    },
+    {
+      "type": "gene",
+      "start": 6703,
+      "end": 7903,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0005",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 6703,
+      "end": 7903,
+      "strand": 1,
+      "gene": null,
+      "product": "spore germination protein xc precursor. bacillus",
+      "locus_tag": "BCE_G9241_pBC218_0005",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 8430,
+      "end": 8580,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0006",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 8430,
+      "end": 8580,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0006",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 9706,
+      "end": 9862,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0007",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 9706,
+      "end": 9862,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0007",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 10346,
+      "end": 10934,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0008",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 10346,
+      "end": 10934,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0008",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 11712,
+      "end": 11847,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0009",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 11712,
+      "end": 11847,
+      "strand": -1,
+      "gene": null,
+      "product": "closticin 574",
+      "locus_tag": "BCE_G9241_pBC218_0009",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 14061,
+      "end": 14301,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0010",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 14061,
+      "end": 14301,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0010",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 14316,
+      "end": 14919,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0011",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 14316,
+      "end": 14919,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0011",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 15175,
+      "end": 16603,
+      "strand": 1,
+      "gene": "pXO2-42",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0012",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 15175,
+      "end": 16603,
+      "strand": 1,
+      "gene": "pXO2-42",
+      "product": "S-layer protein / peptidoglycan endo-beta-N-acetylglucosaminidase",
+      "locus_tag": "BCE_G9241_pBC218_0012",
+      "note": "identified by match to protein family HMM PF00395; match to protein family HMM PF01832"
+    },
+    {
+      "type": "gene",
+      "start": 17466,
+      "end": 17574,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0013",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 17466,
+      "end": 17574,
+      "strand": 1,
+      "gene": null,
+      "product": "periplasmic component of efflux system",
+      "locus_tag": "BCE_G9241_pBC218_0013",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 17610,
+      "end": 18039,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0014",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 17610,
+      "end": 18039,
+      "strand": 1,
+      "gene": null,
+      "product": "periplasmic component of efflux system",
+      "locus_tag": "BCE_G9241_pBC218_0014",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 18220,
+      "end": 19270,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0015",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 18220,
+      "end": 19270,
+      "strand": -1,
+      "gene": null,
+      "product": "phosphoglycerate transporter protein",
+      "locus_tag": "BCE_G9241_pBC218_0015",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 19339,
+      "end": 19849,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0016",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 19339,
+      "end": 19849,
+      "strand": 1,
+      "gene": null,
+      "product": "periplasmic component of efflux system",
+      "locus_tag": "BCE_G9241_pBC218_0016",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 19845,
+      "end": 20526,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0017",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 19845,
+      "end": 20526,
+      "strand": 1,
+      "gene": null,
+      "product": "ABC transporter, ATP-binding protein",
+      "locus_tag": "BCE_G9241_pBC218_0017",
+      "note": "identified by match to protein family HMM PF00005"
+    },
+    {
+      "type": "gene",
+      "start": 20522,
+      "end": 21734,
+      "strand": 1,
+      "gene": "ybjZ",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0018",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 20522,
+      "end": 21734,
+      "strand": 1,
+      "gene": "ybjZ",
+      "product": "ABC transporter, ATP-binding protein",
+      "locus_tag": "BCE_G9241_pBC218_0018",
+      "note": "identified by match to protein family HMM PF02687"
+    },
+    {
+      "type": "gene",
+      "start": 21807,
+      "end": 21969,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0019",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 21807,
+      "end": 21969,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein integral membrane protein",
+      "locus_tag": "BCE_G9241_pBC218_0019",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 22510,
+      "end": 23224,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0020",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 22510,
+      "end": 23224,
+      "strand": 1,
+      "gene": null,
+      "product": "DNA-binding response regulator VicR",
+      "locus_tag": "BCE_G9241_pBC218_0020",
+      "note": "identified by match to protein family HMM PF00072; match to protein family HMM PF00486"
+    },
+    {
+      "type": "gene",
+      "start": 23247,
+      "end": 24300,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0021",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 23247,
+      "end": 24300,
+      "strand": 1,
+      "gene": null,
+      "product": "sensory box histidine kinase VicK, putative",
+      "locus_tag": "BCE_G9241_pBC218_0021",
+      "note": "identified by match to protein family HMM PF00512; match to protein family HMM PF00672; match to protein family HMM PF02518"
+    },
+    {
+      "type": "gene",
+      "start": 24376,
+      "end": 24874,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0022",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 24376,
+      "end": 24874,
+      "strand": 1,
+      "gene": null,
+      "product": "probable secreted protein",
+      "locus_tag": "BCE_G9241_pBC218_0022",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 25269,
+      "end": 25410,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0023",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 25269,
+      "end": 25410,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0023",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 26196,
+      "end": 26628,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0024",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 26196,
+      "end": 26628,
+      "strand": 1,
+      "gene": null,
+      "product": "protease HhoA",
+      "locus_tag": "BCE_G9241_pBC218_0024",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 26944,
+      "end": 27307,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0025",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 26944,
+      "end": 27307,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0025",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 26958,
+      "end": 29241,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0026",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 26958,
+      "end": 29241,
+      "strand": -1,
+      "gene": null,
+      "product": "protective antigen",
+      "locus_tag": "BCE_G9241_pBC218_0026",
+      "note": "identified by match to protein family HMM PF03495"
+    },
+    {
+      "type": "gene",
+      "start": 29840,
+      "end": 31271,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0027",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 29840,
+      "end": 31271,
+      "strand": -1,
+      "gene": null,
+      "product": "lethal factor precursor",
+      "locus_tag": "BCE_G9241_pBC218_0027",
+      "note": "identified by match to protein family HMM PF03496"
+    },
+    {
+      "type": "gene",
+      "start": 32314,
+      "end": 32488,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0028",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 32314,
+      "end": 32488,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0028",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 34248,
+      "end": 34419,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0029",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 34248,
+      "end": 34419,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase, IS3 family, interruption",
+      "locus_tag": "BCE_G9241_pBC218_0029",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 34607,
+      "end": 34853,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0030",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 34607,
+      "end": 34853,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase",
+      "locus_tag": "BCE_G9241_pBC218_0030",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 34726,
+      "end": 35368,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0031",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 34726,
+      "end": 35368,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase, IS3 family, interruption",
+      "locus_tag": "BCE_G9241_pBC218_0031",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 35657,
+      "end": 36224,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0032",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 35657,
+      "end": 36224,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase, IS3 family, interruption",
+      "locus_tag": "BCE_G9241_pBC218_0032",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 36849,
+      "end": 37047,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0033",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 36849,
+      "end": 37047,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase, IS3 family, interruption",
+      "locus_tag": "BCE_G9241_pBC218_0033",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 37474,
+      "end": 38008,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0034",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 37474,
+      "end": 38008,
+      "strand": -1,
+      "gene": null,
+      "product": "pVS1 resolvase",
+      "locus_tag": "BCE_G9241_pBC218_0034",
+      "note": "identified by match to protein family HMM PF00239"
+    },
+    {
+      "type": "gene",
+      "start": 39317,
+      "end": 39536,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0035",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 39317,
+      "end": 39536,
+      "strand": 1,
+      "gene": null,
+      "product": "collagen triple helix repeat protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0035",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 40490,
+      "end": 40883,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0036",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 40490,
+      "end": 40883,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0036",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 41213,
+      "end": 41411,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0037",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 41213,
+      "end": 41411,
+      "strand": 1,
+      "gene": null,
+      "product": "IS861, transposase OrfB, putative",
+      "locus_tag": "BCE_G9241_pBC218_0037",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 41404,
+      "end": 41884,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0038",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 41404,
+      "end": 41884,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase",
+      "locus_tag": "BCE_G9241_pBC218_0038",
+      "note": "identified by match to protein family HMM PF00665"
+    },
+    {
+      "type": "gene",
+      "start": 43347,
+      "end": 43794,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0039",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 43347,
+      "end": 43794,
+      "strand": -1,
+      "gene": null,
+      "product": "enterotoxin B",
+      "locus_tag": "BCE_G9241_pBC218_0039",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 43759,
+      "end": 44110,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0040",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 43759,
+      "end": 44110,
+      "strand": -1,
+      "gene": null,
+      "product": "non-hemolytic enterotoxin lytic component L1",
+      "locus_tag": "BCE_G9241_pBC218_0040",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 44184,
+      "end": 44535,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0041",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 44184,
+      "end": 44535,
+      "strand": -1,
+      "gene": null,
+      "product": "non-hemolytic enterotoxin lytic component L1",
+      "locus_tag": "BCE_G9241_pBC218_0041",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 44617,
+      "end": 45328,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0042",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 44617,
+      "end": 45328,
+      "strand": -1,
+      "gene": null,
+      "product": "non-hemolytic enterotoxin lytic component L2, putative",
+      "locus_tag": "BCE_G9241_pBC218_0042",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 45984,
+      "end": 47877,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0043",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 45984,
+      "end": 47877,
+      "strand": -1,
+      "gene": null,
+      "product": "S-layer homology domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0043",
+      "note": "identified by match to protein family HMM PF00395"
+    },
+    {
+      "type": "gene",
+      "start": 50118,
+      "end": 50919,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0044",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 50118,
+      "end": 50919,
+      "strand": 1,
+      "gene": null,
+      "product": "serine protease DO",
+      "locus_tag": "BCE_G9241_pBC218_0044",
+      "note": "identified by match to protein family HMM PF00089"
+    },
+    {
+      "type": "gene",
+      "start": 52532,
+      "end": 52832,
+      "strand": -1,
+      "gene": "pXO1-109",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0045",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 52532,
+      "end": 52832,
+      "strand": -1,
+      "gene": "pXO1-109",
+      "product": "transcriptional regulator, arsR family",
+      "locus_tag": "BCE_G9241_pBC218_0045",
+      "note": "identified by match to protein family HMM PF01022"
+    },
+    {
+      "type": "gene",
+      "start": 53034,
+      "end": 53724,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0046",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 53034,
+      "end": 53724,
+      "strand": -1,
+      "gene": null,
+      "product": "membrane protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0046",
+      "note": "identified by match to protein family HMM PF00892"
+    },
+    {
+      "type": "gene",
+      "start": 54308,
+      "end": 55649,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0047",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 54308,
+      "end": 55649,
+      "strand": -1,
+      "gene": null,
+      "product": "probable electron transfer protein Rv1937, putative",
+      "locus_tag": "BCE_G9241_pBC218_0047",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 55730,
+      "end": 56654,
+      "strand": -1,
+      "gene": "cysK",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0048",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 55730,
+      "end": 56654,
+      "strand": -1,
+      "gene": "cysK",
+      "product": "cysteine synthase A",
+      "locus_tag": "BCE_G9241_pBC218_0048",
+      "note": "identified by match to protein family HMM PF00291; match to protein family HMM TIGR01136; match to protein family HMM TIGR01139"
+    },
+    {
+      "type": "gene",
+      "start": 58777,
+      "end": 59197,
+      "strand": -1,
+      "gene": "pXO2-61",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0049",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 58777,
+      "end": 59197,
+      "strand": -1,
+      "gene": "pXO2-61",
+      "product": "trans-acting positive regulator (Atx A)",
+      "locus_tag": "BCE_G9241_pBC218_0049",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 59545,
+      "end": 60976,
+      "strand": 1,
+      "gene": "atxA",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0050",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 59545,
+      "end": 60976,
+      "strand": 1,
+      "gene": "atxA",
+      "product": "trans-acting positive regulator",
+      "locus_tag": "BCE_G9241_pBC218_0050",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 61026,
+      "end": 61473,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0051",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 61026,
+      "end": 61473,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase",
+      "locus_tag": "BCE_G9241_pBC218_0051",
+      "note": "identified by match to protein family HMM PF00665"
+    },
+    {
+      "type": "gene",
+      "start": 61772,
+      "end": 62045,
+      "strand": -1,
+      "gene": "cdd",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0052",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 61772,
+      "end": 62045,
+      "strand": -1,
+      "gene": "cdd",
+      "product": "cytidine deaminase",
+      "locus_tag": "BCE_G9241_pBC218_0052",
+      "note": "identified by match to protein family HMM PF00383"
+    },
+    {
+      "type": "gene",
+      "start": 62835,
+      "end": 63156,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0053",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 62835,
+      "end": 63156,
+      "strand": 1,
+      "gene": null,
+      "product": "first of two overlapping orfs with similarity to IS3 genes",
+      "locus_tag": "BCE_G9241_pBC218_0053",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 63290,
+      "end": 64031,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0054",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 63290,
+      "end": 64031,
+      "strand": 1,
+      "gene": null,
+      "product": "ISPsy9, transposase OrfB",
+      "locus_tag": "BCE_G9241_pBC218_0054",
+      "note": "identified by match to protein family HMM PF00665"
+    },
+    {
+      "type": "gene",
+      "start": 64117,
+      "end": 66034,
+      "strand": -1,
+      "gene": "yngK-1",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0055",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 64117,
+      "end": 66034,
+      "strand": -1,
+      "gene": "yngK-1",
+      "product": "YngK protein",
+      "locus_tag": "BCE_G9241_pBC218_0055",
+      "note": "identified by match to protein family HMM PF00395; match to protein family HMM PF02638"
+    },
+    {
+      "type": "gene",
+      "start": 66574,
+      "end": 66679,
+      "strand": 1,
+      "gene": "pXO1-35",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0056",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 66574,
+      "end": 66679,
+      "strand": 1,
+      "gene": "pXO1-35",
+      "product": "transposase for insertion sequence element is231c",
+      "locus_tag": "BCE_G9241_pBC218_0056",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 66767,
+      "end": 68438,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0057",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 66767,
+      "end": 68438,
+      "strand": -1,
+      "gene": null,
+      "product": "pXO1 ORF14-like protein",
+      "locus_tag": "BCE_G9241_pBC218_0057",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 71855,
+      "end": 72689,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0058",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 71855,
+      "end": 72689,
+      "strand": -1,
+      "gene": null,
+      "product": "collagen adhesion protein",
+      "locus_tag": "BCE_G9241_pBC218_0058",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 73427,
+      "end": 74702,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0059",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 73427,
+      "end": 74702,
+      "strand": -1,
+      "gene": null,
+      "product": "polysaccharide translocase protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0059",
+      "note": "identified by match to protein family HMM PF01943"
+    },
+    {
+      "type": "gene",
+      "start": 74698,
+      "end": 75406,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0060",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 74698,
+      "end": 75406,
+      "strand": -1,
+      "gene": null,
+      "product": "CMP-sialic acid synthetase, putative",
+      "locus_tag": "BCE_G9241_pBC218_0060",
+      "note": "identified by match to protein family HMM PF02348"
+    },
+    {
+      "type": "gene",
+      "start": 75419,
+      "end": 76565,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0061",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 75419,
+      "end": 76565,
+      "strand": -1,
+      "gene": null,
+      "product": "UDP-N-acetylglucosamine 2-epimerase, putative",
+      "locus_tag": "BCE_G9241_pBC218_0061",
+      "note": "identified by match to protein family HMM PF02350"
+    },
+    {
+      "type": "gene",
+      "start": 76590,
+      "end": 77523,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0062",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 76590,
+      "end": 77523,
+      "strand": -1,
+      "gene": null,
+      "product": "sialic acid synthase, putative",
+      "locus_tag": "BCE_G9241_pBC218_0062",
+      "note": "identified by match to protein family HMM PF01354; match to protein family HMM PF03102"
+    },
+    {
+      "type": "gene",
+      "start": 77728,
+      "end": 78400,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0063",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 77728,
+      "end": 78400,
+      "strand": -1,
+      "gene": null,
+      "product": "glycosyl transferase, putative",
+      "locus_tag": "BCE_G9241_pBC218_0063",
+      "note": "identified by match to protein family HMM PF02397"
+    },
+    {
+      "type": "gene",
+      "start": 78399,
+      "end": 79287,
+      "strand": -1,
+      "gene": "galU",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0064",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 78399,
+      "end": 79287,
+      "strand": -1,
+      "gene": "galU",
+      "product": "UTP-glucose-1-phosphate uridylyltransferase",
+      "locus_tag": "BCE_G9241_pBC218_0064",
+      "note": "identified by match to protein family HMM PF00483; match to protein family HMM TIGR01099"
+    },
+    {
+      "type": "gene",
+      "start": 79943,
+      "end": 80621,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0065",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 79943,
+      "end": 80621,
+      "strand": -1,
+      "gene": null,
+      "product": "exopolysaccharide biosynthesis protein",
+      "locus_tag": "BCE_G9241_pBC218_0065",
+      "note": "identified by match to protein family HMM PF00991"
+    },
+    {
+      "type": "gene",
+      "start": 80604,
+      "end": 81345,
+      "strand": -1,
+      "gene": "wzz",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0066",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 80604,
+      "end": 81345,
+      "strand": -1,
+      "gene": "wzz",
+      "product": "chain length determinant protein",
+      "locus_tag": "BCE_G9241_pBC218_0066",
+      "note": "identified by match to protein family HMM PF02706"
+    },
+    {
+      "type": "gene",
+      "start": 81920,
+      "end": 82835,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0067",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 81920,
+      "end": 82835,
+      "strand": -1,
+      "gene": null,
+      "product": "transcriptional regulator, LytR family",
+      "locus_tag": "BCE_G9241_pBC218_0067",
+      "note": "identified by match to protein family HMM PF03816; match to protein family HMM TIGR00350"
+    },
+    {
+      "type": "gene",
+      "start": 84074,
+      "end": 84263,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0068",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 84074,
+      "end": 84263,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0068",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 84356,
+      "end": 85055,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0069",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 84356,
+      "end": 85055,
+      "strand": -1,
+      "gene": null,
+      "product": "polysaccharide capsule synthesis protein",
+      "locus_tag": "BCE_G9241_pBC218_0069",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 85244,
+      "end": 86216,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0070",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 85244,
+      "end": 86216,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0070",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 86300,
+      "end": 87035,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0071",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 86300,
+      "end": 87035,
+      "strand": -1,
+      "gene": null,
+      "product": "glycosyl transferase, WecB/TagA/CpsF family",
+      "locus_tag": "BCE_G9241_pBC218_0071",
+      "note": "identified by match to protein family HMM PF03808; match to protein family HMM TIGR00696"
+    },
+    {
+      "type": "gene",
+      "start": 87119,
+      "end": 88427,
+      "strand": -1,
+      "gene": "wzy",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0072",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 87119,
+      "end": 88427,
+      "strand": -1,
+      "gene": "wzy",
+      "product": "polysaccharide polymerase",
+      "locus_tag": "BCE_G9241_pBC218_0072",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 88451,
+      "end": 89354,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0073",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 88451,
+      "end": 89354,
+      "strand": -1,
+      "gene": null,
+      "product": "glycosyl transferase, group 2 family protein",
+      "locus_tag": "BCE_G9241_pBC218_0073",
+      "note": "identified by match to protein family HMM PF00535"
+    },
+    {
+      "type": "gene",
+      "start": 90070,
+      "end": 91740,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0074",
+      "note": "pXO1 ORF14-like protein, possible frameshift"
+    },
+    {
+      "type": "gene",
+      "start": 92021,
+      "end": 92360,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0075",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 92021,
+      "end": 92360,
+      "strand": 1,
+      "gene": null,
+      "product": "first of two overlapping orfs with similarity to IS3 genes",
+      "locus_tag": "BCE_G9241_pBC218_0075",
+      "note": "identified by match to protein family HMM PF01527"
+    },
+    {
+      "type": "gene",
+      "start": 92503,
+      "end": 93211,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0076",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 92503,
+      "end": 93211,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase",
+      "locus_tag": "BCE_G9241_pBC218_0076",
+      "note": "identified by match to protein family HMM PF00665"
+    },
+    {
+      "type": "gene",
+      "start": 97248,
+      "end": 97944,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0077",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 97248,
+      "end": 97944,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase (IS4 family) domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0077",
+      "note": "identified by match to protein family HMM PF01609"
+    },
+    {
+      "type": "gene",
+      "start": 97927,
+      "end": 98686,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0078",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 97927,
+      "end": 98686,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase (IS4 family) domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0078",
+      "note": "identified by match to protein family HMM PF01609"
+    },
+    {
+      "type": "gene",
+      "start": 99491,
+      "end": 100283,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0079",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 99491,
+      "end": 100283,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase (IS4 family)",
+      "locus_tag": "BCE_G9241_pBC218_0079",
+      "note": "identified by match to protein family HMM PF01609"
+    },
+    {
+      "type": "gene",
+      "start": 101175,
+      "end": 102459,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0080",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 101175,
+      "end": 102459,
+      "strand": -1,
+      "gene": null,
+      "product": "MAEBL, putative",
+      "locus_tag": "BCE_G9241_pBC218_0080",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 102752,
+      "end": 103058,
+      "strand": 1,
+      "gene": "dnaX",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0081",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 102752,
+      "end": 103058,
+      "strand": 1,
+      "gene": "dnaX",
+      "product": "DNA polymerase III, gamma and tau subunits",
+      "locus_tag": "BCE_G9241_pBC218_0081",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 103086,
+      "end": 104208,
+      "strand": -1,
+      "gene": "tnpB",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0082",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 103086,
+      "end": 104208,
+      "strand": -1,
+      "gene": "tnpB",
+      "product": "transposase all7245",
+      "locus_tag": "BCE_G9241_pBC218_0082",
+      "note": "identified by match to protein family HMM PF01385; match to protein family HMM TIGR01766"
+    },
+    {
+      "type": "gene",
+      "start": 104503,
+      "end": 104896,
+      "strand": 1,
+      "gene": "dnaX",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0083",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 104503,
+      "end": 104896,
+      "strand": 1,
+      "gene": "dnaX",
+      "product": "DNA polymerase III, gamma and tau subunits",
+      "locus_tag": "BCE_G9241_pBC218_0083",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 104931,
+      "end": 105744,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0084",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 104931,
+      "end": 105744,
+      "strand": 1,
+      "gene": null,
+      "product": "DNA polymerase III, gamma and tau subunits, putative",
+      "locus_tag": "BCE_G9241_pBC218_0084",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 105792,
+      "end": 108525,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0085",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 105792,
+      "end": 108525,
+      "strand": -1,
+      "gene": null,
+      "product": "restriction endonuclease family",
+      "locus_tag": "BCE_G9241_pBC218_0085",
+      "note": "identified by match to protein family HMM PF04471"
+    },
+    {
+      "type": "gene",
+      "start": 108942,
+      "end": 111465,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0086",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 108942,
+      "end": 111465,
+      "strand": 1,
+      "gene": null,
+      "product": "SEC-C motif domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0086",
+      "note": "identified by match to protein family HMM PF02810"
+    },
+    {
+      "type": "gene",
+      "start": 111668,
+      "end": 111872,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0087",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 111668,
+      "end": 111872,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0087",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 112032,
+      "end": 112608,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0088",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 112032,
+      "end": 112608,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0088",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 112922,
+      "end": 113579,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0089",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 112922,
+      "end": 113579,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0089",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 114407,
+      "end": 116123,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0090",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 114407,
+      "end": 116123,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0090",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 116119,
+      "end": 116602,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0091",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 116119,
+      "end": 116602,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0091",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 117481,
+      "end": 117583,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0092",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 117481,
+      "end": 117583,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0092",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 117856,
+      "end": 118465,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0093",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 117856,
+      "end": 118465,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0093",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 118454,
+      "end": 119621,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0094",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 118454,
+      "end": 119621,
+      "strand": -1,
+      "gene": null,
+      "product": "cell division protein (ftsK)",
+      "locus_tag": "BCE_G9241_pBC218_0094",
+      "note": "identified by match to protein family HMM PF01580"
+    },
+    {
+      "type": "gene",
+      "start": 119636,
+      "end": 119843,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0095",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 119636,
+      "end": 119843,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0095",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 121268,
+      "end": 122153,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0096",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 121268,
+      "end": 122153,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein subfamily",
+      "locus_tag": "BCE_G9241_pBC218_0096",
+      "note": "identified by match to protein family HMM TIGR01784"
+    },
+    {
+      "type": "gene",
+      "start": 122658,
+      "end": 123240,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0097",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 122658,
+      "end": 123240,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein cytosolic protein",
+      "locus_tag": "BCE_G9241_pBC218_0097",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 123331,
+      "end": 123760,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0098",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 123331,
+      "end": 123760,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0098",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 123780,
+      "end": 124107,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0099",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 123780,
+      "end": 124107,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0099",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 124306,
+      "end": 124642,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0100",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 124306,
+      "end": 124642,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase for IS1630-like insertion sequence element, putative",
+      "locus_tag": "BCE_G9241_pBC218_0100",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 124866,
+      "end": 125586,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0101",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 124866,
+      "end": 125586,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0101",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 126286,
+      "end": 126469,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0102",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 126286,
+      "end": 126469,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0102",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 126650,
+      "end": 127091,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0103",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 126650,
+      "end": 127091,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0103",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 127466,
+      "end": 128696,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0104",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 127466,
+      "end": 128696,
+      "strand": 1,
+      "gene": null,
+      "product": "geranylgeranyl hydrogenase BchP, putative",
+      "locus_tag": "BCE_G9241_pBC218_0104",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 129063,
+      "end": 129219,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0105",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 129063,
+      "end": 129219,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0105",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 129346,
+      "end": 129982,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0106",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 129346,
+      "end": 129982,
+      "strand": 1,
+      "gene": null,
+      "product": "metallo-beta-lactamase superfamily protein",
+      "locus_tag": "BCE_G9241_pBC218_0106",
+      "note": "identified by match to protein family HMM PF00753"
+    },
+    {
+      "type": "gene",
+      "start": 130419,
+      "end": 131319,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0107",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 130419,
+      "end": 131319,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0107",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 131559,
+      "end": 132087,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0108",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 131559,
+      "end": 132087,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0108",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 132343,
+      "end": 132931,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0109",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 132343,
+      "end": 132931,
+      "strand": -1,
+      "gene": null,
+      "product": "predicted protein",
+      "locus_tag": "BCE_G9241_pBC218_0109",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 133159,
+      "end": 133606,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0110",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 133159,
+      "end": 133606,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0110",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 133970,
+      "end": 134495,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0111",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 133970,
+      "end": 134495,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase all7245",
+      "locus_tag": "BCE_G9241_pBC218_0111",
+      "note": "identified by match to protein family HMM PF01385"
+    },
+    {
+      "type": "gene",
+      "start": 134540,
+      "end": 135014,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0112",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 134540,
+      "end": 135014,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase all7245",
+      "locus_tag": "BCE_G9241_pBC218_0112",
+      "note": "identified by match to protein family HMM TIGR01766"
+    },
+    {
+      "type": "gene",
+      "start": 135238,
+      "end": 136210,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0113",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 135238,
+      "end": 136210,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0113",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 136209,
+      "end": 137079,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0114",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 136209,
+      "end": 137079,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0114",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 137329,
+      "end": 137953,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0115",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 137329,
+      "end": 137953,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0115",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 138339,
+      "end": 138930,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0116",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 138339,
+      "end": 138930,
+      "strand": -1,
+      "gene": null,
+      "product": "transcriptional regulator, tetR family, putative",
+      "locus_tag": "BCE_G9241_pBC218_0116",
+      "note": "identified by match to protein family HMM PF00440"
+    },
+    {
+      "type": "gene",
+      "start": 139006,
+      "end": 140050,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0117",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 139006,
+      "end": 140050,
+      "strand": -1,
+      "gene": null,
+      "product": "proline imino-peptidase",
+      "locus_tag": "BCE_G9241_pBC218_0117",
+      "note": "identified by match to protein family HMM PF00561"
+    },
+    {
+      "type": "gene",
+      "start": 140681,
+      "end": 141278,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0118",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 140681,
+      "end": 141278,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0118",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 141288,
+      "end": 142500,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0119",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 141288,
+      "end": 142500,
+      "strand": -1,
+      "gene": null,
+      "product": "lipoprotein, NLP/P60 family",
+      "locus_tag": "BCE_G9241_pBC218_0119",
+      "note": "identified by match to protein family HMM PF00877"
+    },
+    {
+      "type": "gene",
+      "start": 142527,
+      "end": 144873,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0120",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 142527,
+      "end": 144873,
+      "strand": -1,
+      "gene": null,
+      "product": "membrane protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0120",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 144905,
+      "end": 145388,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0121",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 144905,
+      "end": 145388,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0121",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 145389,
+      "end": 147447,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0122",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 145389,
+      "end": 147447,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0122",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 147461,
+      "end": 147929,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0123",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 147461,
+      "end": 147929,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0123",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 148432,
+      "end": 148723,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0124",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 148432,
+      "end": 148723,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0124",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 148725,
+      "end": 149832,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0125",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 148725,
+      "end": 149832,
+      "strand": -1,
+      "gene": null,
+      "product": "similar to ORF13 of enterococcus faecalis TRANSPOSON TN916., putative",
+      "locus_tag": "BCE_G9241_pBC218_0125",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 150834,
+      "end": 152544,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0126",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 150834,
+      "end": 152544,
+      "strand": -1,
+      "gene": null,
+      "product": "pXO1 ORF16-like protein",
+      "locus_tag": "BCE_G9241_pBC218_0126",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 153175,
+      "end": 153649,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0127",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 153175,
+      "end": 153649,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0127",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 153913,
+      "end": 155323,
+      "strand": -1,
+      "gene": "gnd",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0128",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 153913,
+      "end": 155323,
+      "strand": -1,
+      "gene": "gnd",
+      "product": "6-phosphogluconate dehydrogenase, decarboxylating",
+      "locus_tag": "BCE_G9241_pBC218_0128",
+      "note": "identified by match to protein family HMM PF00393; match to protein family HMM PF03446; match to protein family HMM TIGR00873"
+    },
+    {
+      "type": "gene",
+      "start": 155587,
+      "end": 156934,
+      "strand": -1,
+      "gene": "gntP",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0129",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 155587,
+      "end": 156934,
+      "strand": -1,
+      "gene": "gntP",
+      "product": "gluconate permease",
+      "locus_tag": "BCE_G9241_pBC218_0129",
+      "note": "identified by match to protein family HMM PF02447; match to protein family HMM TIGR00791"
+    },
+    {
+      "type": "gene",
+      "start": 157051,
+      "end": 158587,
+      "strand": -1,
+      "gene": "gntK",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0130",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 157051,
+      "end": 158587,
+      "strand": -1,
+      "gene": "gntK",
+      "product": "gluconate kinase",
+      "locus_tag": "BCE_G9241_pBC218_0130",
+      "note": "identified by match to protein family HMM PF00370; match to protein family HMM PF02782; match to protein family HMM TIGR01314"
+    },
+    {
+      "type": "gene",
+      "start": 158579,
+      "end": 159311,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0131",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 158579,
+      "end": 159311,
+      "strand": -1,
+      "gene": null,
+      "product": "gluconate regulator",
+      "locus_tag": "BCE_G9241_pBC218_0131",
+      "note": "identified by match to protein family HMM PF00392"
+    },
+    {
+      "type": "gene",
+      "start": 159861,
+      "end": 161550,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0132",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 159861,
+      "end": 161550,
+      "strand": 1,
+      "gene": null,
+      "product": "pXO1 ORF14-like protein",
+      "locus_tag": "BCE_G9241_pBC218_0132",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 161953,
+      "end": 163285,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0133",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 161953,
+      "end": 163285,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0133",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 164043,
+      "end": 164634,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0134",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 164043,
+      "end": 164634,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0134",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 164805,
+      "end": 167880,
+      "strand": -1,
+      "gene": "pXO1-42",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0135",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 164805,
+      "end": 167880,
+      "strand": -1,
+      "gene": "pXO1-42",
+      "product": "conjugation protein, TraG/TraD family",
+      "locus_tag": "BCE_G9241_pBC218_0135",
+      "note": "identified by match to protein family HMM PF02534"
+    },
+    {
+      "type": "gene",
+      "start": 167902,
+      "end": 169405,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0136",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 167902,
+      "end": 169405,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0136",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 169973,
+      "end": 170630,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0137",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 169973,
+      "end": 170630,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0137",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 171267,
+      "end": 171642,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0138",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 171267,
+      "end": 171642,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0138",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 171641,
+      "end": 173090,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0139",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 171641,
+      "end": 173090,
+      "strand": 1,
+      "gene": null,
+      "product": "ftsZ/tubulin-related protein",
+      "locus_tag": "BCE_G9241_pBC218_0139",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 173115,
+      "end": 173865,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0140",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 173115,
+      "end": 173865,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0140",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 176839,
+      "end": 178153,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0141",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 176839,
+      "end": 178153,
+      "strand": 1,
+      "gene": null,
+      "product": "DNA primase",
+      "locus_tag": "BCE_G9241_pBC218_0141",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 178434,
+      "end": 178800,
+      "strand": 1,
+      "gene": "tnpB",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0142",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 178434,
+      "end": 178800,
+      "strand": 1,
+      "gene": "tnpB",
+      "product": "transposase all7245",
+      "locus_tag": "BCE_G9241_pBC218_0142",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 178814,
+      "end": 179561,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0143",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 178814,
+      "end": 179561,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase all7245",
+      "locus_tag": "BCE_G9241_pBC218_0143",
+      "note": "identified by match to protein family HMM PF01385; match to protein family HMM TIGR01766"
+    },
+    {
+      "type": "gene",
+      "start": 179858,
+      "end": 180089,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0144",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 179858,
+      "end": 180089,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0144",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 180111,
+      "end": 181089,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0145",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 180111,
+      "end": 181089,
+      "strand": 1,
+      "gene": null,
+      "product": "RNA polymerase sigma-43 factor, putative",
+      "locus_tag": "BCE_G9241_pBC218_0145",
+      "note": "identified by match to protein family HMM PF04542; match to protein family HMM PF04545"
+    },
+    {
+      "type": "gene",
+      "start": 181401,
+      "end": 182907,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0146",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 181401,
+      "end": 182907,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0146",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 182927,
+      "end": 185297,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0147",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 182927,
+      "end": 185297,
+      "strand": 1,
+      "gene": null,
+      "product": "surface adhesion protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0147",
+      "note": "identified by match to protein family HMM PF00801"
+    },
+    {
+      "type": "gene",
+      "start": 185391,
+      "end": 185928,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0148",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 185391,
+      "end": 185928,
+      "strand": -1,
+      "gene": null,
+      "product": "signal peptidase I",
+      "locus_tag": "BCE_G9241_pBC218_0148",
+      "note": "identified by match to protein family HMM PF00461"
+    },
+    {
+      "type": "gene",
+      "start": 186215,
+      "end": 186737,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0149",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 186215,
+      "end": 186737,
+      "strand": 1,
+      "gene": null,
+      "product": "oligopeptide ABC transporter, ATP-binding protein, putative",
+      "locus_tag": "BCE_G9241_pBC218_0149",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 187513,
+      "end": 189445,
+      "strand": 1,
+      "gene": "pXO1-23",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0150",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 187513,
+      "end": 189445,
+      "strand": 1,
+      "gene": "pXO1-23",
+      "product": "group II intron reverse transcriptase maturase",
+      "locus_tag": "BCE_G9241_pBC218_0150",
+      "note": "identified by match to protein family HMM PF00078; match to protein family HMM PF01844"
+    },
+    {
+      "type": "gene",
+      "start": 189675,
+      "end": 189813,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0151",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 189675,
+      "end": 189813,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0151",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 190829,
+      "end": 191525,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0152",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 190829,
+      "end": 191525,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase (IS4 family) domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0152",
+      "note": "identified by match to protein family HMM PF01609"
+    },
+    {
+      "type": "gene",
+      "start": 191598,
+      "end": 192267,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0153",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 191598,
+      "end": 192267,
+      "strand": 1,
+      "gene": null,
+      "product": "transposase (IS4 family) domain protein",
+      "locus_tag": "BCE_G9241_pBC218_0153",
+      "note": "identified by match to protein family HMM PF01609"
+    },
+    {
+      "type": "gene",
+      "start": 192479,
+      "end": 192830,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0154",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 192479,
+      "end": 192830,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0154",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 192918,
+      "end": 193113,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0155",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 192918,
+      "end": 193113,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0155",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 193238,
+      "end": 193412,
+      "strand": 1,
+      "gene": "pXO1-71/72",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0156",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 193238,
+      "end": 193412,
+      "strand": 1,
+      "gene": "pXO1-71/72",
+      "product": "gp90",
+      "locus_tag": "BCE_G9241_pBC218_0156",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 193539,
+      "end": 194220,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0157",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 193539,
+      "end": 194220,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0157",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 194605,
+      "end": 194698,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0158",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 194605,
+      "end": 194698,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0158",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 194838,
+      "end": 195222,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0159",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 194838,
+      "end": 195222,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0159",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 195651,
+      "end": 196134,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0160",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 195651,
+      "end": 196134,
+      "strand": 1,
+      "gene": null,
+      "product": "2MDa_1 protein",
+      "locus_tag": "BCE_G9241_pBC218_0160",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 196212,
+      "end": 196734,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0161",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 196212,
+      "end": 196734,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0161",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 196541,
+      "end": 197036,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0162",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 196541,
+      "end": 197036,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0162",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 196830,
+      "end": 197310,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0163",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 196830,
+      "end": 197310,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0163",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 197621,
+      "end": 198371,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0164",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 197621,
+      "end": 198371,
+      "strand": -1,
+      "gene": null,
+      "product": "CAAX amino terminal protease family family",
+      "locus_tag": "BCE_G9241_pBC218_0164",
+      "note": "identified by match to protein family HMM PF02517"
+    },
+    {
+      "type": "gene",
+      "start": 198901,
+      "end": 199264,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0165",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 198901,
+      "end": 199264,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0165",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 199828,
+      "end": 200359,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0166",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 199828,
+      "end": 200359,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0166",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 200402,
+      "end": 200759,
+      "strand": -1,
+      "gene": "nrdI",
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0167",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 200402,
+      "end": 200759,
+      "strand": -1,
+      "gene": "nrdI",
+      "product": "nrdI protein",
+      "locus_tag": "BCE_G9241_pBC218_0167",
+      "note": "identified by match to protein family HMM TIGR00333"
+    },
+    {
+      "type": "gene",
+      "start": 200858,
+      "end": 201332,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0168",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 200858,
+      "end": 201332,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0168",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 201333,
+      "end": 201864,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0169",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 201333,
+      "end": 201864,
+      "strand": -1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0169",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 201925,
+      "end": 202099,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0170",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 201925,
+      "end": 202099,
+      "strand": -1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0170",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 202463,
+      "end": 203063,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0171",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 202463,
+      "end": 203063,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0171",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 203127,
+      "end": 203271,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0172",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 203127,
+      "end": 203271,
+      "strand": 1,
+      "gene": null,
+      "product": "papG protein",
+      "locus_tag": "BCE_G9241_pBC218_0172",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 203657,
+      "end": 203876,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0173",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 203657,
+      "end": 203876,
+      "strand": 1,
+      "gene": null,
+      "product": "hemolysin II",
+      "locus_tag": "BCE_G9241_pBC218_0173",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 204179,
+      "end": 204707,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0174",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 204179,
+      "end": 204707,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0174",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 205482,
+      "end": 205767,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0175",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 205482,
+      "end": 205767,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0175",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 205852,
+      "end": 206863,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0176",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 205852,
+      "end": 206863,
+      "strand": -1,
+      "gene": null,
+      "product": "DNA binding domain, excisionase family protein",
+      "locus_tag": "BCE_G9241_pBC218_0176",
+      "note": "identified by match to protein family HMM TIGR01764"
+    },
+    {
+      "type": "gene",
+      "start": 207261,
+      "end": 208434,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0177",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 207261,
+      "end": 208434,
+      "strand": 1,
+      "gene": null,
+      "product": "putative integrase-recombinase",
+      "locus_tag": "BCE_G9241_pBC218_0177",
+      "note": "identified by match to protein family HMM PF00589"
+    },
+    {
+      "type": "gene",
+      "start": 208607,
+      "end": 208709,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0178",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 208607,
+      "end": 208709,
+      "strand": 1,
+      "gene": null,
+      "product": "hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0178",
+      "note": "identified by glimmer2; putative"
+    },
+    {
+      "type": "gene",
+      "start": 208773,
+      "end": 208992,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0179",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 208773,
+      "end": 208992,
+      "strand": 1,
+      "gene": null,
+      "product": "small acid-soluble spore protein-related protein",
+      "locus_tag": "BCE_G9241_pBC218_0179",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 209512,
+      "end": 212530,
+      "strand": -1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0180",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 209512,
+      "end": 212530,
+      "strand": -1,
+      "gene": null,
+      "product": "transposase X",
+      "locus_tag": "BCE_G9241_pBC218_0180",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 212630,
+      "end": 213212,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0181",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 212630,
+      "end": 213212,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0181",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 213528,
+      "end": 214620,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0182",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 213528,
+      "end": 214620,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0182",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 214663,
+      "end": 216142,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0183",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 214663,
+      "end": 216142,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0183",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 216098,
+      "end": 217298,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0184",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 216098,
+      "end": 217298,
+      "strand": 1,
+      "gene": null,
+      "product": "spore germination protein xc precursor. bacillus",
+      "locus_tag": "BCE_G9241_pBC218_0184",
+      "note": null
+    },
+    {
+      "type": "gene",
+      "start": 217825,
+      "end": 217975,
+      "strand": 1,
+      "gene": null,
+      "product": null,
+      "locus_tag": "BCE_G9241_pBC218_0185",
+      "note": null
+    },
+    {
+      "type": "CDS",
+      "start": 217825,
+      "end": 217975,
+      "strand": 1,
+      "gene": null,
+      "product": "conserved hypothetical protein protein",
+      "locus_tag": "BCE_G9241_pBC218_0185",
+      "note": null
+    }
+  ],
+  "annotations": {
+    "topology": "linear",
+    "data_file_division": "BCT",
+    "date": "21-MAY-2004",
+    "accessions": [
+      "GenBank_AAEK01000004",
+      "AAEK01000000"
+    ],
+    "sequence_version": 1,
+    "keywords": [
+      "WGS"
+    ],
+    "source": "Bacillus cereus G9241",
+    "organism": "Bacillus cereus G9241",
+    "taxonomy": [
+      "Bacteria",
+      "Bacillota",
+      "Bacilli",
+      "Bacillales",
+      "Bacillaceae",
+      "Bacillus",
+      "Bacillus cereus group"
+    ],
+    "references": [
+      "location: [0:218094]\nauthors: Hoffmaster,A.R., Ravel,J., Rasko,D.A., Chapman,G.D., Chute,M.D., Marston,C.K., De,B.K., Sacchi,C.T., Fitzgerald,C., Mayer,L.W., Maiden,M.C., Priest,F.G., Barker,M., Jiang,L., Cer,R.Z., Rilstone,J., Peterson,S.N., Weyant,R.S., Galloway,D.R., Read,T.D., Popovic,T. and Fraser,C.M.\ntitle: Identification of anthrax toxin genes in a Bacillus cereus associated with an illness resembling inhalation anthrax\njournal: Proc. Natl. Acad. Sci. U.S.A. 101 (22), 8449-8454 (2004)\nmedline id: \npubmed id: 15155910\ncomment: \n",
+      "location: [0:218094]\nauthors: Hoffmaster,A.R., Ravel,J., Rasko,D.A., Chapman,G.D., Chute,M.D., Marston,C.K., De,B.K., Sacchi,C.T., Fitzgerald,C., Mayer,L.W., Maiden,M.C., Priest,F.G., Barker,M., Jiang,L., Cer,R.Z., Rilstone,J., Peterson,S.N., Weyant,R.S., Galloway,D.R., Read,T.D., Popovic,T. and Fraser,C.M.\ntitle: Identification of anthrax toxin genes in a Bacillus cereus associated with an illness resembling inhalation anthrax\njournal: Proc. Natl. Acad. Sci. U.S.A. 101 (22), 8449-8454 (2004)\nmedline id: \npubmed id: 15155910\ncomment: \n",
+      "location: [0:218094]\nauthors: Hoffmaster,A.R., Ravel,J., Rasko,D.A., Chapman,G.D., Chute,M.D., Marston,C.K., De,B.K., Sacchi,C.T., Fitzgerald,C., Mayer,L.W., Maiden,M.C.J., Priest,F.G., Barker,M., Jiang,L., Cer,R.Z., Rilstone,J., Peterson,S.N., Weyant,R.S., Galloway,D.R., Read,T.D., Popovic,T. and Fraser,C.M.\ntitle: Direct Submission\njournal: Submitted (13-MAY-2004) The Institute for Genomic Research, 9712 Medical Center Drive, Rockville, MD 20850, USA\nmedline id: \npubmed id: \ncomment: \n",
+      "location: [0:218094]\nauthors: Hoffmaster,A.R., Ravel,J., Rasko,D.A., Chapman,G.D., Chute,M.D., Marston,C.K., De,B.K., Sacchi,C.T., Fitzgerald,C., Mayer,L.W., Maiden,M.C.J., Priest,F.G., Barker,M., Jiang,L., Cer,R.Z., Rilstone,J., Peterson,S.N., Weyant,R.S., Galloway,D.R., Read,T.D., Popovic,T. and Fraser,C.M.\ntitle: Direct Submission\njournal: Submitted (13-MAY-2004) The Institute for Genomic Research, 9712 Medical Center Drive, Rockville, MD 20850, USA\nmedline id: \npubmed id: \ncomment: \n"
+    ],
+    "molecule_type": "DNA"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "id": "e5017e56-926e-41e1-b20d-30e9f07a4971",
+  "seq_hash": "8ad04e7661daac11f489c7b3e64bd7775dd97ddca1f5819b26c3c0e80abff318",
+  "length": 182777,
+  "classification": "Natural",
+  "topology": "linear",
+  "copy_number": "unknown",
+  "plasmid_type": "unknown",
+  "host": "unknown",
+  "origins": [],
+  "features": {
+    "engineered": {
+      "has_synthetic_ori": false,
+      "origins": [],
+      "markers": []
+    },
+    "natural": {
+      "amr_genes": [],
+      "mobility": null,
+      "replicon_type": null,
+      "coding_density": 0.0,
+      "predicted_host": null,
+      "ptu": null
+    },
+    "qc": {
+      "gc_content": null,
+      "linguistic_complexity": null,
+      "synthesis_risk": null,
+      "synthesis_risk_reasons": [],
+      "max_homopolymer": null
+    }
+  },
+  "metadata": {
+    "organism": "Bacillus anthracis str. CNEVA-9066",
+    "description": "Bacillus anthracis str. CNEVA-9066 plasmid pXO1 cont2250, whole genome shotgun sequence",
+    "original_id": "GenBank_AAEN01000029.1",
+    "original_name": "GenBank_AAEN01000029",
+    "filename": "GenBank AAEN01000029.1.gbk",
+    "gc_content": 0.32558801162071815,
+    "resistance_markers": [],
+    "reporter_genes": [],
+    "tags": [],
+    "cds_count": 0,
+    "gene_count": 0,
+    "has_origin": false,
+    "genbank_features": [],
+    "annotations": {
+      "topology": "linear",
+      "data_file_division": "BCT",
+      "date": "03-JUN-2004",
+      "accessions": [
+        "GenBank_AAEN01000029",
+        "AAEN01000000"
+      ],
+      "sequence_version": 1,
+      "keywords": [
+        "WGS"
+      ],
+      "source": "Bacillus anthracis str. CNEVA-9066",
+      "organism": "Bacillus anthracis str. CNEVA-9066",
+      "taxonomy": [
+        "Bacteria",
+        "Bacillota",
+        "Bacilli",
+        "Bacillales",
+        "Bacillaceae",
+        "Bacillus",
+        "Bacillus cereus group"
+      ],
+      "references": [
+        "location: [0:182777]\nauthors: Ravel,J., Rasko,D.A., Shumway,M.F., Jiang,L., Cer,R.Z., Federova,N.B., Wilson,M., Stanley,S., Decker,S., Read,T.D., Salzberg,S. and Fraser,C.M.\ntitle: Bacillus anthracis comparative genomics\njournal: Unpublished\nmedline id: \npubmed id: \ncomment: \n",
+        "location: [0:182777]\nauthors: Ravel,J., Rasko,D.A., Shumway,M.F., Jiang,L., Cer,R.Z., Federova,N.B., Wilson,M., Stanley,S., Decker,S., Read,T.D., Salzberg,S. and Fraser,C.M.\ntitle: Direct Submission\njournal: Submitted (02-JUN-2004) Microbial Genomics, The Institute for Genomic Research, 9712 Medical Center Drive, Rockville, MD 20850, USA\nmedline id: \npubmed id: \ncomment: \n"
+      ],
+      "molecule_type": "DNA"
+    }
+  },
+  "sample_id": "GenBank_AAEN01000029.1"
+}

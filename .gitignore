@@ -1,0 +1,48 @@
+# Metaflow
+.metaflow/
+**/.metaflow/
+
+# Project Outputs
+plasmid_data/
+plasmid_data_output/
+tests_data_output/
+tests/data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest
+.pytest_cache/
+
+# IDEs
+.idea/
+.vscode/
+.DS_Store

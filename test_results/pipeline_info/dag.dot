@@ -1,0 +1,119 @@
+digraph "dag" {
+rankdir=TB;
+v0 [shape=point,label="",fixedsize=true,width=0.1,xlabel="Channel.fromPath"];
+v1 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v0 -> v1;
+
+v1 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v2 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="count"];
+v1 -> v2 [label="input_ch"];
+
+v2 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="count"];
+v3 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="view"];
+v2 -> v3;
+
+v3 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="view"];
+v4 [shape=point];
+v3 -> v4;
+
+v1 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v5 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v1 -> v5 [label="input_ch"];
+
+v5 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v6 [label="SIMPLE:NORMALIZE"];
+v5 -> v6;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v7 [label="SIMPLE:SCAN_ENGINEERED"];
+v6 -> v7;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v16 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v6 -> v16;
+
+v7 [label="SIMPLE:SCAN_ENGINEERED"];
+v16 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v7 -> v16;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v8 [label="SIMPLE:SKIP_BAKTA"];
+v6 -> v8;
+
+v8 [label="SIMPLE:SKIP_BAKTA"];
+v13 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v8 -> v13;
+
+v8 [label="SIMPLE:SKIP_BAKTA"];
+v9 [shape=point];
+v8 -> v9;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v10 [label="SIMPLE:SKIP_MOBSUITE"];
+v6 -> v10;
+
+v10 [label="SIMPLE:SKIP_MOBSUITE"];
+v13 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v10 -> v13;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v11 [label="SIMPLE:SKIP_COPLA"];
+v6 -> v11;
+
+v11 [label="SIMPLE:SKIP_COPLA"];
+v14 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v11 -> v14;
+
+v6 [label="SIMPLE:NORMALIZE"];
+v12 [label="SIMPLE:SKIP_QC"];
+v6 -> v12;
+
+v12 [label="SIMPLE:SKIP_QC"];
+v18 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v12 -> v18;
+
+v13 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v14 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v13 -> v14;
+
+v14 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v15 [label="SIMPLE:PARSE_NATURAL"];
+v14 -> v15 [label="natural_inputs"];
+
+v15 [label="SIMPLE:PARSE_NATURAL"];
+v17 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v15 -> v17;
+
+v16 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v17 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v16 -> v17;
+
+v17 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v18 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v17 -> v18;
+
+v18 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="join"];
+v19 [label="SIMPLE:CLASSIFY"];
+v18 -> v19 [label="classify_inputs"];
+
+v19 [label="SIMPLE:CLASSIFY"];
+v20 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v19 -> v20;
+
+v20 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="map"];
+v21 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="collect"];
+v20 -> v21;
+
+v21 [shape=circle,label="",fixedsize=true,width=0.1,xlabel="collect"];
+v22 [label="SIMPLE:EXPORT_PARQUET"];
+v21 -> v22 [label="classified_files"];
+
+v22 [label="SIMPLE:EXPORT_PARQUET"];
+v24 [shape=point];
+v22 -> v24;
+
+v22 [label="SIMPLE:EXPORT_PARQUET"];
+v23 [shape=point];
+v22 -> v23;
+
+}
