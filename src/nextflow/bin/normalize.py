@@ -2,13 +2,18 @@
 """
 normalize.py - Input normalization and metadata extraction for SPACE pipeline.
 
-Extracts rich metadata from GenBank files and converts to FASTA for downstream tools.
-Reuses logic from plasmid_pretraining.parsers for consistency.
+Supports multiple input formats:
+- GenBank (.gb, .gbk) - Full metadata extraction
+- FASTA (.fasta, .fa) - Minimal metadata
+- Addgene JSON (.json) - Rich Addgene metadata
+
+Extracts rich metadata and converts to FASTA for downstream tools.
 """
 
 import argparse
 import hashlib
 import json
+import re
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -97,14 +102,21 @@ def calculate_seq_hash(sequence: str) -> str:
 
 
 def match_keywords(text: str, keyword_dict: Dict[str, List[str]]) -> List[str]:
-    """Match text against keyword dictionary."""
+    """Match text against keyword dictionary using word boundaries.
+
+    Uses regex word boundaries to avoid false positives like matching
+    'cos' (cell line) in 'glucose' (sugar).
+    """
     if not text:
         return []
     text_lower = text.lower()
     matches = []
     for category, keywords in keyword_dict.items():
         for keyword in keywords:
-            if keyword.lower() in text_lower:
+            # Use word boundary regex to match whole words/phrases only
+            # \b matches word boundaries (start/end of word)
+            pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
+            if re.search(pattern, text_lower):
                 if category not in matches:
                     matches.append(category)
                 break
@@ -283,6 +295,127 @@ def parse_genbank(filepath: Path) -> Dict[str, Any]:
     }
 
 
+def parse_addgene_json(filepath: Path) -> Dict[str, Any]:
+    """Parse an Addgene JSON file (split from addgene_plasmids.json).
+
+    Maps Addgene fields to our internal schema while preserving all metadata.
+    """
+    with open(filepath, "r") as f:
+        data = json.load(f)
+
+    # Get sequence (added by split_addgene.py)
+    sequence = data.get("_sequence", "").upper()
+    if not sequence:
+        raise ValueError(f"No sequence found in {filepath}")
+
+    # Generate IDs
+    record_id = str(uuid.uuid4())
+    seq_hash = calculate_seq_hash(sequence)
+
+    # Map Addgene fields to internal schema
+    addgene_id = data.get("id", "")
+    original_id = f"addgene_{addgene_id}" if addgene_id else filepath.stem
+
+    # Extract resistance markers from bacterial_resistance field
+    bacterial_resistance = data.get("bacterial_resistance", "") or ""
+    resistance_markers = []
+    if bacterial_resistance:
+        resistance_markers = match_keywords(bacterial_resistance, RESISTANCE_MARKERS)
+
+    # Extract copy number from plasmid_copy field
+    plasmid_copy = (data.get("plasmid_copy") or "").lower()
+    copy_number = None
+    if "high" in plasmid_copy:
+        copy_number = "high"
+    elif "low" in plasmid_copy:
+        copy_number = "low"
+    elif plasmid_copy:
+        copy_number = "medium"
+
+    # Extract plasmid type from vector_types
+    cloning = data.get("cloning", {}) or {}
+    vector_types = cloning.get("vector_types", []) or []
+    vector_types_text = " ".join(vector_types) if vector_types else ""
+    plasmid_type_matches = match_keywords(vector_types_text, PLASMID_TYPES)
+    plasmid_type = plasmid_type_matches[0] if plasmid_type_matches else None
+
+    # Also check name and description for plasmid type if not found
+    if not plasmid_type:
+        name_desc = f"{data.get('name', '')} {data.get('description', '')}"
+        plasmid_type_matches = match_keywords(name_desc, PLASMID_TYPES)
+        plasmid_type = plasmid_type_matches[0] if plasmid_type_matches else None
+
+    # Extract reporter genes from tags and gene fields
+    inserts = data.get("inserts", []) or []
+    all_tags = []
+    reporter_genes = []
+    genes = []
+    for insert in inserts:
+        insert_tags = insert.get("tags", []) or []
+        all_tags.extend(insert_tags)
+        insert_gene = insert.get("gene", "") or ""
+        if insert_gene:
+            genes.append(insert_gene)
+
+    # Match reporters and tags from collected data
+    tags_text = " ".join(all_tags + genes)
+    reporter_genes = match_keywords(tags_text, REPORTER_GENES)
+    protein_tags = match_keywords(tags_text, PROTEIN_TAGS)
+
+    # Extract host from growth_strain
+    growth_strain = data.get("growth_strain", "") or ""
+    host = growth_strain if growth_strain else None
+
+    # Build comprehensive annotations dict with all Addgene metadata
+    annotations = {
+        "addgene_id": addgene_id,
+        "sequence_source": data.get("_sequence_source", ""),
+        "depositor_name": data.get("depositor_name", ""),
+        "depositor_institution": data.get("depositor_institution", ""),
+        "pi_name": data.get("pi_name", ""),
+        "article_references": data.get("article_references", []),
+        "url": data.get("url", ""),
+        "vector_types": vector_types,
+        "growth_strain": growth_strain,
+        "growth_temperature": data.get("growth_temperature", ""),
+        "bacterial_resistance_raw": bacterial_resistance,
+        "plasmid_copy_raw": data.get("plasmid_copy", ""),
+        "gene_insert": data.get("gene_insert", ""),
+        "inserts": inserts,
+        "cloning": cloning,
+        "purpose": data.get("purpose", ""),
+        "addgene_alias_ids": data.get("alias_ids", []),
+    }
+
+    # Clean up None values
+    annotations = {k: v for k, v in annotations.items() if v is not None and v != ""}
+
+    return {
+        "id": record_id,
+        "seq_hash": seq_hash,
+        "original_id": original_id,
+        "original_name": data.get("name", ""),
+        "filename": filepath.name,
+        "length": len(sequence),
+        "gc_content": calculate_gc_content(sequence),
+        "topology": "circular",  # Addgene plasmids are typically circular
+        "organism": None,
+        "description": data.get("description", "") or data.get("name", ""),
+        "host": host,
+        "plasmid_type": plasmid_type,
+        "copy_number": copy_number,
+        "resistance_markers": resistance_markers,
+        "reporter_genes": reporter_genes,
+        "tags": protein_tags,
+        "cds_count": 0,  # Not available from Addgene JSON
+        "gene_count": len(genes),
+        "has_origin": False,  # Will be detected by PlasmidKit
+        "genbank_features": [],  # Not available from Addgene JSON
+        "annotations": annotations,
+        "sequence": sequence,
+    }
+
+
 def parse_fasta(filepath: Path) -> Dict[str, Any]:
     """Parse a FASTA file (minimal metadata)."""
     with open(filepath, "r") as f:
@@ -351,7 +484,9 @@ def main():
 
     # Determine file type and parse
     suffix = input_path.suffix.lower()
-    if suffix in [".gb", ".gbk", ".genbank"]:
+    if suffix == ".json":
+        metadata = parse_addgene_json(input_path)
+    elif suffix in [".gb", ".gbk", ".genbank"]:
         metadata = parse_genbank(input_path)
     elif suffix in [".fasta", ".fa", ".fna"]:
         metadata = parse_fasta(input_path)

@@ -1,1 +1,0 @@
-/Users/mcclainthiel/Projects/PhD/plasmid-pretraining/work/cb/9674bbad58833c2f8cf36600f0150a/GenBank_AAEK01000020.1_mobsuite_skip.txt

@@ -1,12 +1,17 @@
+# Nextflow
+.nextflow/
+.nextflow.log*
+work/
+results/
+test_results/
+
 # Metaflow
 .metaflow/
-**/.metaflow/
 
 # Project Outputs
 plasmid_data/
 plasmid_data_output/
 tests_data_output/
-tests/data/
 
 # Python
 __pycache__/
@@ -35,7 +40,6 @@ wheels/
 *.egg
 
 # Byte-compiled / optimized / DLL files
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -46,3 +50,6 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+
+# Nextflow binary (downloaded)
+nextflow

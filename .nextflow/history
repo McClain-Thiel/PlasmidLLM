@@ -1,5 +1,0 @@
-2025-12-17 12:16:27	2.8s	nice_ptolemy	ERR	07aa6af6e6ff7d17e849e740876ed0fc	a6ae02a9-26b9-4c21-8c5f-0f2e36074f15	nextflow run src/nextflow/main.nf -entry SIMPLE --input_pattern 'tests/data/*.gbk' --outdir test_results
-2025-12-17 12:17:07	3.1s	distraught_gilbert	ERR	c7f68c841d36ec6186cc20786e09a3c3	62684174-c969-42a8-b52f-a4ad820ab506	nextflow run src/nextflow/main.nf -entry SIMPLE --input_pattern 'tests/data/*.gbk' --outdir test_results
-2025-12-17 12:18:16	3.1s	sad_banach	ERR	c7f68c841d36ec6186cc20786e09a3c3	6603ce88-d6a0-4d31-87d0-9f484b77af84	nextflow run src/nextflow/main.nf -entry SIMPLE --input_pattern 'tests/data/*.gbk' --outdir test_results
-2025-12-17 12:21:25	23.8s	voluminous_curran	OK	c7f68c841d36ec6186cc20786e09a3c3	66b0e62f-5340-4f99-b0fd-47a4997ff363	nextflow run src/nextflow/main.nf -entry SIMPLE --input_pattern 'tests/data/*.gbk' --outdir test_results
-2025-12-17 16:01:01	21.2s	determined_ampere	OK	c7f68c841d36ec6186cc20786e09a3c3	32b1fd3c-ab15-48c6-85f2-9218e25ac50a	nextflow run src/nextflow/main.nf -entry SIMPLE --input_pattern 'tests/data/*.gbk' --outdir test_results

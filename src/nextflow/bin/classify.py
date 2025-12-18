@@ -9,6 +9,7 @@ Classification logic:
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -58,11 +59,10 @@ def predict_plasmid_type(metadata: Dict, engineered_result: Dict) -> Optional[st
     """
     Predict plasmid type from features and annotations.
 
-    Uses keyword matching on description, features, and detected markers.
+    Uses keyword matching with word boundaries on description, features, and detected markers.
     """
     # Check description for keywords
     description = (metadata.get('description') or '').lower()
-    organism = (metadata.get('organism') or '').lower()
 
     # Promoter-based prediction
     origin_names = [o.lower() for o in engineered_result.get('origin_names', [])]
@@ -86,8 +86,11 @@ def predict_plasmid_type(metadata: Dict, engineered_result: Dict) -> Optional[st
     }
 
     for ptype, keywords in type_keywords.items():
-        if any(kw in all_text for kw in keywords):
-            return ptype
+        for kw in keywords:
+            # Use word boundary regex to avoid false positives
+            pattern = r'\b' + re.escape(kw) + r'\b'
+            if re.search(pattern, all_text):
+                return ptype
 
     return None
 
