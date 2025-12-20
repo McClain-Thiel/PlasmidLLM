@@ -9,6 +9,7 @@ LABEL description="SPACE Pipeline - Python processing container"
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

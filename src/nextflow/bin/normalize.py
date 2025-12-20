@@ -352,10 +352,20 @@ def parse_addgene_json(filepath: Path) -> Dict[str, Any]:
     genes = []
     for insert in inserts:
         insert_tags = insert.get("tags", []) or []
-        all_tags.extend(insert_tags)
+        # Handle both string tags and dict tags
+        for tag in insert_tags:
+            if isinstance(tag, str):
+                all_tags.append(tag)
+            elif isinstance(tag, dict):
+                # Extract tag name from dict if present
+                tag_name = tag.get("name", "") or tag.get("tag", "") or str(tag)
+                all_tags.append(tag_name)
         insert_gene = insert.get("gene", "") or ""
         if insert_gene:
-            genes.append(insert_gene)
+            if isinstance(insert_gene, str):
+                genes.append(insert_gene)
+            elif isinstance(insert_gene, dict):
+                genes.append(insert_gene.get("name", "") or str(insert_gene))
 
     # Match reporters and tags from collected data
     tags_text = " ".join(all_tags + genes)
@@ -462,10 +472,9 @@ def write_fasta(metadata: Dict[str, Any], output_path: Path):
 
 
 def write_metadata(metadata: Dict[str, Any], output_path: Path):
-    """Write metadata to JSON file (excluding sequence)."""
-    meta_out = {k: v for k, v in metadata.items() if k != "sequence"}
+    """Write metadata to JSON file (including sequence for final output)."""
     with open(output_path, "w") as f:
-        json.dump(meta_out, f, indent=2)
+        json.dump(metadata, f, indent=2)
 
 
 def main():

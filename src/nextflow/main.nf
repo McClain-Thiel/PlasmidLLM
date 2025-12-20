@@ -19,7 +19,7 @@
 nextflow.enable.dsl=2
 
 // Include modules
-include { NORMALIZE } from './modules/normalize'
+include { NORMALIZE; SPLIT_JSON_FILE } from './modules/normalize'
 include { SCAN_ENGINEERED } from './modules/scan_engineered'
 include { RUN_BAKTA; RUN_MOBSUITE; RUN_COPLA; PARSE_NATURAL; SKIP_BAKTA; SKIP_MOBSUITE; SKIP_COPLA } from './modules/scan_natural'
 include { SEQ_QC; SKIP_QC } from './modules/seq_qc'
@@ -49,9 +49,29 @@ Skip QC       : ${params.skip_qc}
  * Main workflow
  */
 workflow {
-    // Input channel from file pattern
-    input_ch = Channel.fromPath(params.input_pattern, checkIfExists: true)
-        .map { file -> tuple(file.baseName.replaceAll(/\.(gb|gbk|fasta|fa)$/, '').replaceAll(/[^a-zA-Z0-9_.-]/, '_'), file) }
+    // Input channel from file pattern(s) - supports list or single pattern
+    if (params.input_pattern instanceof List) {
+        raw_input_ch = Channel.fromPath(params.input_pattern, checkIfExists: true)
+    } else {
+        raw_input_ch = Channel.fromPath(params.input_pattern, checkIfExists: true)
+    }
+
+    // Branch inputs: JSONs need splitting, others proceed directly
+    input_branch = raw_input_ch.branch {
+        json: it.name.endsWith('.json')
+        other: true
+    }
+
+    // Split large JSONs
+    SPLIT_JSON_FILE(input_branch.json)
+    
+    // Flatten the split output (list of files) into individual items
+    split_json_ch = SPLIT_JSON_FILE.out.split_files.flatten()
+
+    // Merge original non-JSON files with the newly split JSON files
+    // And map to (id, file) tuple
+    input_ch = input_branch.other.mix(split_json_ch)
+        .map { file -> tuple(file.baseName.replaceAll(/\.(gb|gbk|fasta|fa|json)$/, '').replaceAll(/[^a-zA-Z0-9_.-]/, '_'), file) }
 
     // Log input files
     input_ch.count().view { n -> "Processing ${n} input files" }

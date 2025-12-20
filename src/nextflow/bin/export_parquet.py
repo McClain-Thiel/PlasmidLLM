@@ -45,6 +45,7 @@ def create_golden_table(records: List[Dict]) -> pd.DataFrame:
             "id": record.get("id"),
             "seq_hash": record.get("seq_hash"),
             "length": record.get("length"),
+            "sequence": record.get("sequence"),  # Include actual sequence
 
             # Primary columns
             "classification": record.get("classification"),
@@ -68,7 +69,7 @@ def create_golden_table(records: List[Dict]) -> pd.DataFrame:
 
     # Ensure correct column order
     columns = [
-        "id", "seq_hash", "length",
+        "id", "seq_hash", "length", "sequence",
         "classification", "topology", "copy_number", "plasmid_type", "host",
         "origins", "features", "metadata"
     ]
@@ -117,7 +118,7 @@ def main():
     if not records:
         # Create empty DataFrame with schema
         df = pd.DataFrame(columns=[
-            "id", "seq_hash", "length",
+            "id", "seq_hash", "length", "sequence",
             "classification", "topology", "copy_number", "plasmid_type", "host",
             "origins", "features", "metadata"
         ])

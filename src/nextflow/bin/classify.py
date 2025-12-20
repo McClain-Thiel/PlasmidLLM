@@ -147,6 +147,7 @@ def classify(
         "id": genbank_meta.get('id'),
         "seq_hash": genbank_meta.get('seq_hash'),
         "length": genbank_meta.get('length'),
+        "sequence": genbank_meta.get('sequence'),  # Include sequence for final output
 
         # PRIMARY COLUMNS
         "classification": classification,

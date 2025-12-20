@@ -53,3 +53,17 @@ wheels/
 
 # Nextflow binary (downloaded)
 nextflow
+
+# Logs
+*.log
+extract_*.log
+setup_*.log
+
+# Results and test data
+results_*/
+test_run_data/
+data/
+
+# Database files
+db-light/
+amrfinder/
