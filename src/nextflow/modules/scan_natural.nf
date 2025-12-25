@@ -31,6 +31,7 @@ process RUN_BAKTA {
         --prefix ${sample_id} \\
         --threads ${task.cpus} \\
         --skip-plot \\
+        --skip-trna \\
         ${fasta}
     """
 }

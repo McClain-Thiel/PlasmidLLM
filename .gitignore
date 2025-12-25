@@ -52,7 +52,7 @@ wheels/
 .DS_Store
 
 # Nextflow binary (downloaded)
-nextflow
+/nextflow
 
 # Logs
 *.log
