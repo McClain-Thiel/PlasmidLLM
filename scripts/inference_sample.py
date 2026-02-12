@@ -96,15 +96,11 @@ def main():
         generated_ids = output_ids[0, len(input_ids) :].tolist()
         generated_text = tokenizer.decode(generated_ids)
 
-        # Truncate true completion for display
-        true_short = true_completion[:200] + "..." if len(true_completion) > 200 else true_completion
-        gen_short = generated_text[:200] + "..." if len(generated_text) > 200 else generated_text
-
         results.append({
             "idx": idx,
             "prompt": prompt_text,
-            "true_completion": true_short,
-            "generated": gen_short,
+            "true_completion": true_completion,
+            "generated": generated_text,
             "true_len": len(true_completion),
             "gen_len": len(generated_text),
         })
