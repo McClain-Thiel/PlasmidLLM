@@ -93,13 +93,17 @@ class TransformerLM(nn.Module):
         d_ff = config.d_ff
         dropout = config.dropout
 
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
+        # Pad vocab to multiple of 8 for CUDA bf16 alignment
+        padded_vocab = ((vocab_size + 7) // 8) * 8
+        self.vocab_size = vocab_size
+
+        self.tok_emb = nn.Embedding(padded_vocab, d_model)
         self.drop = nn.Dropout(dropout)
         self.blocks = nn.ModuleList(
             [TransformerBlock(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)]
         )
         self.ln_f = nn.RMSNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head = nn.Linear(d_model, padded_vocab, bias=False)
 
         # Weight tying
         self.head.weight = self.tok_emb.weight

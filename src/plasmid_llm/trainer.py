@@ -13,7 +13,7 @@ import mlflow
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
-from torch.cuda.amp import GradScaler
+from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from plasmid_llm.utils.metrics import compute_perplexity
@@ -88,8 +88,10 @@ class Trainer:
         self.optimizer = _build_optimizer(model, cfg.train)
         self.scheduler = _build_scheduler(self.optimizer, cfg.train)
 
-        self.use_amp = cfg.train.precision == "bf16" and self.device.type == "cuda"
-        self.scaler = GradScaler(enabled=self.use_amp and cfg.train.precision != "bf16")
+        self.use_amp = cfg.train.precision in ("bf16", "fp16") and self.device.type == "cuda"
+        # bf16 doesn't need loss scaling; fp16 does
+        self.use_scaler = cfg.train.precision == "fp16" and self.device.type == "cuda"
+        self.scaler = GradScaler("cuda", enabled=self.use_scaler)
         self.amp_dtype = torch.bfloat16 if cfg.train.precision == "bf16" else torch.float16
 
         self.global_step = 0

@@ -108,13 +108,16 @@ class MambaLM(nn.Module):
         d_conv = config.d_conv
         expand = config.expand
 
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
+        padded_vocab = ((vocab_size + 7) // 8) * 8
+        self.vocab_size = vocab_size
+
+        self.tok_emb = nn.Embedding(padded_vocab, d_model)
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList(
             [MambaBlock(d_model, d_state, d_conv, expand) for _ in range(n_layers)]
         )
         self.ln_f = nn.RMSNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head = nn.Linear(d_model, padded_vocab, bias=False)
         self.head.weight = self.tok_emb.weight
 
         self._init_weights()

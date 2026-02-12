@@ -54,7 +54,8 @@ class DenoisingTransformer(nn.Module):
 
     def __init__(self, vocab_size: int, d_model: int, n_layers: int, n_heads: int, max_len: int = 8192, dropout: float = 0.1):
         super().__init__()
-        self.tok_emb = nn.Embedding(vocab_size, d_model)
+        padded_vocab = ((vocab_size + 7) // 8) * 8
+        self.tok_emb = nn.Embedding(padded_vocab, d_model)
         self.pos_emb = nn.Embedding(max_len, d_model)
         self.time_emb = nn.Sequential(
             nn.Linear(1, d_model),
@@ -66,7 +67,7 @@ class DenoisingTransformer(nn.Module):
             [DenoisingTransformerBlock(d_model, n_heads, dropout) for _ in range(n_layers)]
         )
         self.ln_f = nn.RMSNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size, bias=False)
+        self.head = nn.Linear(d_model, padded_vocab, bias=False)
 
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, key_padding_mask: torch.Tensor | None = None
