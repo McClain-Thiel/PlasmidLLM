@@ -75,14 +75,15 @@ class MambaLM(nn.Module):
         temperature: float = 1.0,
         top_k: int = 50,
     ) -> torch.Tensor:
-        """Autoregressive generation."""
-        for _ in range(max_new_tokens):
-            logits = self.mamba(input_ids).logits[:, -1, :]
-            logits = logits / temperature
-            if top_k > 0:
-                v, _ = torch.topk(logits, top_k)
-                logits[logits < v[:, [-1]]] = float("-inf")
-            probs = F.softmax(logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)
-            input_ids = torch.cat([input_ids, next_token], dim=1)
-        return input_ids
+        """Stateful autoregressive generation using Mamba's recurrent state.
+
+        Uses mamba-ssm's built-in generate which carries forward the SSM
+        hidden state — O(1) per step instead of reprocessing the full sequence.
+        """
+        max_length = input_ids.shape[1] + max_new_tokens
+        return self.mamba.generate(
+            input_ids=input_ids,
+            max_length=max_length,
+            temperature=temperature,
+            top_k=top_k,
+        )
