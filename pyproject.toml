@@ -5,7 +5,6 @@ description = "Language models for plasmid DNA sequence generation"
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.1,<2.10",
-    "transformers>=4.39",
     "tokenizers>=0.15",
     "pyarrow>=14.0",
     "pandas>=2.0",
