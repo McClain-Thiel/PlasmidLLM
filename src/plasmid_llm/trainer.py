@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import psutil
 import subprocess
 import time
 from pathlib import Path
@@ -32,6 +33,24 @@ def _get_git_commit() -> str:
 
 def _count_params(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def _get_system_metrics(device: torch.device) -> dict[str, float]:
+    """Collect CPU and GPU utilization metrics."""
+    metrics = {
+        "system/cpu_percent": psutil.cpu_percent(),
+        "system/ram_percent": psutil.virtual_memory().percent,
+    }
+    if device.type == "cuda":
+        idx = device.index or 0
+        mem_alloc = torch.cuda.memory_allocated(idx) / 1e9
+        mem_reserved = torch.cuda.memory_reserved(idx) / 1e9
+        mem_total = torch.cuda.get_device_properties(idx).total_mem / 1e9
+        metrics["system/gpu_mem_allocated_gb"] = round(mem_alloc, 2)
+        metrics["system/gpu_mem_reserved_gb"] = round(mem_reserved, 2)
+        metrics["system/gpu_mem_total_gb"] = round(mem_total, 2)
+        metrics["system/gpu_utilization_percent"] = round(mem_alloc / mem_total * 100, 1)
+    return metrics
 
 
 def _build_optimizer(model: nn.Module, cfg: Any) -> torch.optim.Optimizer:
@@ -157,15 +176,14 @@ class Trainer:
                 if self.global_step % self.cfg.train.log_every == 0:
                     lr = self.scheduler.get_last_lr()[0]
                     train_ppl = compute_perplexity(loss)
-                    mlflow.log_metrics(
-                        {
-                            "train/loss": loss,
-                            "train/perplexity": train_ppl,
-                            "train/lr": lr,
-                            "train/grad_norm": grad_norm,
-                        },
-                        step=self.global_step,
-                    )
+                    metrics = {
+                        "train/loss": loss,
+                        "train/perplexity": train_ppl,
+                        "train/lr": lr,
+                        "train/grad_norm": grad_norm,
+                    }
+                    metrics.update(_get_system_metrics(self.device))
+                    mlflow.log_metrics(metrics, step=self.global_step)
                     log.info(
                         f"step={self.global_step} loss={loss:.4f} ppl={train_ppl:.2f} "
                         f"lr={lr:.2e} grad_norm={grad_norm:.3f}"
