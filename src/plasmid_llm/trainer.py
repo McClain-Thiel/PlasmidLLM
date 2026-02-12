@@ -156,17 +156,19 @@ class Trainer:
                 # Logging
                 if self.global_step % self.cfg.train.log_every == 0:
                     lr = self.scheduler.get_last_lr()[0]
+                    train_ppl = compute_perplexity(loss)
                     mlflow.log_metrics(
                         {
                             "train/loss": loss,
+                            "train/perplexity": train_ppl,
                             "train/lr": lr,
                             "train/grad_norm": grad_norm,
                         },
                         step=self.global_step,
                     )
                     log.info(
-                        f"step={self.global_step} loss={loss:.4f} lr={lr:.2e} "
-                        f"grad_norm={grad_norm:.3f}"
+                        f"step={self.global_step} loss={loss:.4f} ppl={train_ppl:.2f} "
+                        f"lr={lr:.2e} grad_norm={grad_norm:.3f}"
                     )
 
                 # Eval

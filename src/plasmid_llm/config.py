@@ -50,6 +50,16 @@ class TransformerConfig:
 
 
 @dataclass
+class TransformerLargeConfig:
+    arch: str = "transformer"
+    d_model: int = 1024
+    n_layers: int = 24
+    n_heads: int = 16
+    d_ff: int = 4096
+    dropout: float = 0.1
+
+
+@dataclass
 class MambaConfig:
     arch: str = "mamba"
     d_model: int = 256
@@ -86,6 +96,7 @@ def register_configs() -> None:
     cs.store(group="data", name="default", node=DataConfig)
     cs.store(group="train", name="default", node=TrainConfig)
     cs.store(group="model", name="transformer", node=TransformerConfig)
+    cs.store(group="model", name="transformer_large", node=TransformerLargeConfig)
     cs.store(group="model", name="mamba", node=MambaConfig)
     cs.store(group="model", name="diffusion", node=DiffusionConfig)
     cs.store(group="mlflow", name="databricks", node=MlflowConfig)
