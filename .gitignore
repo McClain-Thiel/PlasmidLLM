@@ -6,6 +6,7 @@ results/
 test_results/
 results_addgene/
 data/
+.venv/
 
 # Metaflow
 .metaflow/
@@ -55,3 +56,16 @@ wheels/
 
 # Nextflow binary (downloaded)
 nextflow
+
+.databricks
+
+# Hydra outputs
+outputs/
+multirun/
+
+# Checkpoints
+checkpoints/
+*.pt
+
+# MLflow
+mlruns/
