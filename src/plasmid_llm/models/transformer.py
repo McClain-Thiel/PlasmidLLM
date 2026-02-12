@@ -12,21 +12,22 @@ import torch.nn.functional as F
 from plasmid_llm.models import register_model
 
 
-def _rope_freqs(dim: int, max_len: int = 8192, base: float = 10000.0) -> torch.Tensor:
-    """Precompute RoPE frequency tensor."""
+def _rope_freqs(dim: int, max_len: int = 8192, base: float = 10000.0) -> tuple[torch.Tensor, torch.Tensor]:
+    """Precompute RoPE cos/sin tables (real-valued, bf16-safe)."""
     freqs = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
     t = torch.arange(max_len).float()
-    freqs = torch.outer(t, freqs)
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    angles = torch.outer(t, freqs)  # (max_len, dim/2)
+    return torch.cos(angles), torch.sin(angles)
 
 
-def _apply_rope(x: torch.Tensor, freqs: torch.Tensor) -> torch.Tensor:
-    """Apply rotary embeddings to query/key tensors."""
+def _apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+    """Apply rotary embeddings using real-valued rotation (bf16-safe)."""
     # x: (B, n_heads, S, head_dim)
-    x_complex = torch.view_as_complex(x.float().reshape(*x.shape[:-1], -1, 2))
-    freqs = freqs[: x.shape[2]].unsqueeze(0).unsqueeze(0)
-    x_rotated = torch.view_as_real(x_complex * freqs).flatten(-2)
-    return x_rotated.type_as(x)
+    S = x.shape[2]
+    cos = cos[:S].unsqueeze(0).unsqueeze(0)  # (1, 1, S, dim/2)
+    sin = sin[:S].unsqueeze(0).unsqueeze(0)
+    x1, x2 = x[..., ::2], x[..., 1::2]
+    return torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1).flatten(-2)
 
 
 class CausalSelfAttention(nn.Module):
@@ -40,7 +41,7 @@ class CausalSelfAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(
-        self, x: torch.Tensor, rope_freqs: torch.Tensor, mask: torch.Tensor | None = None
+        self, x: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor, mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         B, S, D = x.shape
         qkv = self.qkv(x).reshape(B, S, 3, self.n_heads, self.head_dim)
@@ -50,8 +51,8 @@ class CausalSelfAttention(nn.Module):
         v = v.transpose(1, 2)
 
         # Apply RoPE to q, k
-        q = _apply_rope(q, rope_freqs)
-        k = _apply_rope(k, rope_freqs)
+        q = _apply_rope(q, rope_cos, rope_sin)
+        k = _apply_rope(k, rope_cos, rope_sin)
 
         # Scaled dot-product attention with causal mask
         attn = F.scaled_dot_product_attention(
@@ -75,8 +76,8 @@ class TransformerBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x: torch.Tensor, rope_freqs: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x), rope_freqs)
+    def forward(self, x: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.ln1(x), rope_cos, rope_sin)
         x = x + self.mlp(self.ln2(x))
         return x
 
@@ -108,9 +109,11 @@ class TransformerLM(nn.Module):
         # Weight tying
         self.head.weight = self.tok_emb.weight
 
-        # Precompute RoPE frequencies
+        # Precompute RoPE cos/sin tables
         head_dim = d_model // n_heads
-        self.register_buffer("rope_freqs", _rope_freqs(head_dim), persistent=False)
+        cos, sin = _rope_freqs(head_dim)
+        self.register_buffer("rope_cos", cos, persistent=False)
+        self.register_buffer("rope_sin", sin, persistent=False)
 
         self._init_weights()
 
@@ -128,7 +131,7 @@ class TransformerLM(nn.Module):
         x = self.drop(self.tok_emb(input_ids))
 
         for block in self.blocks:
-            x = block(x, self.rope_freqs)
+            x = block(x, self.rope_cos, self.rope_sin)
 
         x = self.ln_f(x)
         logits = self.head(x)
