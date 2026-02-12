@@ -1,6 +1,7 @@
 """Structured Hydra configs for PlasmidLLM."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from hydra.core.config_store import ConfigStore
 
