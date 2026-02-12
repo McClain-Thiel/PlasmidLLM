@@ -113,12 +113,13 @@ def _split_tokens(text: str) -> list[str]:
     parts = _TAG_PATTERN.split(text)
     tokens = []
     for part in parts:
-        if not part:
+        if not part or part.isspace():
             continue
         if part.startswith("<") and part.endswith(">"):
             tokens.append(part)
         else:
-            tokens.extend(list(part))
+            # Filter out whitespace characters from non-tag parts
+            tokens.extend(c for c in part if not c.isspace())
     return tokens
 
 

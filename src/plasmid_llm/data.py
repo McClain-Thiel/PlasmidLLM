@@ -28,9 +28,12 @@ class PlasmidDataset(Dataset):
         self.sep_id = tokenizer.sep_token_id
 
         # Read parquet — columns are lightweight tag strings + DNA, fits in RAM
-        table = pq.read_table(parquet_path, columns=["token_prompt", "token_completion"])
+        # Support both column naming conventions
+        table = pq.read_table(parquet_path)
+        col_names = table.column_names
         self.prompts = table.column("token_prompt").to_pylist()
-        self.completions = table.column("token_completion").to_pylist()
+        completion_col = "token_completion" if "token_completion" in col_names else "sequence"
+        self.completions = table.column(completion_col).to_pylist()
 
     def __len__(self) -> int:
         return len(self.prompts)
