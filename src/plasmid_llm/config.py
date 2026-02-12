@@ -93,7 +93,7 @@ class PlasmidLLMConfig:
 
 def register_configs() -> None:
     cs = ConfigStore.instance()
-    cs.store(name="config", node=PlasmidLLMConfig)
+    # Don't register top-level schema — it prevents cross-architecture model switching
     cs.store(group="data", name="default", node=DataConfig)
     cs.store(group="train", name="default", node=TrainConfig)
     cs.store(group="model", name="transformer", node=TransformerConfig)
