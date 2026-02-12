@@ -47,7 +47,7 @@ def main():
     print(f"Building {cfg.model.arch} model...")
     model = build_model(cfg.model, tokenizer.vocab_size)
     model.load_state_dict(ckpt["model_state_dict"])
-    model.to(device)
+    model.to(device).to(torch.bfloat16)
     model.eval()
     print(f"Model loaded: {sum(p.numel() for p in model.parameters()):,} params")
 
@@ -84,13 +84,12 @@ def main():
         input_ids = tokenizer.encode(prompt_with_sep)
         input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
 
-        # Generate
-        with torch.no_grad(), torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=device.type == "cuda"):
-            output_ids = model.generate(
-                input_tensor,
-                max_new_tokens=args.max_new_tokens,
-                temperature=args.temperature,
-            )
+        # Generate (model already in bf16, no autocast needed)
+        output_ids = model.generate(
+            input_tensor,
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+        )
 
         # Decode generated part only
         generated_ids = output_ids[0, len(input_ids) :].tolist()
