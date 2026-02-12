@@ -45,7 +45,7 @@ def _get_system_metrics(device: torch.device) -> dict[str, float]:
         idx = device.index or 0
         mem_alloc = torch.cuda.memory_allocated(idx) / 1e9
         mem_reserved = torch.cuda.memory_reserved(idx) / 1e9
-        mem_total = torch.cuda.get_device_properties(idx).total_mem / 1e9
+        mem_total = torch.cuda.get_device_properties(idx).total_memory / 1e9
         metrics["system/gpu_mem_allocated_gb"] = round(mem_alloc, 2)
         metrics["system/gpu_mem_reserved_gb"] = round(mem_reserved, 2)
         metrics["system/gpu_mem_total_gb"] = round(mem_total, 2)
