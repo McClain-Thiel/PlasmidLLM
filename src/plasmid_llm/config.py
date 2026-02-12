@@ -86,7 +86,7 @@ class DiffusionConfig:
 class PlasmidLLMConfig:
     data: DataConfig = field(default_factory=DataConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
-    model: TransformerConfig = field(default_factory=TransformerConfig)
+    model: Any = field(default_factory=TransformerConfig)
     mlflow: MlflowConfig = field(default_factory=MlflowConfig)
 
 
