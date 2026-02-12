@@ -26,11 +26,15 @@ def _load_vocab(path: str | Path) -> dict[str, int]:
         bucket, key = parts[0], parts[1]
         s3 = boto3.client("s3")
         obj = s3.get_object(Bucket=bucket, Key=key)
-        vocab = json.loads(obj["Body"].read().decode("utf-8"))
+        data = json.loads(obj["Body"].read().decode("utf-8"))
     else:
         with open(path) as f:
-            vocab = json.load(f)
-    return vocab
+            data = json.load(f)
+
+    # Support nested format with "token_to_id" key
+    if isinstance(data, dict) and "token_to_id" in data:
+        return data["token_to_id"]
+    return data
 
 
 class PlasmidTokenizer:
