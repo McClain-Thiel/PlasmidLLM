@@ -29,6 +29,7 @@ class TrainConfig:
     num_workers: int = 4
     precision: str = "bf16"
     scheduler: str = "cosine"
+    patience: int = 10
     checkpoint_dir: str = "checkpoints"
     resume_from: str = ""
 

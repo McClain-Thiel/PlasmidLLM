@@ -10,5 +10,6 @@ log_every: 10
 num_workers: 4
 precision: bf16
 scheduler: cosine
+patience: 10
 checkpoint_dir: checkpoints
 resume_from: ""

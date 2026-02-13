@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from plasmid_llm.models import register_model
 
 
-def _rope_freqs(dim: int, max_len: int = 8192, base: float = 10000.0) -> tuple[torch.Tensor, torch.Tensor]:
+def _rope_freqs(dim: int, max_len: int = 16384, base: float = 10000.0) -> tuple[torch.Tensor, torch.Tensor]:
     """Precompute RoPE cos/sin tables (real-valued, bf16-safe)."""
     freqs = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
     t = torch.arange(max_len).float()
@@ -20,12 +20,12 @@ def _rope_freqs(dim: int, max_len: int = 8192, base: float = 10000.0) -> tuple[t
     return torch.cos(angles), torch.sin(angles)
 
 
-def _apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+def _apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, offset: int = 0) -> torch.Tensor:
     """Apply rotary embeddings using real-valued rotation (bf16-safe)."""
     # x: (B, n_heads, S, head_dim)
     S = x.shape[2]
-    cos = cos[:S].unsqueeze(0).unsqueeze(0)  # (1, 1, S, dim/2)
-    sin = sin[:S].unsqueeze(0).unsqueeze(0)
+    cos = cos[offset:offset + S].unsqueeze(0).unsqueeze(0)  # (1, 1, S, dim/2)
+    sin = sin[offset:offset + S].unsqueeze(0).unsqueeze(0)
     x1, x2 = x[..., ::2], x[..., 1::2]
     return torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1).flatten(-2)
 
@@ -41,8 +41,14 @@ class CausalSelfAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(
-        self, x: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor, mask: torch.Tensor | None = None
-    ) -> torch.Tensor:
+        self,
+        x: torch.Tensor,
+        rope_cos: torch.Tensor,
+        rope_sin: torch.Tensor,
+        mask: torch.Tensor | None = None,
+        kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
+        pos_offset: int = 0,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         B, S, D = x.shape
         qkv = self.qkv(x).reshape(B, S, 3, self.n_heads, self.head_dim)
         q, k, v = qkv.unbind(dim=2)  # each: (B, S, n_heads, head_dim)
@@ -50,17 +56,26 @@ class CausalSelfAttention(nn.Module):
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
 
-        # Apply RoPE to q, k
-        q = _apply_rope(q, rope_cos, rope_sin)
-        k = _apply_rope(k, rope_cos, rope_sin)
+        # Apply RoPE to q, k with position offset
+        q = _apply_rope(q, rope_cos, rope_sin, offset=pos_offset)
+        k = _apply_rope(k, rope_cos, rope_sin, offset=pos_offset)
+
+        # Append to KV cache if provided
+        if kv_cache is not None:
+            k = torch.cat([kv_cache[0], k], dim=2)
+            v = torch.cat([kv_cache[1], v], dim=2)
+        new_kv_cache = (k, v)
 
         # Scaled dot-product attention with causal mask
+        # When using KV cache for single-token decode, no causal mask needed
+        # (the new token can attend to all cached positions)
+        use_causal = mask is None and kv_cache is None
         attn = F.scaled_dot_product_attention(
             q, k, v, attn_mask=mask, dropout_p=self.dropout.p if self.training else 0.0,
-            is_causal=mask is None,
+            is_causal=use_causal,
         )
         out = attn.transpose(1, 2).reshape(B, S, D)
-        return self.dropout(self.out_proj(out))
+        return self.dropout(self.out_proj(out)), new_kv_cache
 
 
 class TransformerBlock(nn.Module):
@@ -76,10 +91,20 @@ class TransformerBlock(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x: torch.Tensor, rope_cos: torch.Tensor, rope_sin: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x), rope_cos, rope_sin)
+    def forward(
+        self,
+        x: torch.Tensor,
+        rope_cos: torch.Tensor,
+        rope_sin: torch.Tensor,
+        kv_cache: tuple[torch.Tensor, torch.Tensor] | None = None,
+        pos_offset: int = 0,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        attn_out, new_kv_cache = self.attn(
+            self.ln1(x), rope_cos, rope_sin, kv_cache=kv_cache, pos_offset=pos_offset,
+        )
+        x = x + attn_out
         x = x + self.mlp(self.ln2(x))
-        return x
+        return x, new_kv_cache
 
 
 @register_model("transformer")
@@ -131,7 +156,7 @@ class TransformerLM(nn.Module):
         x = self.drop(self.tok_emb(input_ids))
 
         for block in self.blocks:
-            x = block(x, self.rope_cos, self.rope_sin)
+            x, _ = block(x, self.rope_cos, self.rope_sin)
 
         x = self.ln_f(x)
         logits = self.head(x)
@@ -157,14 +182,40 @@ class TransformerLM(nn.Module):
         temperature: float = 1.0,
         top_k: int = 50,
     ) -> torch.Tensor:
-        """Autoregressive generation."""
+        """Autoregressive generation with KV cache."""
+        # Prefill: process the full prompt, build KV cache
+        x = self.drop(self.tok_emb(input_ids))
+        kv_caches: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for block in self.blocks:
+            x, kv = block(x, self.rope_cos, self.rope_sin, kv_cache=None, pos_offset=0)
+            kv_caches.append(kv)
+        x = self.ln_f(x)
+        logits = self.head(x[:, -1:, :]).squeeze(1)  # (B, vocab)
+
+        cur_len = input_ids.shape[1]
+
         for _ in range(max_new_tokens):
-            logits = self.forward(input_ids)["logits"][:, -1, :]
-            logits = logits / temperature
+            # Sample next token
+            scaled_logits = logits / temperature
             if top_k > 0:
-                v, _ = torch.topk(logits, top_k)
-                logits[logits < v[:, [-1]]] = float("-inf")
-            probs = F.softmax(logits, dim=-1)
+                v, _ = torch.topk(scaled_logits, top_k)
+                scaled_logits[scaled_logits < v[:, [-1]]] = float("-inf")
+            probs = F.softmax(scaled_logits, dim=-1)
             next_token = torch.multinomial(probs, num_samples=1)
             input_ids = torch.cat([input_ids, next_token], dim=1)
+
+            # Decode step: only process the new token with KV cache
+            x = self.drop(self.tok_emb(next_token))  # (B, 1, d_model)
+            new_kv_caches = []
+            for i, block in enumerate(self.blocks):
+                x, kv = block(
+                    x, self.rope_cos, self.rope_sin,
+                    kv_cache=kv_caches[i], pos_offset=cur_len,
+                )
+                new_kv_caches.append(kv)
+            kv_caches = new_kv_caches
+            x = self.ln_f(x)
+            logits = self.head(x).squeeze(1)  # (B, vocab)
+            cur_len += 1
+
         return input_ids

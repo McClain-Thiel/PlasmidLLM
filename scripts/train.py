@@ -47,7 +47,7 @@ def main(cfg: DictConfig) -> float:
     log.info(f"Model params: {n_params:,}")
 
     # Train
-    trainer = Trainer(model, train_loader, val_loader, cfg)
+    trainer = Trainer(model, train_loader, val_loader, cfg, tokenizer=tokenizer)
     best_val_loss = trainer.train()
 
     log.info(f"Training complete. Best val loss: {best_val_loss:.4f}")
