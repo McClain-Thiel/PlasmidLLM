@@ -170,14 +170,20 @@ class Trainer:
         flat_cfg = dict(OmegaConf.to_container(self.cfg, resolve=True, throw_on_missing=True))
         mlflow.log_params(_flatten_dict(flat_cfg))
 
-        # Log tags
+        # Log tags and important metadata
         mlflow.set_tags({
             "architecture": self.cfg.model.arch,
             "git_commit": _get_git_commit(),
             "total_params": str(_count_params(self.model)),
             "dataset_size": str(len(self.train_loader.dataset)),
             "max_seq_len": str(self.cfg.data.max_seq_len),
+            "checkpoint_dir": str(self.checkpoint_dir),
+            "resume_from": str(self.cfg.train.resume_from) if self.cfg.train.resume_from else "none",
+            "hostname": os.uname().nodename,
         })
+        
+        # Log checkpoint location as param for easy reference
+        mlflow.log_param("checkpoint_path", str(self.checkpoint_dir / "best.pt"))
 
         # Log config as artifact
         config_path = self.checkpoint_dir / "config.yaml"
@@ -358,13 +364,9 @@ class Trainer:
 
         # Compute token-level accuracy before backward
         with torch.no_grad():
-            preds = outputs["logits"][:, :-1, :].argmax(dim=-1)
-            labels = batch["labels"][:, 1:]
-            mask = labels != -100
-            if mask.any():
-                token_acc = (preds[mask] == labels[mask]).float().mean().item()
-            else:
-                token_acc = 0.0
+            token_acc = self._compute_accuracy(
+                outputs["logits"], batch["labels"], batch["attention_mask"]
+            )
 
         loss.backward()
 
@@ -377,6 +379,28 @@ class Trainer:
 
         return loss.item(), grad_norm, token_acc
 
+    def _compute_accuracy(
+        self, logits: torch.Tensor, labels: torch.Tensor, attention_mask: torch.Tensor
+    ) -> float:
+        """Compute token-level accuracy. Handles both causal LM and diffusion models."""
+        is_diffusion = self.cfg.model.arch == "diffusion"
+        
+        if is_diffusion:
+            # Diffusion: predict same positions (no shift)
+            preds = logits.argmax(dim=-1)
+            mask = (labels != -100) & attention_mask.bool()
+            if mask.any():
+                return (preds[mask] == labels[mask]).float().mean().item()
+            return 0.0
+        else:
+            # Causal LM: predict next token (shifted)
+            preds = logits[:, :-1, :].argmax(dim=-1)
+            labels_shifted = labels[:, 1:]
+            mask = labels_shifted != -100
+            if mask.any():
+                return (preds[mask] == labels_shifted[mask]).float().mean().item()
+            return 0.0
+
     @torch.no_grad()
     def _evaluate(self) -> tuple[float, float, float]:
         self.model.eval()
@@ -384,6 +408,7 @@ class Trainer:
         total_correct = 0
         total_tokens = 0
         n_batches = 0
+        is_diffusion = self.cfg.model.arch == "diffusion"
 
         for batch in self.val_loader:
             batch = {k: v.to(self.device) for k, v in batch.items()}
@@ -396,11 +421,21 @@ class Trainer:
             total_loss += outputs["loss"].item()
 
             # Token accuracy
-            preds = outputs["logits"][:, :-1, :].argmax(dim=-1)
-            labels = batch["labels"][:, 1:]
-            mask = labels != -100
+            if is_diffusion:
+                # Diffusion: predict same positions (no shift)
+                preds = outputs["logits"].argmax(dim=-1)
+                mask = (batch["labels"] != -100) & batch["attention_mask"].bool()
+            else:
+                # Causal LM: predict next token (shifted)
+                preds = outputs["logits"][:, :-1, :].argmax(dim=-1)
+                labels = batch["labels"][:, 1:]
+                mask = labels != -100
+            
             if mask.any():
-                total_correct += (preds[mask] == labels[mask]).sum().item()
+                if is_diffusion:
+                    total_correct += (preds[mask] == batch["labels"][mask]).sum().item()
+                else:
+                    total_correct += (preds[mask] == labels[mask]).sum().item()
                 total_tokens += mask.sum().item()
 
             n_batches += 1

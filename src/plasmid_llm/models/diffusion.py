@@ -18,7 +18,7 @@ def _cosine_schedule(timesteps: int) -> torch.Tensor:
     alphas = torch.cos(t * math.pi / 2) ** 2
     alphas = alphas / alphas[0]
     betas = 1 - alphas[1:] / alphas[:-1]
-    return betas.clamp(0.0, 0.999)
+    return betas.clamp(0.0001, 0.9999)
 
 
 def _linear_schedule(timesteps: int) -> torch.Tensor:
@@ -57,17 +57,33 @@ class DenoisingTransformer(nn.Module):
         padded_vocab = ((vocab_size + 7) // 8) * 8
         self.tok_emb = nn.Embedding(padded_vocab, d_model)
         self.pos_emb = nn.Embedding(max_len, d_model)
-        self.time_emb = nn.Sequential(
-            nn.Linear(1, d_model),
+        
+        # Sinusoidal time embedding (standard for diffusion)
+        self.time_mlp = nn.Sequential(
+            nn.Linear(d_model, d_model),
             nn.SiLU(),
             nn.Linear(d_model, d_model),
         )
+        
         self.drop = nn.Dropout(dropout)
         self.blocks = nn.ModuleList(
             [DenoisingTransformerBlock(d_model, n_heads, dropout) for _ in range(n_layers)]
         )
         self.ln_f = nn.RMSNorm(d_model)
         self.head = nn.Linear(d_model, padded_vocab, bias=False)
+        
+        # Tie weights between token embedding and output head
+        self.head.weight = self.tok_emb.weight
+
+    def _time_embedding(self, t: torch.Tensor, dim: int = 256) -> torch.Tensor:
+        """Sinusoidal time embeddings (Transformer-style positional encoding)."""
+        half_dim = dim // 2
+        freqs = torch.exp(
+            -math.log(10000) * torch.arange(half_dim, dtype=torch.float32, device=t.device) / half_dim
+        )
+        args = t[:, None].float() * freqs[None, :]
+        embedding = torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+        return embedding
 
     def forward(
         self, x: torch.Tensor, t: torch.Tensor, key_padding_mask: torch.Tensor | None = None
@@ -76,9 +92,9 @@ class DenoisingTransformer(nn.Module):
         positions = torch.arange(L, device=x.device).unsqueeze(0)
         h = self.tok_emb(x) + self.pos_emb(positions)
 
-        # Add time conditioning
-        t_emb = self.time_emb(t.float().unsqueeze(-1) / 1000.0)  # (B, d_model)
-        h = h + t_emb.unsqueeze(1)
+        # Add time conditioning via sinusoidal embedding
+        t_emb = self._time_embedding(t, dim=h.size(-1))
+        h = h + self.time_mlp(t_emb).unsqueeze(1)
 
         h = self.drop(h)
         for block in self.blocks:
@@ -121,11 +137,29 @@ class DiscreteDiffusionLM(nn.Module):
         alpha_cumprod = torch.cumprod(alphas, dim=0)
         # mask_prob[t] = 1 - alpha_cumprod[t] = probability of being masked
         self.register_buffer("mask_prob", 1 - alpha_cumprod)
+        
+        self._init_weights()
 
-    def _noise(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        """Apply forward diffusion: mask tokens to absorbing state."""
+    def _init_weights(self):
+        """Initialize weights for stable training."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+            elif isinstance(module, nn.Embedding):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+
+    def _noise(self, x: torch.Tensor, t: torch.Tensor, valid_mask: torch.Tensor) -> torch.Tensor:
+        """Apply forward diffusion: mask tokens to absorbing state.
+        
+        Args:
+            x: Clean token IDs (B, L)
+            t: Timestep indices (B,)
+            valid_mask: Boolean mask of valid (non-padding) positions (B, L)
+        """
         mask_p = self.mask_prob[t]  # (B,)
-        mask = torch.rand_like(x.float()) < mask_p.unsqueeze(1)
+        # Only mask valid positions (not padding)
+        rand = torch.rand_like(x.float())
+        mask = (rand < mask_p.unsqueeze(1)) & valid_mask
         noised = x.clone()
         noised[mask] = self.absorb_id
         return noised, mask
@@ -140,26 +174,38 @@ class DiscreteDiffusionLM(nn.Module):
 
         # Use labels as clean targets if provided, else use input_ids
         clean = labels if labels is not None else input_ids
-        # For computing loss, ignore -100 positions
-        valid_mask = clean != -100
-        clean_for_noise = clean.clamp(min=0)  # replace -100 with 0 for noise
+        
+        # Track which positions are valid (not -100 padding in labels, not 0 in attention_mask)
+        if attention_mask is not None:
+            valid_mask = attention_mask.bool()
+        else:
+            valid_mask = torch.ones_like(clean, dtype=torch.bool)
+        
+        # Also exclude -100 labels from being noised or predicted
+        label_valid_mask = (clean != -100)
+        
+        # For noising: replace -100 with 0 temporarily (but won't be noised due to mask)
+        clean_for_noise = clean.clone()
+        clean_for_noise[~label_valid_mask] = 0  # Safe value, won't be used in loss
 
         # Sample random timesteps
         t = torch.randint(0, self.timesteps, (B,), device=input_ids.device)
 
-        # Noise the sequence
-        noised, noise_mask = self._noise(clean_for_noise, t)
+        # Noise the sequence (only on valid positions)
+        noised, noise_mask = self._noise(clean_for_noise, t, valid_mask & label_valid_mask)
 
         # Predict clean tokens
         key_padding_mask = ~attention_mask.bool() if attention_mask is not None else None
         logits = self.backbone(noised, t, key_padding_mask=key_padding_mask)
 
         # Loss: only on masked positions that are valid (not -100 in labels)
-        loss_mask = noise_mask & valid_mask
+        loss_mask = noise_mask & label_valid_mask
         if loss_mask.any():
+            # Get the actual clean token IDs (not the 0 we substituted)
+            targets = clean[loss_mask]
             loss = F.cross_entropy(
                 logits[loss_mask],
-                clean_for_noise[loss_mask],
+                targets,
             )
         else:
             loss = torch.tensor(0.0, device=input_ids.device, requires_grad=True)
