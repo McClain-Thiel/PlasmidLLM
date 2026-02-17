@@ -1,0 +1,9 @@
+arch: encoder_decoder
+d_model: 384
+n_enc_layers: 4      # Shallow encoder (just encoding metadata)
+n_dec_layers: 12     # Deep decoder (generating 8000 tokens)
+n_heads: 8
+d_ff: 1536
+dropout: 0.1
+sep_token_id: 3
+max_seq_len: 8192

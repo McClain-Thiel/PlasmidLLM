@@ -111,13 +111,14 @@ class TransformerBlock(nn.Module):
 class TransformerLM(nn.Module):
     """Decoder-only transformer language model with RoPE."""
 
-    def __init__(self, config: Any, vocab_size: int):
+    def __init__(self, config: Any, vocab_size: int, loss_fn=None):
         super().__init__()
         d_model = config.d_model
         n_layers = config.n_layers
         n_heads = config.n_heads
         d_ff = config.d_ff
         dropout = config.dropout
+        self.loss_fn = loss_fn
 
         # Pad vocab to multiple of 8 for CUDA bf16 alignment
         padded_vocab = ((vocab_size + 7) // 8) * 8
@@ -166,11 +167,12 @@ class TransformerLM(nn.Module):
             # Shift: predict next token
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = labels[:, 1:].contiguous()
-            loss = F.cross_entropy(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1),
-                ignore_index=-100,
-            )
+            flat_logits = shift_logits.view(-1, shift_logits.size(-1))
+            flat_labels = shift_labels.view(-1)
+            if self.loss_fn is not None:
+                loss = self.loss_fn(flat_logits, flat_labels)
+            else:
+                loss = F.cross_entropy(flat_logits, flat_labels, ignore_index=-100)
 
         return {"logits": logits, "loss": loss}
 

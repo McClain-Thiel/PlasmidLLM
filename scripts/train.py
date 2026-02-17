@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 
 from plasmid_llm.config import register_configs
 from plasmid_llm.data import PlasmidDataset, build_dataloaders
+from plasmid_llm.loss import build_loss_fn
 from plasmid_llm.models import build_model
 from plasmid_llm.tokenizer import PlasmidTokenizer
 from plasmid_llm.trainer import Trainer
@@ -41,8 +42,15 @@ def main(cfg: DictConfig) -> float:
     )
     log.info(f"Dataset: {len(dataset)} samples, train={len(train_loader.dataset)}, val={len(val_loader.dataset)}")
 
+    # Loss function
+    loss_fn = build_loss_fn(cfg.train)
+    if loss_fn is not None:
+        log.info(f"Loss: {cfg.train.loss_type} (gamma={getattr(cfg.train, 'focal_gamma', 'N/A')}, label_smoothing={cfg.train.label_smoothing})")
+    else:
+        log.info("Loss: cross_entropy (default)")
+
     # Model
-    model = build_model(cfg.model, tokenizer.vocab_size)
+    model = build_model(cfg.model, tokenizer.vocab_size, loss_fn=loss_fn)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model params: {n_params:,}")
 

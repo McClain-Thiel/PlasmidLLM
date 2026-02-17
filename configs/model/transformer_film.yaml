@@ -1,0 +1,7 @@
+arch: transformer_film
+d_model: 384
+n_layers: 10
+n_heads: 8
+d_ff: 1536
+dropout: 0.1
+sep_token_id: 3

@@ -12,7 +12,7 @@ from plasmid_llm.tokenizer import PlasmidTokenizer
 class PlasmidDataset(Dataset):
     """Dataset that reads prompt/completion pairs from parquet and tokenizes them.
 
-    Each sample is: <prompt tokens> <SEP> <completion tokens> padded/truncated to max_seq_len.
+    Each sample is: <prompt tokens> <SEP> <completion tokens> <EOS> padded/truncated to max_seq_len.
     Labels are the same as input_ids shifted right (for causal LM), with prompt tokens masked (-100).
     """
 
@@ -26,6 +26,7 @@ class PlasmidDataset(Dataset):
         self.max_seq_len = max_seq_len
         self.pad_id = tokenizer.pad_token_id
         self.sep_id = tokenizer.sep_token_id
+        self.eos_id = tokenizer.eos_token_id
 
         # Read parquet — columns are lightweight tag strings + DNA, fits in RAM
         # Support both column naming conventions
@@ -42,8 +43,8 @@ class PlasmidDataset(Dataset):
         prompt_ids = self.tokenizer.encode(self.prompts[idx])
         completion_ids = self.tokenizer.encode(self.completions[idx])
 
-        # Concatenate: prompt + SEP + completion
-        input_ids = prompt_ids + [self.sep_id] + completion_ids
+        # Concatenate: prompt + SEP + completion + EOS
+        input_ids = prompt_ids + [self.sep_id] + completion_ids + [self.eos_id]
 
         # Truncate to max_seq_len
         input_ids = input_ids[: self.max_seq_len]

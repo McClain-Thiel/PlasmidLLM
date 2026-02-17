@@ -112,9 +112,10 @@ class DiscreteDiffusionLM(nn.Module):
     Reverse process: predict original tokens from noised input.
     """
 
-    def __init__(self, config: Any, vocab_size: int):
+    def __init__(self, config: Any, vocab_size: int, loss_fn=None):
         super().__init__()
         self.vocab_size = vocab_size
+        self.loss_fn = loss_fn
         self.timesteps = config.timesteps
         self.absorb_id = 0  # PAD token as absorbing state
 
@@ -203,10 +204,11 @@ class DiscreteDiffusionLM(nn.Module):
         if loss_mask.any():
             # Get the actual clean token IDs (not the 0 we substituted)
             targets = clean[loss_mask]
-            loss = F.cross_entropy(
-                logits[loss_mask],
-                targets,
-            )
+            masked_logits = logits[loss_mask]
+            if self.loss_fn is not None:
+                loss = self.loss_fn(masked_logits, targets)
+            else:
+                loss = F.cross_entropy(masked_logits, targets)
         else:
             loss = torch.tensor(0.0, device=input_ids.device, requires_grad=True)
 

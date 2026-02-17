@@ -1,63 +1,55 @@
-"""Generate plasmid sequences from a trained model checkpoint."""
+"""Generate plasmid sequences using vLLM."""
 
 from __future__ import annotations
 
 import argparse
-import json
-import sys
-from pathlib import Path
 
-import torch
-from omegaconf import OmegaConf
+from vllm import LLM, SamplingParams
 
-from plasmid_llm.models import build_model
 from plasmid_llm.tokenizer import PlasmidTokenizer
 
 
-def load_model(checkpoint_path: str, device: str = "cpu") -> tuple:
-    """Load model and tokenizer from checkpoint."""
-    ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    cfg = OmegaConf.create(ckpt["config"])
-
-    tokenizer = PlasmidTokenizer(cfg.data.vocab_path)
-    model = build_model(cfg.model, tokenizer.vocab_size)
-    model.load_state_dict(ckpt["model_state_dict"])
-    model.to(device)
-    model.eval()
-
-    return model, tokenizer, cfg
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Generate plasmid sequences")
-    parser.add_argument("--checkpoint", required=True, help="Path to model checkpoint")
-    parser.add_argument("--prompt", default="<BOS><SEP>", help="Tag prompt (e.g. '<BOS><AMR_KANAMYCIN><ORI_F1><SEP>')")
-    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser = argparse.ArgumentParser(description="Generate plasmid sequences with vLLM")
+    parser.add_argument("--hf-model", required=True, help="Path to HF model directory")
+    parser.add_argument("--vocab", required=True, help="Path to vocab JSON")
+    parser.add_argument(
+        "--prompt",
+        default="<BOS> <SEP>",
+        help="Tag prompt (e.g. '<BOS> <COPY_HIGH> <AMR_KANAMYCIN> <ORI_COLE1> <SEP>')",
+    )
+    parser.add_argument("--max-new-tokens", type=int, default=8000)
     parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--top_k", type=int, default=50)
-    parser.add_argument("--num_samples", type=int, default=1)
-    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--top-k", type=int, default=50)
+    parser.add_argument("--num-samples", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
-    model, tokenizer, cfg = load_model(args.checkpoint, args.device)
-    print(f"Loaded {cfg.model.arch} model ({sum(p.numel() for p in model.parameters()):,} params)")
-
+    tokenizer = PlasmidTokenizer(args.vocab)
     prompt_ids = tokenizer.encode(args.prompt)
-    input_ids = torch.tensor([prompt_ids] * args.num_samples, device=args.device)
 
+    print(f"Loading vLLM model: {args.hf_model}")
+    llm = LLM(model=args.hf_model, trust_remote_code=True)
+
+    sampling_params = SamplingParams(
+        max_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+        top_k=args.top_k,
+        seed=args.seed,
+    )
+
+    # Submit N copies of the prompt — vLLM batches them automatically
     print(f"Prompt: {args.prompt}")
     print(f"Generating {args.num_samples} sequence(s)...\n")
 
-    with torch.no_grad():
-        output_ids = model.generate(
-            input_ids,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-            top_k=args.top_k,
-        )
+    outputs = llm.generate(
+        prompt_token_ids=[prompt_ids] * args.num_samples,
+        sampling_params=sampling_params,
+    )
 
-    for i in range(args.num_samples):
-        seq = tokenizer.decode(output_ids[i].tolist())
+    for i, output in enumerate(outputs):
+        generated_ids = output.outputs[0].token_ids
+        seq = tokenizer.decode(list(generated_ids))
         print(f"--- Sample {i + 1} ---")
         print(seq)
         print()
