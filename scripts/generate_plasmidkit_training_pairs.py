@@ -154,8 +154,9 @@ def main():
             matched = match_category(pid, cat_def, meta_idx, annot_by_plasmid)
             tokens.extend(matched)
         
-        sequence = str(seq_idx.at[pid, "sequence"])
-        seq_len = int(seq_idx.at[pid, "sequence_length"])
+        row = seq_idx.loc[pid]
+        sequence = str(row["sequence"]) if isinstance(row, pd.Series) else str(row)
+        seq_len = int(row["sequence_length"]) if isinstance(row, pd.Series) else int(seq_idx.at[pid, "sequence_length"])
         
         gc = gc_content(sequence)
         if gc < 0.45:
