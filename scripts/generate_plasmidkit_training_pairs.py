@@ -86,10 +86,13 @@ TOKEN_CATEGORIES = [
 
 
 def gc_content(seq):
-    if seq is None or len(seq) == 0:
+    if seq is None:
         return 0.5
-    gc = seq.count('G') + seq.count('C')
-    return gc / len(seq)
+    seq_str = str(seq)
+    if len(seq_str) == 0:
+        return 0.5
+    gc = seq_str.count('G') + seq_str.count('C')
+    return gc / len(seq_str)
 
 
 def match_category(pid, cat_def, meta_idx, annot_by_plasmid):
@@ -151,8 +154,8 @@ def main():
             matched = match_category(pid, cat_def, meta_idx, annot_by_plasmid)
             tokens.extend(matched)
         
-        sequence = seq_idx.at[pid, "sequence"]
-        seq_len = seq_idx.at[pid, "sequence_length"]
+        sequence = str(seq_idx.at[pid, "sequence"])
+        seq_len = int(seq_idx.at[pid, "sequence_length"])
         
         gc = gc_content(sequence)
         if gc < 0.45:
