@@ -134,8 +134,9 @@ def main():
     print(f"  Metadata: {len(meta)} rows")
     
     seq = pd.read_parquet(f"{BASE}/sequences/full_sequences.parquet", columns=["plasmid_id", "sequence", "sequence_length"])
+    seq = seq.drop_duplicates(subset=["plasmid_id"])
     seq_idx = seq.set_index("plasmid_id")
-    print(f"  Sequences: {len(seq)} rows")
+    print(f"  Sequences: {len(seq)} rows (after dedup)")
     
     annot = pd.read_parquet(f"{BASE}/annotations/plasmidkit_annotations.parquet", columns=["plasmid_id", "Feature", "Type"])
     print(f"  PlasmidKit annotations: {len(annot)} rows")
@@ -154,9 +155,8 @@ def main():
             matched = match_category(pid, cat_def, meta_idx, annot_by_plasmid)
             tokens.extend(matched)
         
-        row = seq_idx.loc[pid]
-        sequence = str(row["sequence"]) if isinstance(row, pd.Series) else str(row)
-        seq_len = int(row["sequence_length"]) if isinstance(row, pd.Series) else int(seq_idx.at[pid, "sequence_length"])
+        sequence = str(seq_idx.at[pid, "sequence"])
+        seq_len = int(seq_idx.at[pid, "sequence_length"])
         
         gc = gc_content(sequence)
         if gc < 0.45:
