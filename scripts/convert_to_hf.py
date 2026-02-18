@@ -129,7 +129,7 @@ def convert_transformer_to_hf(checkpoint_path: str, vocab_path: str, output_dir:
     print(f"Saved config.json")
 
     # Copy HF model code into the output directory
-    hf_model_dir = Path(__file__).resolve().parent / "hf_model"
+    hf_model_dir = Path(__file__).resolve().parent.parent / "src" / "plasmid_llm" / "models" / "hf_plasmid_lm"
     for py_file in ["configuration_plasmid_lm.py", "modeling_plasmid_lm.py", "tokenization_plasmid_lm.py"]:
         src = hf_model_dir / py_file
         if src.exists():
