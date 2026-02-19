@@ -58,6 +58,96 @@ def feature_to_token(feature: str) -> str:
     return f"<FEAT_{tok}>"
 
 
+# ── AMR and PROM token mappings ────────────────────────────────────────────────
+
+# Feature patterns → AMR tokens
+AMR_TOKEN_MAP = {
+    # Ampicillin
+    "<AMR_AMPICILLIN>": ["AmpR", "blaTEM", "TEM-116", "TEM-171", "TEM-181", "Ampicillin", "beta-lactamase"],
+    # Kanamycin
+    "<AMR_KANAMYCIN>": ["KanR", "neo", "NeoR", "kanMX", "nptII", "APH", "Kanamycin", "Neomycin", "NeoR/KanR"],
+    # Spectinomycin
+    "<AMR_SPECTINOMYCIN>": ["SpecR", "spectinomycin", "aadA"],
+    # Chloramphenicol
+    "<AMR_CHLORAMPHENICOL>": ["CmR", "CAT", "cat", "Chloramphenicol", "CamR"],
+    # Gentamicin
+    "<AMR_GENTAMICIN>": ["GentR", "gentamicin", "aacC1", "aac(3)-Ia"],
+    # Tetracycline
+    "<AMR_TETRACYCLINE>": ["TetR", "tetR", "tetA", "tetM", "tetQ", "tetC", "tetL", "tetX", "Tetracycline"],
+    # Zeocin/Bleocin
+    "<AMR_ZEOCIN>": ["BleoR", "zeocin", "bleomycin"],
+    # Apramycin
+    "<AMR_APRAMYCIN>": ["ApraR", "apramycin"],
+    # Streptomycin
+    "<AMR_STREPTOMYCIN>": ["StrR", "streptomycin", "aadA"],
+    # Hygromycin
+    "<AMR_HYGROMYCIN>": ["HygR", "hygromycin", "Hygromycin"],
+    # Puromycin
+    "<AMR_PUROMYCIN>": ["PuroR", "puro", "Puromycin"],
+    # Neomycin
+    "<AMR_NEOMYCIN>": ["NeoR", "neomycin", "Neomycin"],
+    # Blasticidin
+    "<AMR_BLASTICIDIN>": ["BSD", "bsr", "blasticidin", "Blasticidin"],
+    # Nourseothricin
+    "<AMR_NOURSEOTHRICIN>": ["NatR", "nourseothricin"],
+}
+
+# Feature patterns → PROM tokens
+PROM_TOKEN_MAP = {
+    "<PROM_AMPR>": ["AmpR promoter"],
+    "<PROM_CMV>": ["CMV promoter", "CMV IE94 promoter", "CMV enhancer", "mCMV promoter", "CMV IE", "CMV_immearly"],
+    "<PROM_T5>": ["T5 promoter"],
+    "<PROM_SV40>": ["SV40 promoter", "SV40 early promoter"],
+    "<PROM_LAC>": ["lac promoter", "tac promoter", "lac UV5 promoter", "lacI promoter"],
+    "<PROM_T7>": ["T7 promoter"],
+    "<PROM_U6>": ["U6 promoter"],
+    "<PROM_EF1A>": ["EF-1α promoter", "EF-1α core promoter", "EF-1 promoter", "EF_1"],
+    "<PROM_RSV>": ["RSV promoter", "RSV LTR"],
+    "<PROM_SP6>": ["SP6 promoter"],
+    "<PROM_CAG>": ["chicken β-actin promoter", "CAG promoter", "CBA promoter"],
+    "<PROM_T3>": ["T3 promoter"],
+}
+
+
+def feature_to_amr_token(feature: str) -> str | None:
+    """Map a feature name to an AMR token if it matches."""
+    feat_lower = feature.lower()
+    for token, patterns in AMR_TOKEN_MAP.items():
+        for pattern in patterns:
+            if pattern.lower() in feat_lower:
+                return token
+    return None
+
+
+def feature_to_prom_token(feature: str) -> str | None:
+    """Map a feature name to a PROM token if it matches."""
+    feat_lower = feature.lower()
+    for token, patterns in PROM_TOKEN_MAP.items():
+        for pattern in patterns:
+            if pattern.lower() in feat_lower:
+                return token
+    return None
+
+
+def feature_to_any_token(feature: str) -> tuple[str, str]:
+    """Map a feature to the best matching token (FEAT, AMR, or PROM).
+    
+    Returns: (token, token_category)
+    """
+    # Try AMR first
+    amr_tok = feature_to_amr_token(feature)
+    if amr_tok:
+        return amr_tok, "AMR"
+    
+    # Try PROM
+    prom_tok = feature_to_prom_token(feature)
+    if prom_tok:
+        return prom_tok, "PROM"
+    
+    # Default to FEAT
+    return feature_to_token(feature), "FEAT"
+
+
 # ── Step 1: Load plannotate metadata CSVs ──────────────────────────────────────
 
 def load_plannotate_metadata() -> pd.DataFrame:
@@ -292,10 +382,13 @@ def build_registry(
             "db_source": row["db_source"],
         }
 
-    # ── Map features → tokens, detect collisions ──
+    # ── Map features → tokens (FEAT, AMR, PROM), detect collisions ──
     token_map: dict[str, list[str]] = defaultdict(list)  # token → [feature_names]
+    feature_token_category: dict[str, tuple[str, str]] = {}  # feat → (token, category)
+    
     for feat in in_scope_features:
-        tok = feature_to_token(feat)
+        tok, category = feature_to_any_token(feat)
+        feature_token_category[feat] = (tok, category)
         token_map[tok].append(feat)
 
     # Warn about token collisions
@@ -313,7 +406,7 @@ def build_registry(
 
     for feat in sorted(in_scope_features):
         motif_uuid = str(uuid.uuid5(MOTIF_NAMESPACE, feat))
-        tok = feature_to_token(feat)
+        tok, category = feature_token_category[feat]
         is_in_vocab = tok in vocab
 
         # Collect all sseqids for this feature from annotations
@@ -378,6 +471,7 @@ def build_registry(
             "uuid": motif_uuid,
             "feature_name": feat,
             "token": tok,
+            "token_category": category,
             "type": feat_type,
             "in_training_vocab": is_in_vocab,
             "in_top_n": feat in top_features,
@@ -394,21 +488,44 @@ def build_registry(
         if any(s["sequence"] is not None for s in m["sequences"])
     )
     n_in_vocab = sum(1 for m in motifs.values() if m["in_training_vocab"])
+    
+    # Count by category
+    n_feat = sum(1 for m in motifs.values() if m["token"].startswith("<FEAT_"))
+    n_amr = sum(1 for m in motifs.values() if m["token"].startswith("<AMR_"))
+    n_prom = sum(1 for m in motifs.values() if m["token"].startswith("<PROM_"))
+    
     logger.info(
         "Registry: %d motifs (%d with sequences, %d in training vocab)",
         len(motifs), n_with_seq, n_in_vocab,
     )
+    logger.info(
+        "  By category: %d FEAT, %d AMR, %d PROM",
+        n_feat, n_amr, n_prom,
+    )
 
-    # Check vocab coverage
+    # Check vocab coverage by category
     vocab_feat_tokens = {t for t in vocab if t.startswith("<FEAT_")}
+    vocab_amr_tokens = {t for t in vocab if t.startswith("<AMR_")}
+    vocab_prom_tokens = {t for t in vocab if t.startswith("<PROM_")}
     registry_tokens = set(token_to_uuid.keys())
-    missing_from_registry = vocab_feat_tokens - registry_tokens
-    if missing_from_registry:
-        logger.warning(
-            "%d vocab tokens not in registry: %s",
-            len(missing_from_registry),
-            sorted(missing_from_registry)[:10],
-        )
+    
+    missing_feat = vocab_feat_tokens - registry_tokens
+    missing_amr = vocab_amr_tokens - registry_tokens
+    missing_prom = vocab_prom_tokens - registry_tokens
+    
+    if missing_feat:
+        logger.warning("%d FEAT tokens not in registry: %s", len(missing_feat), sorted(missing_feat)[:5])
+    if missing_amr:
+        logger.warning("%d AMR tokens not in registry: %s", len(missing_amr), sorted(missing_amr))
+    if missing_prom:
+        logger.warning("%d PROM tokens not in registry: %s", len(missing_prom), sorted(missing_prom))
+    
+    logger.info(
+        "Vocab coverage: %d/%d FEAT, %d/%d AMR, %d/%d PROM",
+        len(vocab_feat_tokens & registry_tokens), len(vocab_feat_tokens),
+        len(vocab_amr_tokens & registry_tokens), len(vocab_amr_tokens),
+        len(vocab_prom_tokens & registry_tokens), len(vocab_prom_tokens),
+    )
 
     return {
         "version": "1.0",
