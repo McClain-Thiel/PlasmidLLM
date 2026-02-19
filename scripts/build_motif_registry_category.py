@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Build motif registry matching category-based training pairs (no FEAT tokens).
-
-Maps plannotate features directly to category tokens (AMR, PROM, ORI, ELEM, REPORTER, TAG)
-instead of generic FEAT tokens.
-"""
+"""Build motif registry matching category-based training pairs WITH sequences."""
 
 import argparse
 import gzip
@@ -108,7 +104,6 @@ TAG_TOKEN_MAP = {
     "<TAG_V5>": ["V5", "V5 tag", "GKPIPNPLLGLDST"],
 }
 
-# Combine all
 ALL_TOKEN_MAPS = {
     "AMR": AMR_TOKEN_MAP,
     "PROM": PROM_TOKEN_MAP,
@@ -117,6 +112,7 @@ ALL_TOKEN_MAPS = {
     "REPORTER": REPORTER_TOKEN_MAP,
     "TAG": TAG_TOKEN_MAP,
 }
+
 
 def feature_to_category_token(feature: str) -> tuple[str, str] | None:
     """Map feature to (token, category) or None if no match."""
@@ -136,12 +132,143 @@ def feature_to_category_token(feature: str) -> tuple[str, str] | None:
     return None
 
 
+def load_plannotate_metadata():
+    """Load metadata from plannotate CSVs."""
+    import plannotate
+    data_dir = Path(plannotate.__file__).parent / "data" / "data"
+    
+    frames = []
+    
+    sg = pd.read_csv(data_dir / "snapgene.csv")
+    sg["db_source"] = "snapgene"
+    frames.append(sg)
+    
+    fp = pd.read_csv(data_dir / "fpbase.csv")
+    fp["Type"] = "CDS"
+    fp["db_source"] = "fpbase"
+    for col in ["sseqid", "Feature", "Description"]:
+        fp[col] = fp[col].apply(lambda x: html.unescape(str(x)) if pd.notna(x) else x)
+    frames.append(fp)
+    
+    sp = pd.read_csv(
+        data_dir / "swissprot.csv.gz",
+        header=None,
+        names=["sseqid", "Feature", "Description"],
+        compression="gzip",
+    )
+    sp["Type"] = "CDS"
+    sp["db_source"] = "swissprot"
+    frames.append(sp)
+    
+    meta = pd.concat(frames, ignore_index=True)
+    return meta
+
+
+def _parse_fasta(text, db_source=""):
+    """Parse FASTA, handling swissprot sp|ACC|ID format."""
+    entries = []
+    current_id = None
+    current_seq = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(">"):
+            if current_id is not None:
+                entries.append((current_id, "".join(current_seq)))
+            header_id = line[1:].split()[0]
+            if db_source == "swissprot" and "|" in header_id:
+                parts = header_id.split("|")
+                current_id = parts[1] if len(parts) >= 2 else header_id
+            else:
+                current_id = header_id
+            current_seq = []
+        else:
+            current_seq.append(line)
+    if current_id is not None:
+        entries.append((current_id, "".join(current_seq)))
+    return entries
+
+
+def extract_sequences(db_dir, needed_sseqids):
+    """Extract sequences from BLAST/Diamond/Infernal databases."""
+    db_dir = Path(db_dir)
+    all_seqs = []
+    
+    # snapgene
+    snapgene_db = db_dir / "snapgene"
+    if snapgene_db.with_suffix(".nsq").exists() or snapgene_db.with_suffix(".ndb").exists():
+        try:
+            result = subprocess.run(
+                ["blastdbcmd", "-db", str(snapgene_db), "-entry", "all"],
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                for sid, seq in _parse_fasta(result.stdout, "snapgene"):
+                    all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "dna", "db_source": "snapgene"})
+                logger.info(f"  snapgene: {sum(1 for s in all_seqs if s['db_source'] == 'snapgene')} sequences")
+        except Exception as e:
+            logger.warning(f"snapgene failed: {e}")
+    
+    # fpbase
+    fpbase_dmnd = db_dir / "fpbase.dmnd"
+    if fpbase_dmnd.exists():
+        try:
+            result = subprocess.run(
+                ["diamond", "getseq", "-d", str(fpbase_dmnd)],
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                for sid, seq in _parse_fasta(result.stdout, "fpbase"):
+                    all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "fpbase"})
+                logger.info(f"  fpbase: {sum(1 for s in all_seqs if s['db_source'] == 'fpbase')} sequences")
+        except Exception as e:
+            logger.warning(f"fpbase failed: {e}")
+    
+    # swissprot (filtered)
+    swissprot_dmnd = db_dir / "swissprot.dmnd"
+    if swissprot_dmnd.exists():
+        try:
+            result = subprocess.run(
+                ["diamond", "getseq", "-d", str(swissprot_dmnd)],
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                n_total = 0
+                n_kept = 0
+                for sid, seq in _parse_fasta(result.stdout, "swissprot"):
+                    n_total += 1
+                    if sid in needed_sseqids:
+                        n_kept += 1
+                        all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "swissprot"})
+                logger.info(f"  swissprot: {n_kept}/{n_total} sequences (filtered)")
+        except Exception as e:
+            logger.warning(f"swissprot failed: {e}")
+    
+    # Rfam
+    rfam_cm = db_dir / "Rfam.cm"
+    if rfam_cm.exists():
+        try:
+            result = subprocess.run(
+                ["cmemit", "-c", str(rfam_cm)],
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                for sid, seq in _parse_fasta(result.stdout, "Rfam"):
+                    all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "rna_consensus", "db_source": "Rfam"})
+                logger.info(f"  Rfam: {sum(1 for s in all_seqs if s['db_source'] == 'Rfam')} sequences")
+        except Exception as e:
+            logger.warning(f"Rfam failed: {e}")
+    
+    return pd.DataFrame(all_seqs)
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--annotations", default=f"{BASE}/annotations/plannotate_annotations.parquet")
-    parser.add_argument("--db-dir", default="~/.cache/pLannotate/BLAST_dbs")
+    parser.add_argument("--db-dir", default="/opt/dlami/nvme/miniconda3/pkgs/plannotate-1.2.4-pyhdfd78af_0/site-packages/plannotate/data/BLAST_dbs")
     parser.add_argument("--output-dir", default=f"{BASE}/tokenization/")
     args = parser.parse_args()
     
@@ -158,36 +285,74 @@ def main():
     # Map features to tokens
     logger.info("Mapping features to category tokens...")
     annot["mapped"] = annot["Feature"].apply(feature_to_category_token)
-    
-    # Keep only mapped features
     annot_mapped = annot[annot["mapped"].notna()].copy()
     annot_mapped["token"] = annot_mapped["mapped"].apply(lambda x: x[0])
     annot_mapped["category"] = annot_mapped["mapped"].apply(lambda x: x[1])
+    logger.info(f"  Mapped {len(annot_mapped):,}/{len(annot):,} annotations")
     
-    logger.info(f"  Mapped {len(annot_mapped):,}/{len(annot):,} annotations to category tokens")
+    # Get needed sseqids
+    needed_sseqids = set(annot_mapped["sseqid"].unique())
+    logger.info(f"  Need sequences for {len(needed_sseqids)} sseqids")
     
-    # Group by token and collect metadata
+    # Extract sequences
+    logger.info("Extracting sequences from databases...")
+    seq_df = extract_sequences(args.db_dir, needed_sseqids)
+    seq_lookup = {row["sseqid"]: row for _, row in seq_df.iterrows()}
+    logger.info(f"  Total sequences extracted: {len(seq_lookup)}")
+    
+    # Group by token
+    logger.info("Building motif registry...")
     token_groups = annot_mapped.groupby("token")
     
     motifs = {}
     token_to_uuid = {}
-    sseqid_to_uuid = {}
+    rows = []
     
     for token, group in token_groups:
         motif_uuid = str(uuid.uuid5(MOTIF_NAMESPACE, token))
         token_to_uuid[token] = motif_uuid
         
-        # Collect unique features and sseqids for this token
         features = group["Feature"].unique().tolist()
-        sseqids = group["sseqid"].unique().tolist()
         plasmid_count = group["plasmid_id"].nunique()
-        
-        # Create sequences entries (will be populated later if DBs available)
-        sequences = [{"sseqid": sid, "sequence": None} for sid in sseqids]
-        for sid in sseqids:
-            sseqid_to_uuid[sid] = motif_uuid
-        
         category = group["category"].iloc[0]
+        
+        # Build sequence entries
+        sequences = []
+        for sseqid in group["sseqid"].unique():
+            if sseqid in seq_lookup:
+                seq_info = seq_lookup[sseqid]
+                sequences.append({
+                    "sseqid": sseqid,
+                    "sequence": seq_info["sequence"],
+                    "seq_type": seq_info["seq_type"],
+                    "db_source": seq_info["db_source"],
+                    "seq_len": len(seq_info["sequence"]) if seq_info["sequence"] else None,
+                })
+                rows.append({
+                    "uuid": motif_uuid,
+                    "token": token,
+                    "category": category,
+                    "features": ",".join(features),
+                    "plasmid_count": int(plasmid_count),
+                    "sseqid": sseqid,
+                    "db_source": seq_info["db_source"],
+                    "seq_type": seq_info["seq_type"],
+                    "seq_len": len(seq_info["sequence"]) if seq_info["sequence"] else None,
+                    "sequence": seq_info["sequence"],
+                })
+            else:
+                rows.append({
+                    "uuid": motif_uuid,
+                    "token": token,
+                    "category": category,
+                    "features": ",".join(features),
+                    "plasmid_count": int(plasmid_count),
+                    "sseqid": sseqid,
+                    "db_source": None,
+                    "seq_type": None,
+                    "seq_len": None,
+                    "sequence": None,
+                })
         
         motifs[motif_uuid] = {
             "uuid": motif_uuid,
@@ -198,47 +363,34 @@ def main():
             "sequences": sequences,
         }
     
-    logger.info(f"Created {len(motifs)} motif entries")
+    logger.info(f"Created {len(motifs)} motifs with {len([r for r in rows if r['sequence'] is not None])} sequences")
     
     # Summary
-    by_cat = defaultdict(int)
+    by_cat = defaultdict(lambda: {"tokens": 0, "with_seq": 0})
     for m in motifs.values():
-        by_cat[m["category"]] += 1
+        has_seq = any(s.get("sequence") for s in m["sequences"])
+        by_cat[m["category"]]["tokens"] += 1
+        if has_seq:
+            by_cat[m["category"]]["with_seq"] += 1
     
     logger.info("By category:")
-    for cat, count in sorted(by_cat.items()):
-        logger.info(f"  {cat}: {count}")
+    for cat, counts in sorted(by_cat.items()):
+        logger.info(f"  {cat}: {counts['tokens']} tokens, {counts['with_seq']} with sequences")
     
-    # Create flat dataframe
-    rows = []
-    for motif_uuid, motif in motifs.items():
-        for seq_entry in motif["sequences"]:
-            rows.append({
-                "uuid": motif_uuid,
-                "token": motif["token"],
-                "category": motif["category"],
-                "features": ",".join(motif["features"]),
-                "plasmid_count": motif["plasmid_count"],
-                "sseqid": seq_entry["sseqid"],
-                "sequence": seq_entry["sequence"],
-            })
-    
+    # Save parquet
     df = pd.DataFrame(rows)
-    
-    # Save
-    output_path = Path(args.output_dir) / "motif_registry_category.parquet"
+    output_path = Path(args.output_dir) / "motif_registry.parquet"
     df.to_parquet(output_path, index=False)
     logger.info(f"Saved {len(df)} rows to {output_path}")
     
     # Save JSON
-    json_output = Path(args.output_dir) / "motif_registry_category.json"
+    json_output = Path(args.output_dir) / "motif_registry.json"
     with open(json_output, 'w') as f:
         json.dump({
-            "version": "1.0",
+            "version": "2.0",
             "n_motifs": len(motifs),
             "motifs": motifs,
             "token_to_uuid": token_to_uuid,
-            "sseqid_to_uuid": sseqid_to_uuid,
         }, f, indent=2)
     logger.info(f"Saved JSON to {json_output}")
 
