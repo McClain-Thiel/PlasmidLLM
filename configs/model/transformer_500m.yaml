@@ -1,6 +1,0 @@
-arch: transformer
-d_model: 1280
-n_layers: 32
-n_heads: 16
-d_ff: 5120
-dropout: 0.1

@@ -1,8 +1,0 @@
-# @package _global_
-hydra:
-  sweeper:
-    params:
-      model.d_model: choice(128, 256, 512)
-      model.n_layers: range(4, 12, step=2)
-      train.lr: interval(1e-5, 1e-3)
-      train.weight_decay: choice(0.01, 0.1)

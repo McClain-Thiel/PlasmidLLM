@@ -27,15 +27,3 @@ def build_model(config: Any, vocab_size: int, loss_fn: nn.Module | None = None) 
         raise ValueError(f"Unknown architecture '{arch}'. Available: {available}")
     return MODEL_REGISTRY[arch](config, vocab_size, loss_fn=loss_fn)
 
-
-# Import model modules to trigger registration
-from plasmid_llm.models import transformer  # noqa: F401, E402
-from plasmid_llm.models import diffusion  # noqa: F401, E402
-from plasmid_llm.models import transformer_variants  # noqa: F401, E402
-from plasmid_llm.models import encoder_decoder  # noqa: F401, E402
-
-# Optional mamba import (requires mamba-ssm package)
-try:
-    from plasmid_llm.models import mamba  # noqa: F401, E402
-except ImportError:
-    pass

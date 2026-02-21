@@ -1,32 +1,23 @@
 #!/usr/bin/env python3
-"""Build a motif registry mapping feature tokens to canonical reference sequences.
+"""Build a motif registry mapping categorical tokens to canonical reference sequences.
 
-Extracts canonical sequences from plannotate's underlying BLAST/Diamond/Infernal
-databases, links them to the <FEAT_*> tokens used in training, and outputs a
-registry for use as a GRPO reward function lookup.
-
-Architecture:
-    Token (<FEAT_CMR>) → UUID (deterministic) → Canonical Sequence(s)
-                                                  ├── CmR_(1)  [snapgene, dna]
-                                                  ├── CmR_(2)  [snapgene, dna]
-                                                  └── P62577   [swissprot, protein]
+Maps plannotate annotations to the categorical tokens used in training
+(<AMR_*>, <PROM_*>, <ORI_*>, <ELEM_*>, <REPORTER_*>, <TAG_*>), then extracts
+canonical sequences from plannotate's BLAST/Diamond/Infernal databases.
 
 Output:
     motif_registry.json   — nested dict keyed by UUID
-    motif_registry.parquet — flat table (one row per uuid+sseqid pair)
+    motif_registry.parquet — flat table (one row per token+sseqid pair)
 """
 
 import argparse
-import gzip
 import html
 import json
 import logging
 import re
-import shutil
 import subprocess
 import uuid
 from collections import defaultdict
-from io import StringIO
 from pathlib import Path
 
 import pandas as pd
@@ -34,144 +25,163 @@ import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
 
-# ── Constants ──────────────────────────────────────────────────────────────────
-
 BASE = "/mnt/s3/phd-research-storage-1758274488/addgene_clean"
-
-# Deterministic UUID namespace for motif IDs
 MOTIF_NAMESPACE = uuid.UUID("f47ac10b-58cc-4372-a567-0d02b2c3d479")
 
-# Quality thresholds (same as generate_training_pairs_v3.py)
 MIN_PERCMATCH = 95.0
 EXCLUDE_FRAGMENTS = True
-TOP_N_FEATURES = 150
 
+# ── Token maps: plannotate Feature name → categorical token ──────────────────
+# These define how plannotate's Feature field maps to training tokens.
+# Pattern matching: if any pattern appears as substring in the Feature name,
+# the token is assigned. Order within a map matters for priority.
 
-# ── Reused from generate_training_pairs_v3.py ─────────────────────────────────
-
-def feature_to_token(feature: str) -> str:
-    """Convert a plannotate feature name to a valid <TOKEN> string."""
-    tok = feature.upper()
-    tok = re.sub(r"[^A-Z0-9]+", "_", tok)
-    tok = tok.strip("_")
-    tok = re.sub(r"_+", "_", tok)
-    return f"<FEAT_{tok}>"
-
-
-# ── AMR and PROM token mappings ────────────────────────────────────────────────
-
-# Feature patterns → AMR tokens
 AMR_TOKEN_MAP = {
-    # Ampicillin
-    "<AMR_AMPICILLIN>": ["AmpR", "blaTEM", "TEM-116", "TEM-171", "TEM-181", "Ampicillin", "beta-lactamase"],
-    # Kanamycin
-    "<AMR_KANAMYCIN>": ["KanR", "neo", "NeoR", "kanMX", "nptII", "APH", "Kanamycin", "Neomycin", "NeoR/KanR"],
-    # Spectinomycin
+    "<AMR_AMPICILLIN>": ["AmpR", "blaTEM", "TEM-116", "TEM-171", "TEM-181", "beta-lactamase"],
+    "<AMR_KANAMYCIN>": ["KanR", "kanMX", "nptII", "APH(3')", "NeoR/KanR"],
     "<AMR_SPECTINOMYCIN>": ["SpecR", "spectinomycin", "aadA"],
-    # Chloramphenicol
-    "<AMR_CHLORAMPHENICOL>": ["CmR", "CAT", "cat", "Chloramphenicol", "CamR"],
-    # Gentamicin
-    "<AMR_GENTAMICIN>": ["GentR", "gentamicin", "aacC1", "aac(3)-Ia"],
-    # Tetracycline
-    "<AMR_TETRACYCLINE>": ["TetR", "tetR", "tetA", "tetM", "tetQ", "tetC", "tetL", "tetX", "Tetracycline"],
-    # Zeocin/Bleocin
+    "<AMR_CHLORAMPHENICOL>": ["CmR", "CAT", "cat", "CamR"],
+    "<AMR_GENTAMICIN>": ["GentR", "gentamicin", "aacC1", "aac(3)-Ia", "GmR"],
+    "<AMR_TETRACYCLINE>": ["TetR", "tetA", "tetM", "tetQ", "tetC", "tetL", "tetX", "TcR"],
     "<AMR_ZEOCIN>": ["BleoR", "zeocin", "bleomycin"],
-    # Apramycin
-    "<AMR_APRAMYCIN>": ["ApraR", "apramycin"],
-    # Streptomycin
-    "<AMR_STREPTOMYCIN>": ["StrR", "streptomycin", "aadA"],
-    # Hygromycin
-    "<AMR_HYGROMYCIN>": ["HygR", "hygromycin", "Hygromycin"],
-    # Puromycin
-    "<AMR_PUROMYCIN>": ["PuroR", "puro", "Puromycin"],
-    # Neomycin
-    "<AMR_NEOMYCIN>": ["NeoR", "neomycin", "Neomycin"],
-    # Blasticidin
-    "<AMR_BLASTICIDIN>": ["BSD", "bsr", "blasticidin", "Blasticidin"],
-    # Nourseothricin
+    "<AMR_APRAMYCIN>": ["ApraR", "apramycin", "AAC(3)-IV", "AAC6"],
+    "<AMR_STREPTOMYCIN>": ["StrR", "streptomycin"],
+    "<AMR_HYGROMYCIN>": ["HygR", "hygromycin"],
+    "<AMR_PUROMYCIN>": ["PuroR", "puro"],
+    "<AMR_NEOMYCIN>": ["NeoR", "neomycin", "neo"],
+    "<AMR_BLASTICIDIN>": ["BSD", "bsr", "blasticidin"],
     "<AMR_NOURSEOTHRICIN>": ["NatR", "nourseothricin"],
 }
 
-# Feature patterns → PROM tokens
 PROM_TOKEN_MAP = {
     "<PROM_AMPR>": ["AmpR promoter"],
-    "<PROM_CMV>": ["CMV promoter", "CMV IE94 promoter", "CMV enhancer", "mCMV promoter", "CMV IE", "CMV_immearly"],
+    "<PROM_CMV>": ["CMV promoter", "CMV IE94 promoter", "mCMV promoter", "CMV IE", "CMV_immearly"],
     "<PROM_T5>": ["T5 promoter"],
     "<PROM_SV40>": ["SV40 promoter", "SV40 early promoter"],
     "<PROM_LAC>": ["lac promoter", "tac promoter", "lac UV5 promoter", "lacI promoter"],
     "<PROM_T7>": ["T7 promoter"],
-    "<PROM_U6>": ["U6 promoter"],
-    "<PROM_EF1A>": ["EF-1α promoter", "EF-1α core promoter", "EF-1 promoter", "EF_1"],
+    "<PROM_U6>": ["U6 promoter", "AtU6 promoter", "CeU6 promoter"],
+    "<PROM_EF1A>": ["EF-1\u03b1 promoter", "EF-1\u03b1 core promoter", "EF-1 promoter", "EF_1"],
     "<PROM_RSV>": ["RSV promoter", "RSV LTR"],
     "<PROM_SP6>": ["SP6 promoter"],
-    "<PROM_CAG>": ["chicken β-actin promoter", "CAG promoter", "CBA promoter"],
+    "<PROM_CAG>": ["chicken \u03b2-actin promoter", "CAG promoter", "CBA promoter"],
     "<PROM_T3>": ["T3 promoter"],
 }
 
+ORI_TOKEN_MAP = {
+    "<ORI_F1>": ["f1 ori", "f1_origin", "f1 phage ori", "F1 ori"],
+    "<ORI_SV40>": ["SV40 ori", "SV40_origin", "SV40 early ori"],
+    "<ORI_RSF>": ["RSF1010", "RSF ori", "RSF1010 oriV", "RSF1010 oriT"],
+    "<ORI_2MU>": ["2\u03bc ori", "2u ori", "2 micron ori"],
+    "<ORI_P15A>": ["p15A ori", "p15A_origin"],
+    "<ORI_PSC101>": ["pSC101 ori", "pSC101_origin"],
+    "<ORI_COLE1>": ["ColE1", "pBR322", "pMB1", "ori"],
+}
 
-def feature_to_amr_token(feature: str) -> str | None:
-    """Map a feature name to an AMR token if it matches."""
+ELEM_TOKEN_MAP = {
+    "<ELEM_AAV_ITR>": ["AAV ITR", "AAV2 ITR", "adeno-associated virus ITR"],
+    "<ELEM_CMV_ENHANCER>": ["CMV enhancer", "CMV IE enhancer", "hr5 enhancer"],
+    "<ELEM_CMV_INTRON>": ["CMV intron", "CMV IE intron", "CMV intron A"],
+    "<ELEM_CPPT>": ["cPPT", "central polypurine tract", "CPPT/CTS"],
+    "<ELEM_GRNA_SCAFFOLD>": ["gRNA scaffold", "sgRNA scaffold", "tracrRNA scaffold",
+                             "Nm gRNA scaffold", "Fn gRNA scaffold", "Sa gRNA scaffold"],
+    "<ELEM_IRES>": ["IRES", "internal ribosome entry site", "EMCV IRES"],
+    "<ELEM_LTR_3>": ["3' LTR", "3' long terminal repeat", "LTR 3'", "3' LTR (\u0394U3)"],
+    "<ELEM_LTR_5>": ["5' LTR", "5' long terminal repeat", "LTR 5'", "5' LTR (truncated)"],
+    "<ELEM_MCS>": ["MCS", "multiple cloning site", "polylinker", "multiple cloning region"],
+    "<ELEM_POLYA_BGH>": ["bGH poly(A)", "bovine growth hormone polyA", "BGH pA"],
+    "<ELEM_POLYA_SV40>": ["SV40 poly(A)", "SV40 late polyA", "SV40 pA signal", "SV40 poly(A) signal"],
+    "<ELEM_PSI>": ["psi", "\u03a8", "packaging signal", "HIV packaging signal",
+                   "HIV-1 \u03a8", "MESV \u03a8", "MMLV \u03a8", "Ad5 \u03a8"],
+    "<ELEM_TRACRRNA>": ["tracrRNA", "trans-activating crRNA", "tracr", "Nm tracrRNA"],
+    "<ELEM_WPRE>": ["WPRE", "woodchuck hepatitis virus posttranscriptional regulatory element"],
+}
+
+REPORTER_TOKEN_MAP = {
+    "<REPORTER_EGFP>": ["EGFP", "enhanced GFP", "eGFP", "mEGFP", "yEGFP", "yeGFP",
+                        "rsEGFP2", "rsEGFP", "d1EGFP", "d2EGFP", "d4EGFP", "deGFP4",
+                        "cEGFP", "aceGFP"],
+    "<REPORTER_GFP>": ["GFP", "green fluorescent protein", "superfolder GFP",
+                       "GFP (S65T)", "GFPuv", "TurboGFP", "TagGFP", "EmGFP",
+                       "AcGFP1", "\u03b1GFP", "SGFP2", "roGFP2"],
+    "<REPORTER_MCHERRY>": ["mCherry", "PAmCherry"],
+    "<REPORTER_MEMERALD>": ["mEmerald"],
+    "<REPORTER_NANOLUC>": ["NanoLuc", "nanoluciferase", "Nluc"],
+    "<REPORTER_YFP>": ["YFP", "yellow fluorescent protein", "Citrine", "EYFP",
+                       "LanYFP", "SYFP2", "TagYFP", "PhiYFP"],
+}
+
+TAG_TOKEN_MAP = {
+    "<TAG_FLAG>": ["FLAG", "DYKDDDDK", "2xFLAG", "3xFLAG", "5xFLAG"],
+    "<TAG_GST>": ["GST", "glutathione S-transferase", "GST26_SCHJA"],
+    "<TAG_HA>": ["HA tag", "hemagglutinin tag", "YPYDVPDYA", "3xHA"],
+    "<TAG_HIS>": ["6xHis", "His tag", "hexahistidine", "HIS6", "10xHis"],
+    "<TAG_MYC>": ["Myc", "c-Myc", "EQKLISEEDL", "3xMyc", "13xMyc"],
+    "<TAG_NLS>": ["NLS", "nuclear localization signal", "SV40 NLS", "nucleoplasmin NLS"],
+    "<TAG_V5>": ["V5", "V5 tag", "GKPIPNPLLGLDST"],
+}
+
+ALL_TOKEN_MAPS = {
+    "AMR": AMR_TOKEN_MAP,
+    "PROM": PROM_TOKEN_MAP,
+    "ORI": ORI_TOKEN_MAP,
+    "ELEM": ELEM_TOKEN_MAP,
+    "REPORTER": REPORTER_TOKEN_MAP,
+    "TAG": TAG_TOKEN_MAP,
+}
+
+
+# ── Feature → token mapping ─────────────────────────────────────────────────
+
+def feature_to_category_token(feature: str) -> tuple[str, str] | None:
+    """Map a plannotate Feature name to (token, category) or None."""
     feat_lower = feature.lower()
-    for token, patterns in AMR_TOKEN_MAP.items():
-        for pattern in patterns:
-            if pattern.lower() in feat_lower:
-                return token
+
+    # Special case: AmpR promoter → PROM, not AMR
+    if "ampr promoter" in feat_lower or "ampicillin resistance promoter" in feat_lower:
+        return "<PROM_AMPR>", "PROM"
+
+    # Special case: CMV enhancer → ELEM, not PROM
+    if "cmv enhancer" in feat_lower:
+        return "<ELEM_CMV_ENHANCER>", "ELEM"
+
+    # Try ELEM before PROM (CMV intron vs CMV promoter)
+    for category in ["ELEM", "PROM", "ORI", "REPORTER", "TAG", "AMR"]:
+        token_map = ALL_TOKEN_MAPS[category]
+        for token, patterns in token_map.items():
+            for pattern in patterns:
+                pat_lower = pattern.lower()
+                # Short patterns (<=4 chars): word boundary match
+                if len(pat_lower) <= 4:
+                    if re.search(r"\b" + re.escape(pat_lower) + r"\b", feat_lower):
+                        return token, category
+                else:
+                    if pat_lower in feat_lower:
+                        return token, category
+
     return None
 
 
-def feature_to_prom_token(feature: str) -> str | None:
-    """Map a feature name to a PROM token if it matches."""
-    feat_lower = feature.lower()
-    for token, patterns in PROM_TOKEN_MAP.items():
-        for pattern in patterns:
-            if pattern.lower() in feat_lower:
-                return token
-    return None
-
-
-def feature_to_any_token(feature: str) -> tuple[str, str]:
-    """Map a feature to the best matching token (FEAT, AMR, or PROM).
-    
-    Returns: (token, token_category)
-    """
-    # Try AMR first
-    amr_tok = feature_to_amr_token(feature)
-    if amr_tok:
-        return amr_tok, "AMR"
-    
-    # Try PROM
-    prom_tok = feature_to_prom_token(feature)
-    if prom_tok:
-        return prom_tok, "PROM"
-    
-    # Default to FEAT
-    return feature_to_token(feature), "FEAT"
-
-
-# ── Step 1: Load plannotate metadata CSVs ──────────────────────────────────────
+# ── Plannotate metadata loading ──────────────────────────────────────────────
 
 def load_plannotate_metadata() -> pd.DataFrame:
-    """Load and concatenate metadata from plannotate's bundled CSVs."""
+    """Load metadata from plannotate's bundled CSVs."""
     import plannotate
     data_dir = Path(plannotate.__file__).parent / "data" / "data"
 
     frames = []
 
-    # snapgene.csv: has header (sseqid, Feature, Type, Description)
     sg = pd.read_csv(data_dir / "snapgene.csv")
     sg["db_source"] = "snapgene"
     frames.append(sg)
 
-    # fpbase.csv: has header (sseqid, Feature, Description); Type defaults to CDS
     fp = pd.read_csv(data_dir / "fpbase.csv")
     fp["Type"] = "CDS"
     fp["db_source"] = "fpbase"
-    # Decode HTML entities (e.g., &alpha;GFP → αGFP)
     for col in ["sseqid", "Feature", "Description"]:
         fp[col] = fp[col].apply(lambda x: html.unescape(str(x)) if pd.notna(x) else x)
     frames.append(fp)
 
-    # swissprot.csv.gz: NO header; cols = sseqid, Feature, Description; Type = CDS
     sp = pd.read_csv(
         data_dir / "swissprot.csv.gz",
         header=None,
@@ -190,13 +200,16 @@ def load_plannotate_metadata() -> pd.DataFrame:
     return meta
 
 
-# ── Step 2: Extract canonical sequences from databases ─────────────────────────
+# ── Sequence extraction ──────────────────────────────────────────────────────
 
-def _parse_fasta(text: str) -> list[tuple[str, str]]:
-    """Parse FASTA text into [(header, sequence), ...]."""
+def _parse_fasta(text: str, db_source: str = "") -> list[tuple[str, str]]:
+    """Parse FASTA text into [(id, sequence), ...].
+
+    For swissprot diamond output, extracts accession from sp|ACC|ID headers.
+    """
     entries = []
     current_id = None
-    current_seq = []
+    current_seq: list[str] = []
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -204,8 +217,12 @@ def _parse_fasta(text: str) -> list[tuple[str, str]]:
         if line.startswith(">"):
             if current_id is not None:
                 entries.append((current_id, "".join(current_seq)))
-            # Take first whitespace-delimited word as ID
-            current_id = line[1:].split()[0]
+            header_id = line[1:].split()[0]
+            if db_source == "swissprot" and "|" in header_id:
+                parts = header_id.split("|")
+                current_id = parts[1] if len(parts) >= 2 else header_id
+            else:
+                current_id = header_id
             current_seq = []
         else:
             current_seq.append(line)
@@ -231,80 +248,56 @@ def _run_cmd(cmd: list[str], description: str) -> str | None:
         return None
 
 
-def extract_sequences(
-    db_dir: Path,
-    needed_sseqids: set[str] | None = None,
-) -> pd.DataFrame:
-    """Extract canonical sequences from plannotate BLAST/Diamond/Infernal databases.
+def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
+    """Extract canonical sequences from plannotate's BLAST/Diamond/Infernal DBs."""
+    all_seqs: list[dict] = []
 
-    Args:
-        db_dir: Path to ~/.cache/pLannotate/BLAST_dbs/
-        needed_sseqids: If provided, only keep sequences with these sseqids.
-
-    Returns:
-        DataFrame with columns [sseqid, sequence, seq_type, db_source].
-    """
-    all_seqs = []
-
-    # ── snapgene (BLAST nucleotide DB) ──
+    # snapgene (BLAST nucleotide DB)
     snapgene_db = db_dir / "snapgene"
     if snapgene_db.with_suffix(".nsq").exists() or snapgene_db.with_suffix(".ndb").exists():
-        out = _run_cmd(
-            ["blastdbcmd", "-db", str(snapgene_db), "-entry", "all"],
-            "snapgene blastdbcmd",
-        )
+        out = _run_cmd(["blastdbcmd", "-db", str(snapgene_db), "-entry", "all"], "snapgene")
         if out:
-            for sid, seq in _parse_fasta(out):
+            for sid, seq in _parse_fasta(out, "snapgene"):
                 all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "dna", "db_source": "snapgene"})
-            logger.info("  snapgene: extracted %d sequences", sum(1 for s in all_seqs if s["db_source"] == "snapgene"))
+            logger.info("  snapgene: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "snapgene"))
     else:
         logger.warning("snapgene BLAST DB not found at %s", snapgene_db)
 
-    # ── fpbase (Diamond protein DB) ──
+    # fpbase (Diamond protein DB)
     fpbase_dmnd = db_dir / "fpbase.dmnd"
     if fpbase_dmnd.exists():
-        out = _run_cmd(
-            ["diamond", "getseq", "-d", str(fpbase_dmnd)],
-            "fpbase diamond getseq",
-        )
+        out = _run_cmd(["diamond", "getseq", "-d", str(fpbase_dmnd)], "fpbase")
         if out:
-            for sid, seq in _parse_fasta(out):
+            for sid, seq in _parse_fasta(out, "fpbase"):
                 all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "fpbase"})
-            logger.info("  fpbase: extracted %d sequences", sum(1 for s in all_seqs if s["db_source"] == "fpbase"))
+            logger.info("  fpbase: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "fpbase"))
     else:
         logger.warning("fpbase Diamond DB not found at %s", fpbase_dmnd)
 
-    # ── swissprot (Diamond protein DB) — filter to needed sseqids ──
+    # swissprot (Diamond protein DB) — filter to needed sseqids
     swissprot_dmnd = db_dir / "swissprot.dmnd"
     if swissprot_dmnd.exists():
-        out = _run_cmd(
-            ["diamond", "getseq", "-d", str(swissprot_dmnd)],
-            "swissprot diamond getseq",
-        )
+        out = _run_cmd(["diamond", "getseq", "-d", str(swissprot_dmnd)], "swissprot")
         if out:
             n_total = 0
             n_kept = 0
-            for sid, seq in _parse_fasta(out):
+            for sid, seq in _parse_fasta(out, "swissprot"):
                 n_total += 1
-                if needed_sseqids is not None and sid not in needed_sseqids:
-                    continue
-                n_kept += 1
-                all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "swissprot"})
-            logger.info("  swissprot: extracted %d/%d sequences (filtered to needed)", n_kept, n_total)
+                if sid in needed_sseqids:
+                    n_kept += 1
+                    all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "swissprot"})
+            logger.info("  swissprot: %d/%d sequences (filtered)", n_kept, n_total)
     else:
         logger.warning("swissprot Diamond DB not found at %s", swissprot_dmnd)
 
-    # ── Rfam (Infernal covariance model) ──
+    # Rfam (Infernal covariance model)
     rfam_cm = db_dir / "Rfam.cm"
     if rfam_cm.exists():
-        out = _run_cmd(
-            ["cmemit", "-c", str(rfam_cm)],
-            "Rfam cmemit",
-        )
+        out = _run_cmd(["cmemit", "-c", str(rfam_cm)], "Rfam")
         if out:
-            for sid, seq in _parse_fasta(out):
+            for sid, seq in _parse_fasta(out, "Rfam"):
                 all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "rna_consensus", "db_source": "Rfam"})
-            logger.info("  Rfam: extracted %d consensus sequences", sum(1 for s in all_seqs if s["db_source"] == "Rfam"))
+            logger.info("  Rfam: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "Rfam"))
     else:
         logger.warning("Rfam CM not found at %s", rfam_cm)
 
@@ -315,62 +308,106 @@ def extract_sequences(
     return pd.DataFrame(all_seqs)
 
 
-# ── Step 3–6: Build registry ──────────────────────────────────────────────────
+# ── Main ─────────────────────────────────────────────────────────────────────
 
-def build_registry(
-    metadata_df: pd.DataFrame,
-    sequences_df: pd.DataFrame | None,
-    annotations_df: pd.DataFrame,
-    vocab: dict[str, int],
-    top_n_features: int,
-    include_all_annotated: bool,
-) -> dict:
-    """Build the motif registry from metadata, sequences, and annotations.
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--annotations",
+        default=f"{BASE}/annotations/plannotate_annotations.parquet",
+    )
+    parser.add_argument(
+        "--vocab",
+        default=f"{BASE}/tokenization/token_vocabulary_v3.json",
+    )
+    parser.add_argument(
+        "--db-dir",
+        default=str(Path.home() / ".cache" / "pLannotate" / "BLAST_dbs"),
+        help="plannotate BLAST/Diamond DB directory",
+    )
+    parser.add_argument("--output-dir", default=f"{BASE}/tokenization/")
+    parser.add_argument("--metadata-only", action="store_true",
+                        help="Skip sequence extraction")
+    args = parser.parse_args()
 
-    Returns the registry dict ready for JSON serialization.
-    """
-    # ── Filter annotations (same quality thresholds as v3) ──
-    ann = annotations_df.copy()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    # ── Load plannotate metadata CSVs ──
+    logger.info("Loading plannotate metadata CSVs...")
+    metadata_df = load_plannotate_metadata()
+
+    # ── Load annotations ──
+    logger.info("Loading plannotate annotations...")
+    ann = pq.read_table(
+        args.annotations,
+        columns=["plasmid_id", "Feature", "sseqid", "db", "percmatch", "fragment"],
+    ).to_pandas()
+    ann["plasmid_id"] = ann["plasmid_id"].astype(str)
+    logger.info("  %d annotations for %d plasmids", len(ann), ann["plasmid_id"].nunique())
+
+    # Quality filter
     ann = ann[ann["percmatch"] >= MIN_PERCMATCH]
     if EXCLUDE_FRAGMENTS:
         ann = ann[~ann["fragment"].fillna(False).astype(bool)]
-    logger.info("Annotations after quality filter: %d", len(ann))
+    logger.info("  After quality filter: %d", len(ann))
 
-    # ── Find in-scope features ──
-    feat_counts = ann.groupby("Feature")["plasmid_id"].nunique().sort_values(ascending=False)
-    top_features = set(feat_counts.head(top_n_features).index)
+    # ── Map features → categorical tokens ──
+    logger.info("Mapping features to categorical tokens...")
+    ann["mapped"] = ann["Feature"].apply(feature_to_category_token)
+    ann_mapped = ann[ann["mapped"].notna()].copy()
+    ann_mapped["token"] = ann_mapped["mapped"].apply(lambda x: x[0])
+    ann_mapped["category"] = ann_mapped["mapped"].apply(lambda x: x[1])
 
-    if include_all_annotated:
-        all_annotated_features = set(ann["Feature"].unique())
-        in_scope_features = all_annotated_features
-        logger.info(
-            "Including all %d annotated features (%d are top-%d)",
-            len(in_scope_features), len(top_features), top_n_features,
-        )
-    else:
-        in_scope_features = top_features
-        logger.info("Using top-%d features only", top_n_features)
-
-    # Get the set of (Feature, sseqid, db) tuples from annotations
-    ann_scope = ann[ann["Feature"].isin(in_scope_features)]
-    annotation_tuples = set(
-        zip(ann_scope["Feature"], ann_scope["sseqid"], ann_scope["db"])
-    )
-    needed_sseqids = {t[1] for t in annotation_tuples}
+    n_unmapped = len(ann) - len(ann_mapped)
     logger.info(
-        "In-scope: %d features, %d unique sseqids across %d annotation tuples",
-        len(in_scope_features), len(needed_sseqids), len(annotation_tuples),
+        "  Mapped %d/%d annotations (%d unmapped)",
+        len(ann_mapped), len(ann), n_unmapped,
     )
 
-    # ── Build sseqid → sequence lookup ──
-    seq_lookup: dict[str, dict] = {}  # sseqid → {sequence, seq_type, db_source}
-    if sequences_df is not None and len(sequences_df) > 0:
-        for _, row in sequences_df.iterrows():
-            seq_lookup[row["sseqid"]] = {
-                "sequence": row["sequence"],
-                "seq_type": row["seq_type"],
-                "db_source": row["db_source"],
-            }
+    # Show unmapped features for debugging
+    if n_unmapped > 0:
+        unmapped_feats = ann[ann["mapped"].isna()]["Feature"].value_counts().head(20)
+        logger.info("  Top unmapped features:")
+        for feat, cnt in unmapped_feats.items():
+            logger.info("    %6d  %s", cnt, feat)
+
+    # ── Extract sequences ──
+    needed_sseqids = set(ann_mapped["sseqid"].unique())
+    logger.info("Need sequences for %d unique sseqids", len(needed_sseqids))
+
+    seq_lookup: dict[str, dict] = {}
+    if not args.metadata_only:
+        db_dir = Path(args.db_dir)
+        if db_dir.exists():
+            logger.info("Extracting sequences from %s...", db_dir)
+            seq_df = extract_sequences(db_dir, needed_sseqids)
+            for _, row in seq_df.iterrows():
+                seq_lookup[row["sseqid"]] = {
+                    "sequence": row["sequence"],
+                    "seq_type": row["seq_type"],
+                    "db_source": row["db_source"],
+                }
+            logger.info("  Total in lookup: %d", len(seq_lookup))
+        else:
+            logger.warning("DB dir not found: %s — skipping extraction", db_dir)
+    else:
+        logger.info("Skipping sequence extraction (--metadata-only)")
+
+    # ── Load vocab ──
+    logger.info("Loading vocab from %s...", args.vocab)
+    with open(args.vocab) as f:
+        vocab_data = json.load(f)
+    if isinstance(vocab_data, dict) and "token_to_id" in vocab_data:
+        vocab = vocab_data["token_to_id"]
+    else:
+        vocab = vocab_data
 
     # ── Build sseqid → metadata lookup ──
     meta_lookup: dict[str, dict] = {}
@@ -382,342 +419,147 @@ def build_registry(
             "db_source": row["db_source"],
         }
 
-    # ── Map features → tokens (FEAT, AMR, PROM), detect collisions ──
-    token_map: dict[str, list[str]] = defaultdict(list)  # token → [feature_names]
-    feature_token_category: dict[str, tuple[str, str]] = {}  # feat → (token, category)
-    
-    for feat in in_scope_features:
-        tok, category = feature_to_any_token(feat)
-        feature_token_category[feat] = (tok, category)
-        token_map[tok].append(feat)
+    # ── Build registry grouped by token ──
+    logger.info("Building motif registry...")
+    token_groups = ann_mapped.groupby("token")
 
-    # Warn about token collisions
-    for tok, feats in token_map.items():
-        if len(feats) > 1:
-            logger.warning(
-                "Token collision: %s maps to %d features: %s",
-                tok, len(feats), feats,
-            )
-
-    # ── Build motif entries ──
-    motifs: dict[str, dict] = {}  # uuid → motif entry
+    motifs: dict[str, dict] = {}
     token_to_uuid: dict[str, str] = {}
-    sseqid_to_uuid: dict[str, str] = {}
+    flat_rows: list[dict] = []
 
-    for feat in sorted(in_scope_features):
-        motif_uuid = str(uuid.uuid5(MOTIF_NAMESPACE, feat))
-        tok, category = feature_token_category[feat]
-        is_in_vocab = tok in vocab
+    for token, group in token_groups:
+        motif_uuid = str(uuid.uuid5(MOTIF_NAMESPACE, token))
+        token_to_uuid[token] = motif_uuid
 
-        # Collect all sseqids for this feature from annotations
-        feat_sseqids = {
-            (t[1], t[2]) for t in annotation_tuples if t[0] == feat
-        }
+        features = sorted(group["Feature"].unique().tolist())
+        plasmid_count = int(group["plasmid_id"].nunique())
+        category = group["category"].iloc[0]
 
-        # Also check metadata for this feature (some sseqids may not be in annotations)
-        meta_sseqids = {
-            sid for sid, m in meta_lookup.items() if m["Feature"] == feat
-        }
-
-        # Union: annotation sseqids + metadata sseqids
-        all_sseqids_for_feat = {sid for sid, _ in feat_sseqids} | meta_sseqids
-
-        # Build sequence entries
+        # Build sequence entries for each unique sseqid
         sequences = []
-        for sid in sorted(all_sseqids_for_feat):
-            entry = {"sseqid": sid}
-            # Get metadata
-            if sid in meta_lookup:
-                entry["db_source"] = meta_lookup[sid]["db_source"]
-            else:
-                # Try to infer from annotations
-                ann_db = {db for s, db in feat_sseqids if s == sid}
-                entry["db_source"] = next(iter(ann_db)) if ann_db else "unknown"
+        for sseqid in sorted(group["sseqid"].unique()):
+            entry: dict = {"sseqid": sseqid}
 
-            # Get sequence
-            if sid in seq_lookup:
-                entry["sequence"] = seq_lookup[sid]["sequence"]
-                entry["seq_type"] = seq_lookup[sid]["seq_type"]
-                entry["seq_len"] = len(seq_lookup[sid]["sequence"])
+            # Metadata (description, type)
+            if sseqid in meta_lookup:
+                entry["db_source"] = meta_lookup[sseqid]["db_source"]
+                desc = meta_lookup[sseqid].get("Description", "")
+                entry["description"] = str(desc) if desc and str(desc) != "nan" else ""
+            else:
+                # Infer db from annotation
+                ann_dbs = group[group["sseqid"] == sseqid]["db"].unique()
+                entry["db_source"] = ann_dbs[0] if len(ann_dbs) > 0 else "unknown"
+                entry["description"] = ""
+
+            # Sequence
+            if sseqid in seq_lookup:
+                entry["sequence"] = seq_lookup[sseqid]["sequence"]
+                entry["seq_type"] = seq_lookup[sseqid]["seq_type"]
+                entry["seq_len"] = len(seq_lookup[sseqid]["sequence"])
             else:
                 entry["sequence"] = None
                 entry["seq_type"] = None
                 entry["seq_len"] = None
 
             sequences.append(entry)
-            sseqid_to_uuid[sid] = motif_uuid
 
-        # Determine type from metadata (prefer snapgene which has explicit Type)
-        feat_type = "CDS"  # default
-        for sid in all_sseqids_for_feat:
-            if sid in meta_lookup and meta_lookup[sid].get("Type"):
-                feat_type = meta_lookup[sid]["Type"]
-                if meta_lookup[sid]["db_source"] == "snapgene":
-                    break  # prefer snapgene type
+            flat_rows.append({
+                "uuid": motif_uuid,
+                "token": token,
+                "category": category,
+                "features": ",".join(features),
+                "plasmid_count": plasmid_count,
+                "sseqid": sseqid,
+                "db_source": entry["db_source"],
+                "seq_type": entry.get("seq_type"),
+                "seq_len": entry.get("seq_len"),
+                "sequence": entry.get("sequence"),
+            })
 
-        # Get description (prefer snapgene, then fpbase, then swissprot)
+        # Pick best description (prefer snapgene)
         description = ""
         for db_pref in ["snapgene", "fpbase", "swissprot"]:
-            for sid in all_sseqids_for_feat:
-                if sid in meta_lookup and meta_lookup[sid]["db_source"] == db_pref:
-                    desc = meta_lookup[sid].get("Description", "")
-                    if desc and str(desc) != "nan":
-                        description = str(desc)
-                        break
+            for s in sequences:
+                if s["db_source"] == db_pref and s.get("description"):
+                    description = s["description"]
+                    break
             if description:
                 break
 
         motifs[motif_uuid] = {
             "uuid": motif_uuid,
-            "feature_name": feat,
-            "token": tok,
-            "token_category": category,
-            "type": feat_type,
-            "in_training_vocab": is_in_vocab,
-            "in_top_n": feat in top_features,
-            "plasmid_count": int(feat_counts.get(feat, 0)),
+            "token": token,
+            "category": category,
+            "features": features,
+            "plasmid_count": plasmid_count,
             "description": description,
+            "in_vocab": token in vocab,
             "sequences": sequences,
         }
 
-        token_to_uuid[tok] = motif_uuid
-
-    # ── Summary stats ──
     n_with_seq = sum(
         1 for m in motifs.values()
         if any(s["sequence"] is not None for s in m["sequences"])
     )
-    n_in_vocab = sum(1 for m in motifs.values() if m["in_training_vocab"])
-    
-    # Count by category
-    n_feat = sum(1 for m in motifs.values() if m["token"].startswith("<FEAT_"))
-    n_amr = sum(1 for m in motifs.values() if m["token"].startswith("<AMR_"))
-    n_prom = sum(1 for m in motifs.values() if m["token"].startswith("<PROM_"))
-    
-    logger.info(
-        "Registry: %d motifs (%d with sequences, %d in training vocab)",
-        len(motifs), n_with_seq, n_in_vocab,
-    )
-    logger.info(
-        "  By category: %d FEAT, %d AMR, %d PROM",
-        n_feat, n_amr, n_prom,
-    )
+    logger.info("Registry: %d motifs (%d with sequences)", len(motifs), n_with_seq)
 
-    # Check vocab coverage by category
-    vocab_feat_tokens = {t for t in vocab if t.startswith("<FEAT_")}
-    vocab_amr_tokens = {t for t in vocab if t.startswith("<AMR_")}
-    vocab_prom_tokens = {t for t in vocab if t.startswith("<PROM_")}
-    registry_tokens = set(token_to_uuid.keys())
-    
-    missing_feat = vocab_feat_tokens - registry_tokens
-    missing_amr = vocab_amr_tokens - registry_tokens
-    missing_prom = vocab_prom_tokens - registry_tokens
-    
-    if missing_feat:
-        logger.warning("%d FEAT tokens not in registry: %s", len(missing_feat), sorted(missing_feat)[:5])
-    if missing_amr:
-        logger.warning("%d AMR tokens not in registry: %s", len(missing_amr), sorted(missing_amr))
-    if missing_prom:
-        logger.warning("%d PROM tokens not in registry: %s", len(missing_prom), sorted(missing_prom))
-    
-    logger.info(
-        "Vocab coverage: %d/%d FEAT, %d/%d AMR, %d/%d PROM",
-        len(vocab_feat_tokens & registry_tokens), len(vocab_feat_tokens),
-        len(vocab_amr_tokens & registry_tokens), len(vocab_amr_tokens),
-        len(vocab_prom_tokens & registry_tokens), len(vocab_prom_tokens),
-    )
-
-    return {
-        "version": "1.0",
-        "namespace_uuid": str(MOTIF_NAMESPACE),
-        "n_motifs": len(motifs),
-        "n_with_sequences": n_with_seq,
-        "n_in_training_vocab": n_in_vocab,
-        "motifs": motifs,
-        "token_to_uuid": token_to_uuid,
-        "sseqid_to_uuid": sseqid_to_uuid,
-    }
-
-
-def registry_to_flat_df(registry: dict) -> pd.DataFrame:
-    """Convert registry to a flat DataFrame (one row per uuid+sseqid pair)."""
-    rows = []
-    for motif_uuid, motif in registry["motifs"].items():
-        for seq_entry in motif["sequences"]:
-            rows.append({
-                "uuid": motif_uuid,
-                "feature_name": motif["feature_name"],
-                "token": motif["token"],
-                "type": motif["type"],
-                "in_training_vocab": motif["in_training_vocab"],
-                "in_top_n": motif["in_top_n"],
-                "plasmid_count": motif["plasmid_count"],
-                "sseqid": seq_entry["sseqid"],
-                "db_source": seq_entry["db_source"],
-                "seq_type": seq_entry.get("seq_type"),
-                "seq_len": seq_entry.get("seq_len"),
-                "sequence": seq_entry.get("sequence"),
-            })
-    return pd.DataFrame(rows)
-
-
-# ── Main ───────────────────────────────────────────────────────────────────────
-
-def main():
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--annotations",
-        default=f"{BASE}/annotations/plannotate_annotations.parquet",
-        help="Path to plannotate_annotations.parquet",
-    )
-    parser.add_argument(
-        "--vocab",
-        default=f"{BASE}/tokenization/token_vocabulary_v3.json",
-        help="Path to v3 vocab JSON",
-    )
-    parser.add_argument(
-        "--db-dir",
-        default=str(Path.home() / ".cache" / "pLannotate" / "BLAST_dbs"),
-        help="Path to plannotate BLAST/Diamond database directory",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default=f"{BASE}/tokenization",
-        help="Directory for output files",
-    )
-    parser.add_argument(
-        "--top-n-features", type=int, default=TOP_N_FEATURES,
-        help="Number of top features by plasmid count",
-    )
-    parser.add_argument(
-        "--min-percmatch", type=float, default=MIN_PERCMATCH,
-        help="Minimum percmatch for annotation quality filter",
-    )
-    parser.add_argument(
-        "--include-all-annotated", action="store_true",
-        help="Include all annotated features (not just top-N)",
-    )
-    parser.add_argument(
-        "--metadata-only", action="store_true",
-        help="Skip sequence extraction (produce entries with sequence=null)",
-    )
-    args = parser.parse_args()
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
-
-    # ── Step 1: Load plannotate metadata ──
-    logger.info("Step 1: Loading plannotate metadata CSVs...")
-    metadata_df = load_plannotate_metadata()
-
-    # ── Step 3: Load annotations and find in-scope features ──
-    logger.info("Step 3: Loading annotations...")
-    ann_cols = ["plasmid_id", "Feature", "sseqid", "db", "percmatch", "fragment",
-                "pident", "slen", "Type", "Description"]
-    ann = pq.read_table(args.annotations, columns=ann_cols).to_pandas()
-    ann["plasmid_id"] = ann["plasmid_id"].astype(str)
-    logger.info("  Loaded %d annotations for %d plasmids", len(ann), ann["plasmid_id"].nunique())
-
-    # Find sseqids we need (for filtering swissprot extraction)
-    ann_filtered = ann[ann["percmatch"] >= args.min_percmatch].copy()
-    if EXCLUDE_FRAGMENTS:
-        ann_filtered = ann_filtered[~ann_filtered["fragment"].fillna(False).astype(bool)]
-    needed_sseqids = set(ann_filtered["sseqid"].unique())
-    logger.info("  %d unique sseqids in filtered annotations", len(needed_sseqids))
-
-    # ── Step 2: Extract sequences ──
-    sequences_df = None
-    if not args.metadata_only:
-        db_dir = Path(args.db_dir)
-        if db_dir.exists():
-            logger.info("Step 2: Extracting sequences from %s...", db_dir)
-            sequences_df = extract_sequences(db_dir, needed_sseqids=needed_sseqids)
-            logger.info("  Total sequences extracted: %d", len(sequences_df))
-        else:
-            logger.warning("DB directory not found: %s — skipping sequence extraction", db_dir)
-    else:
-        logger.info("Step 2: Skipped (--metadata-only)")
-
-    # ── Step 4: Load vocab ──
-    logger.info("Step 4: Loading vocab from %s...", args.vocab)
-    with open(args.vocab) as f:
-        vocab_data = json.load(f)
-    if isinstance(vocab_data, dict) and "token_to_id" in vocab_data:
-        vocab = vocab_data["token_to_id"]
-    else:
-        vocab = vocab_data
-    logger.info("  Vocab size: %d tokens (%d FEAT tokens)",
-                len(vocab), sum(1 for t in vocab if t.startswith("<FEAT_")))
-
-    # ── Step 5: Build registry ──
-    logger.info("Step 5: Building registry...")
-    registry = build_registry(
-        metadata_df=metadata_df,
-        sequences_df=sequences_df,
-        annotations_df=ann,
-        vocab=vocab,
-        top_n_features=args.top_n_features,
-        include_all_annotated=args.include_all_annotated,
-    )
-
-    # ── Step 6: Output ──
+    # ── Save outputs ──
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_path = output_dir / "motif_registry.json"
     parquet_path = output_dir / "motif_registry.parquet"
 
-    logger.info("Step 6: Writing outputs...")
-
-    # JSON (without full sequences for readability — sequences in parquet)
-    # Actually keep sequences in JSON too for self-contained lookup
     with open(json_path, "w") as f:
-        json.dump(registry, f, indent=2)
-    logger.info("  Written: %s (%.1f MB)", json_path, json_path.stat().st_size / 1e6)
+        json.dump({
+            "version": "2.0",
+            "namespace_uuid": str(MOTIF_NAMESPACE),
+            "n_motifs": len(motifs),
+            "n_with_sequences": n_with_seq,
+            "motifs": motifs,
+            "token_to_uuid": token_to_uuid,
+        }, f, indent=2)
+    logger.info("Written: %s (%.1f MB)", json_path, json_path.stat().st_size / 1e6)
 
-    # Parquet (flat table)
-    flat_df = registry_to_flat_df(registry)
+    flat_df = pd.DataFrame(flat_rows)
     flat_df.to_parquet(parquet_path, index=False)
-    logger.info("  Written: %s (%d rows)", parquet_path, len(flat_df))
+    logger.info("Written: %s (%d rows)", parquet_path, len(flat_df))
 
     # ── Summary ──
     print("\n" + "=" * 70)
     print("MOTIF REGISTRY SUMMARY")
     print("=" * 70)
-    print(f"Total motifs:          {registry['n_motifs']}")
-    print(f"With sequences:        {registry['n_with_sequences']}")
-    print(f"In training vocab:     {registry['n_in_training_vocab']}")
-    print(f"Token→UUID mappings:   {len(registry['token_to_uuid'])}")
-    print(f"Sseqid→UUID mappings:  {len(registry['sseqid_to_uuid'])}")
+    print(f"Total motifs:        {len(motifs)}")
+    print(f"With sequences:      {n_with_seq}")
 
-    # Show top features
-    print(f"\nTop-10 motifs by plasmid count:")
-    top_motifs = sorted(
-        registry["motifs"].values(),
-        key=lambda m: m["plasmid_count"],
-        reverse=True,
-    )[:10]
-    for m in top_motifs:
+    by_cat = defaultdict(lambda: {"n": 0, "with_seq": 0})
+    for m in motifs.values():
+        has_seq = any(s.get("sequence") for s in m["sequences"])
+        by_cat[m["category"]]["n"] += 1
+        if has_seq:
+            by_cat[m["category"]]["with_seq"] += 1
+    print("\nBy category:")
+    for cat in sorted(by_cat):
+        c = by_cat[cat]
+        print(f"  {cat:10s}  {c['n']:3d} tokens  {c['with_seq']:3d} with sequences")
+
+    print(f"\nTop motifs by plasmid count:")
+    for m in sorted(motifs.values(), key=lambda x: x["plasmid_count"], reverse=True)[:15]:
         n_seq = sum(1 for s in m["sequences"] if s["sequence"] is not None)
         print(
-            f"  {m['plasmid_count']:>6,} plasmids  {m['feature_name']:<30}  "
-            f"{m['token']:<35}  {n_seq} seq(s)  {'✓' if m['in_training_vocab'] else '✗'} vocab"
+            f"  {m['plasmid_count']:>6,}  {m['token']:<30}  "
+            f"{len(m['features']):>3} features  {n_seq} seq(s)  "
+            f"{'V' if m['in_vocab'] else 'X'}"
         )
 
     # Vocab coverage
-    vocab_feat_tokens = {t for t in vocab if t.startswith("<FEAT_")}
-    registry_tokens = set(registry["token_to_uuid"].keys())
-    covered = vocab_feat_tokens & registry_tokens
-    print(f"\nVocab coverage: {len(covered)}/{len(vocab_feat_tokens)} FEAT tokens in registry")
-    missing = vocab_feat_tokens - registry_tokens
+    seq_tokens_in_vocab = {t for t in vocab if any(t.startswith(f"<{p}_") for p in
+                           ["AMR", "PROM", "ORI", "ELEM", "REPORTER", "TAG"])}
+    covered = seq_tokens_in_vocab & set(token_to_uuid.keys())
+    print(f"\nVocab coverage: {len(covered)}/{len(seq_tokens_in_vocab)} sequence tokens")
+    missing = seq_tokens_in_vocab - set(token_to_uuid.keys())
     if missing:
-        print(f"  Missing: {sorted(missing)[:20]}")
+        print(f"  Not in registry (OTHER/rare): {sorted(missing)}")
 
     print(f"\nOutputs:")
     print(f"  {json_path}")

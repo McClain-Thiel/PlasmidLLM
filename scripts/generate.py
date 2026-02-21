@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
 from vllm import LLM, SamplingParams
 
-from plasmid_llm.tokenizer import PlasmidTokenizer
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from plasmid_llm.models.hf_plasmid_lm import PlasmidLMTokenizer
 
 
 def main():
@@ -25,7 +29,7 @@ def main():
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
 
-    tokenizer = PlasmidTokenizer(args.vocab)
+    tokenizer = PlasmidLMTokenizer(args.vocab)
     prompt_ids = tokenizer.encode(args.prompt)
 
     print(f"Loading vLLM model: {args.hf_model}")

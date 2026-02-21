@@ -1,6 +1,0 @@
-defaults:
-  - default
-
-loss_type: focal
-focal_gamma: 2.0
-label_smoothing: 0.1

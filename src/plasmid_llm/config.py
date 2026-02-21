@@ -1,181 +1,197 @@
-"""Structured Hydra configs for PlasmidLLM."""
+"""Configuration classes for PlasmidLM training."""
 
+from __future__ import annotations
+
+import hashlib
 from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Optional
 
-from hydra.core.config_store import ConfigStore
+
+def _compute_file_hash(path: Path) -> str:
+    """Compute SHA256 hash of a file (first 16 chars for logging)."""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()[:16]
+    except Exception:
+        return "unknown"
 
 
 @dataclass
-class DataConfig:
-    parquet_path: str = "s3://phd-research-storage-1758274488/addgene_clean/tokenization/training_pairs.parquet"
-    vocab_path: str = "s3://phd-research-storage-1758274488/addgene_clean/tokenization/token_vocabulary.json"
+class PretrainingConfig:
+    """Configuration for pretraining PlasmidLM.
+    
+    Required inputs:
+    - training_pairs: Parquet with full_text column (<BOS><tokens><SEP>SEQUENCE<EOS>)
+    - special_tokens: Text file with special tokens (one per line)
+    """
+    
+    # Data paths (required)
+    training_pairs: Path
+    special_tokens: Path
+    
+    # Model architecture
+    hidden_size: int = 384
+    num_hidden_layers: int = 10
+    num_attention_heads: int = 8
+    intermediate_size: int = 1536
     max_seq_len: int = 4096
-    val_split: float = 0.05
-    seed: int = 42
-
-
-@dataclass
-class TrainConfig:
-    batch_size: int = 32
-    lr: float = 3e-4
-    weight_decay: float = 0.1
+    
+    # Training hyperparameters
+    output_dir: Path = field(default_factory=lambda: Path("output/pretraining"))
+    per_device_train_batch_size: int = 32
+    learning_rate: float = 3e-4
     max_steps: int = 100_000
     warmup_steps: int = 1000
-    grad_clip: float = 1.0
-    eval_every: int = 500
-    save_every: int = 5000
-    log_every: int = 10
-    num_workers: int = 4
-    precision: str = "bf16"
-    scheduler: str = "cosine"
-    patience: int = 10
-    checkpoint_dir: str = "checkpoints"
-    resume_from: str = ""
-    loss_type: str = "cross_entropy"      # "cross_entropy" | "focal"
-    focal_gamma: float = 2.0              # focal loss focusing parameter
-    label_smoothing: float = 0.0          # label smoothing factor
+    weight_decay: float = 0.1
+    max_grad_norm: float = 1.0
+    
+    # Evaluation
+    val_split: float = 0.05
+    eval_steps: int = 500
+    save_steps: int = 5000
+    logging_steps: int = 10
+    early_stopping_patience: int = 10
+    
+    # System
+    bf16: bool = False
+    gradient_checkpointing: bool = False
+    dataloader_num_workers: int = 4
+    seed: int = 42
+    
+    # MLflow tracking
+    mlflow_tracking_uri: Optional[str] = None
+    mlflow_experiment: str = "plasmid_pretraining"
+    
+    def __post_init__(self):
+        """Convert string paths to Path objects and validate."""
+        self.training_pairs = Path(self.training_pairs)
+        self.special_tokens = Path(self.special_tokens)
+        self.output_dir = Path(self.output_dir)
+        
+        if not self.training_pairs.exists():
+            raise FileNotFoundError(f"training_pairs not found: {self.training_pairs}")
+        if not self.special_tokens.exists():
+            raise FileNotFoundError(f"special_tokens not found: {self.special_tokens}")
+    
+    def to_mlflow_params(self) -> dict:
+        """Convert config to MLflow parameters for logging."""
+        return {
+            # Data
+            "training_pairs": str(self.training_pairs),
+            "special_tokens": str(self.special_tokens),
+            "training_pairs_hash": _compute_file_hash(self.training_pairs),
+            "special_tokens_hash": _compute_file_hash(self.special_tokens),
+            "max_seq_len": self.max_seq_len,
+            "val_split": self.val_split,
+            
+            # Architecture
+            "hidden_size": self.hidden_size,
+            "num_hidden_layers": self.num_hidden_layers,
+            "num_attention_heads": self.num_attention_heads,
+            "intermediate_size": self.intermediate_size,
+            
+            # Training
+            "batch_size": self.per_device_train_batch_size,
+            "learning_rate": self.learning_rate,
+            "max_steps": self.max_steps,
+            "warmup_steps": self.warmup_steps,
+            "weight_decay": self.weight_decay,
+            "bf16": self.bf16,
+            "gradient_checkpointing": self.gradient_checkpointing,
+            "seed": self.seed,
+        }
 
 
 @dataclass
-class MlflowConfig:
-    tracking_uri: str = "databricks"
-    experiment_name: str = "/Users/${oc.env:USER,default}/PlasmidLLM"
-    run_name: str = ""
-
-
-@dataclass
-class TransformerConfig:
-    arch: str = "transformer"
-    d_model: int = 256
-    n_layers: int = 8
-    n_heads: int = 8
-    d_ff: int = 1024
-    dropout: float = 0.1
-
-
-@dataclass
-class TransformerLargeConfig:
-    arch: str = "transformer"
-    d_model: int = 1024
-    n_layers: int = 24
-    n_heads: int = 16
-    d_ff: int = 4096
-    dropout: float = 0.1
-
-
-@dataclass
-class Transformer500MConfig:
-    arch: str = "transformer"
-    d_model: int = 1280
-    n_layers: int = 32
-    n_heads: int = 16
-    d_ff: int = 5120
-    dropout: float = 0.1
-
-
-@dataclass
-class MambaConfig:
-    arch: str = "mamba"
-    d_model: int = 256
-    n_layers: int = 16
-    d_state: int = 16
-    d_conv: int = 4
-    expand: int = 2
-    dropout: float = 0.1
-
-
-@dataclass
-class TransformerFiLMConfig:
-    arch: str = "transformer_film"
-    d_model: int = 384
-    n_layers: int = 10
-    n_heads: int = 8
-    d_ff: int = 1536
-    dropout: float = 0.1
-    sep_token_id: int = 3
-
-
-@dataclass
-class TransformerConvConfig:
-    arch: str = "transformer_conv"
-    d_model: int = 384
-    n_layers: int = 10
-    n_heads: int = 8
-    d_ff: int = 1536
-    conv_kernel_size: int = 7
-    dropout: float = 0.1
-
-
-@dataclass
-class TransformerConvLargeConfig:
-    arch: str = "transformer_conv"
-    d_model: int = 512
-    n_layers: int = 12
-    n_heads: int = 8
-    d_ff: int = 2048
-    conv_kernel_size: int = 7
-    dropout: float = 0.1
-
-
-@dataclass
-class DiffusionConfig:
-    arch: str = "diffusion"
-    d_model: int = 256
-    n_layers: int = 8
-    n_heads: int = 8
-    timesteps: int = 1000
-    noise_schedule: str = "cosine"
-    loss_type: str = "cross_entropy"
-    dropout: float = 0.1
-
-
-@dataclass
-class DiffusionSmallConfig:
-    arch: str = "diffusion"
-    d_model: int = 256
-    n_layers: int = 6
-    n_heads: int = 8
-    timesteps: int = 1000
-    noise_schedule: str = "cosine"
-    loss_type: str = "cross_entropy"
-    dropout: float = 0.1
-
-
-@dataclass
-class EncoderDecoderConfig:
-    arch: str = "encoder_decoder"
-    d_model: int = 384
-    n_enc_layers: int = 4      # Shallow - just encoding short metadata
-    n_dec_layers: int = 12     # Deep - generating 8000 DNA tokens
-    n_heads: int = 8
-    d_ff: int = 1536
-    dropout: float = 0.1
-    sep_token_id: int = 3
-    max_seq_len: int = 8192
-
-
-@dataclass
-class PlasmidLLMConfig:
-    data: DataConfig = field(default_factory=DataConfig)
-    train: TrainConfig = field(default_factory=TrainConfig)
-    model: Any = field(default_factory=TransformerConfig)
-    mlflow: MlflowConfig = field(default_factory=MlflowConfig)
-
-
-def register_configs() -> None:
-    cs = ConfigStore.instance()
-    # Don't register top-level schema — it prevents cross-architecture model switching
-    cs.store(group="data", name="default", node=DataConfig)
-    cs.store(group="train", name="default", node=TrainConfig)
-    cs.store(group="model", name="transformer", node=TransformerConfig)
-    cs.store(group="model", name="transformer_large", node=TransformerLargeConfig)
-    cs.store(group="model", name="transformer_500m", node=Transformer500MConfig)
-    cs.store(group="model", name="mamba", node=MambaConfig)
-    cs.store(group="model", name="transformer_film", node=TransformerFiLMConfig)
-    cs.store(group="model", name="transformer_conv", node=TransformerConvConfig)
-    cs.store(group="model", name="transformer_conv_large", node=TransformerConvLargeConfig)
-    cs.store(group="model", name="diffusion", node=DiffusionConfig)
-    cs.store(group="model", name="diffusion_small", node=DiffusionSmallConfig)
-    cs.store(group="model", name="encoder_decoder", node=EncoderDecoderConfig)
-    cs.store(group="mlflow", name="databricks", node=MlflowConfig)
+class PostTrainingConfig:
+    """Configuration for post-training (RL) with PlasmidLM.
+    
+    Required inputs:
+    - training_pairs: Same parquet used for pretraining (will filter has_hard_tokens=True)
+    - motif_lookup: Parquet mapping tokens to sequences (from notebook)
+    - model_checkpoint: Path to pretrained model
+    """
+    
+    # Data paths (required)
+    training_pairs: Path  # Same as pretraining - will filter has_hard_tokens=True
+    motif_lookup: Path    # Motif lookup parquet (token -> sequences)
+    model_checkpoint: Path
+    
+    # GRPO hyperparameters
+    learning_rate: float = 1e-5
+    per_device_train_batch_size: int = 4
+    gradient_accumulation_steps: int = 4
+    num_train_epochs: int = 1
+    max_steps: Optional[int] = None
+    
+    # Sampling parameters
+    num_generations_per_prompt: int = 16  # How many completions to generate per prompt
+    max_new_tokens: int = 8000
+    temperature: float = 0.8
+    top_k: int = 50
+    top_p: float = 0.95
+    
+    # GRPO-specific (from TRL)
+    num_ppo_epochs: int = 4
+    kl_penalty: str = "kl"  # "kl", "abs", or "mse"
+    kl_coef: float = 0.05
+    clip_range: float = 0.2
+    vf_coef: float = 0.1
+    
+    # Training
+    output_dir: Path = field(default_factory=lambda: Path("output/post_training"))
+    save_steps: int = 500
+    logging_steps: int = 10
+    eval_steps: int = 100
+    seed: int = 42
+    
+    # System
+    bf16: bool = False
+    use_vllm: bool = True  # Use vLLM for fast sampling
+    dataloader_num_workers: int = 4
+    
+    # MLflow tracking
+    mlflow_tracking_uri: Optional[str] = None
+    mlflow_experiment: str = "plasmid_post_training"
+    
+    def __post_init__(self):
+        """Convert string paths to Path objects and validate."""
+        self.training_pairs = Path(self.training_pairs)
+        self.motif_lookup = Path(self.motif_lookup)
+        self.model_checkpoint = Path(self.model_checkpoint)
+        self.output_dir = Path(self.output_dir)
+        
+        if not self.training_pairs.exists():
+            raise FileNotFoundError(f"training_pairs not found: {self.training_pairs}")
+        if not self.motif_lookup.exists():
+            raise FileNotFoundError(f"motif_lookup not found: {self.motif_lookup}")
+        if not self.model_checkpoint.exists():
+            raise FileNotFoundError(f"model_checkpoint not found: {self.model_checkpoint}")
+    
+    def to_mlflow_params(self) -> dict:
+        """Convert config to MLflow parameters for logging."""
+        return {
+            # Data
+            "training_pairs": str(self.training_pairs),
+            "motif_lookup": str(self.motif_lookup),
+            "model_checkpoint": str(self.model_checkpoint),
+            "training_pairs_hash": _compute_file_hash(self.training_pairs),
+            "motif_lookup_hash": _compute_file_hash(self.motif_lookup),
+            
+            # GRPO params
+            "learning_rate": self.learning_rate,
+            "batch_size": self.per_device_train_batch_size,
+            "num_generations_per_prompt": self.num_generations_per_prompt,
+            "max_new_tokens": self.max_new_tokens,
+            "temperature": self.temperature,
+            "num_ppo_epochs": self.num_ppo_epochs,
+            "kl_coef": self.kl_coef,
+            "kl_penalty": self.kl_penalty,
+            
+            # Sampling
+            "top_k": self.top_k,
+            "top_p": self.top_p,
+            "use_vllm": self.use_vllm,
+            "seed": self.seed,
+        }

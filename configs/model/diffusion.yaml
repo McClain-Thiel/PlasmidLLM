@@ -1,8 +1,0 @@
-arch: diffusion
-d_model: 256
-n_layers: 8
-n_heads: 8
-timesteps: 1000
-noise_schedule: cosine
-loss_type: cross_entropy
-dropout: 0.1

@@ -109,7 +109,11 @@ class PlasmidLMDecoderLayer(nn.Module):
 class PlasmidLMPreTrainedModel(PreTrainedModel):
     config_class = PlasmidLMConfig
     base_model_prefix = "model"
-    supports_gradient_checkpointing = False
+    supports_gradient_checkpointing = True
+
+    def _set_gradient_checkpointing(self, module, value=False):
+        if isinstance(module, PlasmidLMModel):
+            module.gradient_checkpointing = value
 
 
 class PlasmidLMModel(PlasmidLMPreTrainedModel):
@@ -126,6 +130,7 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         self.register_buffer("rope_cos", cos, persistent=False)
         self.register_buffer("rope_sin", sin, persistent=False)
 
+        self.gradient_checkpointing = False
         self.post_init()
 
     def get_input_embeddings(self):
@@ -145,7 +150,20 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         new_kv_caches = []
         for i, layer in enumerate(self.layers):
             past_kv = past_key_values[i] if past_key_values else None
-            hidden_states, new_kv = layer(hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset)
+            if self.gradient_checkpointing and self.training:
+                # Gradient checkpointing recomputes activations on backward — no past_kv during training
+                def make_ckpt_fn(l):
+                    def fn(h, cos, sin):
+                        out, kv = l(h, cos, sin, None, 0)
+                        return out, kv[0], kv[1]
+                    return fn
+                hidden_states, k, v = torch.utils.checkpoint.checkpoint(
+                    make_ckpt_fn(layer), hidden_states, self.rope_cos, self.rope_sin,
+                    use_reentrant=False,
+                )
+                new_kv = (k, v)
+            else:
+                hidden_states, new_kv = layer(hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset)
             new_kv_caches.append(new_kv)
         hidden_states = self.norm(hidden_states)
         return hidden_states, new_kv_caches

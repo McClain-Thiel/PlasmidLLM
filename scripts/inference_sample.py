@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
+from pathlib import Path
 
 import pyarrow.parquet as pq
 import torch
 from vllm import LLM, SamplingParams
 
-from plasmid_llm.tokenizer import PlasmidTokenizer
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from plasmid_llm.models.hf_plasmid_lm import PlasmidLMTokenizer
 
 
 def main():
@@ -29,7 +33,7 @@ def main():
     parser.add_argument("--data-seed", type=int, default=42, help="Seed used for train/val split")
     args = parser.parse_args()
 
-    tokenizer = PlasmidTokenizer(args.vocab)
+    tokenizer = PlasmidLMTokenizer(args.vocab)
 
     # Load data and reproduce val split
     print(f"Loading data: {args.parquet}")

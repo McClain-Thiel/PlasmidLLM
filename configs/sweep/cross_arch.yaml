@@ -1,7 +1,0 @@
-# @package _global_
-hydra:
-  sweeper:
-    params:
-      model: choice(transformer, mamba, diffusion)
-      model.d_model: choice(128, 256, 512)
-      train.lr: interval(1e-5, 1e-3)

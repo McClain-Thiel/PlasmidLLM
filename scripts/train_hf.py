@@ -1,4 +1,10 @@
-"""HF-native training script for PlasmidLM (transformer-only, no Hydra)."""
+"""HF-native training script for PlasmidLM (transformer-only, no Hydra).
+
+LEGACY: This script still works but uses command-line arguments instead of config files.
+For new projects, use `train_with_config.py` with Python config files instead.
+
+See: docs/CONFIG_TRAINING.md for the new approach.
+"""
 
 from __future__ import annotations
 
@@ -60,40 +66,76 @@ def _get_git_commit() -> str:
         return "unknown"
 
 
-class PlasmidMLflowCallback(TrainerCallback):
-    """Log model metadata tags to MLflow at training start."""
+def _compute_file_hash(path: str) -> str:
+    """Compute SHA256 hash of a file for data lineage tracking."""
+    import hashlib
+    try:
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()[:16]  # First 16 chars
+    except Exception:
+        return "unknown"
+
+
+class DataLineageCallback(TrainerCallback):
+    """Log data provenance and computed metrics to MLflow.
+    
+    Doesn't manage runs - that's handled by HF's built-in MLflow integration.
+    Just adds custom data lineage params and perplexity metrics.
+    """
+
+    def __init__(self, train_args_ns):
+        self.train_args_ns = train_args_ns
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
+        if not state.is_world_process_zero:
+            return
         try:
             import mlflow
-            n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            mlflow.set_tags({
-                "architecture": "plasmid_lm_transformer",
+            a = self.train_args_ns
+            
+            # Log data lineage
+            lineage_params = {
+                "data_path": a.data_path,
+                "vocab_path": a.vocab_path,
+                "data_sha256": _compute_file_hash(a.data_path),
+                "vocab_sha256": _compute_file_hash(a.vocab_path),
                 "git_commit": _get_git_commit(),
-                "total_params": str(n_params),
-                "hidden_size": str(model.config.hidden_size),
-                "num_layers": str(model.config.num_hidden_layers),
-                "num_heads": str(model.config.num_attention_heads),
-            })
+            }
+            
+            # Add motif registry if provided
+            if hasattr(a, "motif_registry_path") and a.motif_registry_path:
+                lineage_params["motif_registry_path"] = a.motif_registry_path
+                lineage_params["motif_registry_sha256"] = _compute_file_hash(a.motif_registry_path)
+            
+            mlflow.log_params(lineage_params)
+            
         except Exception as e:
-            log.warning(f"MLflow tag logging failed: {e}")
+            log.warning(f"Data lineage logging failed: {e}")
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs or not state.is_world_process_zero:
+            return
+        try:
+            import math
+            # Add perplexity to logs dict (HF's MLflow integration will pick it up)
+            if "loss" in logs and "train_perplexity" not in logs:
+                logs["train_perplexity"] = math.exp(min(logs["loss"], 20))
+            if "eval_loss" in logs and "eval_perplexity" not in logs:
+                logs["eval_perplexity"] = math.exp(min(logs["eval_loss"], 20))
+        except Exception as e:
+            log.warning(f"Perplexity computation failed: {e}")
 
 
 class GenerationSampleCallback(TrainerCallback):
-    """Generate sample sequences at each evaluation and log to MLflow."""
+    """Generate full-length sample sequences at each evaluation and log to MLflow."""
 
-    def __init__(self, val_dataset, tokenizer: PlasmidLMTokenizer, max_new_tokens: int = 512, n_samples: int = 3):
+    def __init__(self, val_dataset, tokenizer, max_new_tokens: int = 8000, n_samples: int = 3):
         self.val_dataset = val_dataset
         self.tokenizer = tokenizer
         self.max_new_tokens = max_new_tokens
         self.n_samples = n_samples
 
     def on_evaluate(self, args, state, control, model=None, **kwargs):
-        try:
-            import mlflow
-        except Exception:
-            return
-
         if model is None:
             return
 
@@ -101,6 +143,7 @@ class GenerationSampleCallback(TrainerCallback):
         device = next(model.parameters()).device
         sep_id = self.tokenizer.sep_token_id
         pad_id = self.tokenizer.pad_token_id
+        eos_id = self.tokenizer.eos_token_id
 
         lines = [f"=== Generation samples at step {state.global_step} ===\n"]
 
@@ -113,32 +156,46 @@ class GenerationSampleCallback(TrainerCallback):
             except ValueError:
                 continue
 
+            # Include BOS + prompt + SEP as the conditioning prefix
             prompt_ids = ids_list[:sep_pos + 1]
-            prompt_text = self.tokenizer.decode(ids_list[:sep_pos])
+            prompt_text = self.tokenizer.decode(ids_list[1:sep_pos])  # skip BOS for display
 
+            # True completion (strip padding and EOS for display)
             true_ids = ids_list[sep_pos + 1:]
-            if pad_id in true_ids:
-                true_ids = true_ids[:true_ids.index(pad_id)]
-            true_text = self.tokenizer.decode(true_ids)
+            for stop_id in (pad_id, eos_id):
+                if stop_id in true_ids:
+                    true_ids = true_ids[:true_ids.index(stop_id)]
+            true_seq = self.tokenizer.decode(true_ids)
 
             input_tensor = torch.tensor([prompt_ids], dtype=torch.long, device=device)
             try:
-                output_ids = model.generate(input_tensor, max_new_tokens=self.max_new_tokens, temperature=0.8)
+                with torch.no_grad():
+                    output_ids = model.generate(
+                        input_tensor,
+                        max_new_tokens=self.max_new_tokens,
+                        temperature=0.8,
+                        do_sample=True,
+                    )
                 gen_ids = output_ids[0, len(prompt_ids):].tolist()
-                gen_text = self.tokenizer.decode(gen_ids)
+                # Strip EOS if present
+                if eos_id in gen_ids:
+                    gen_ids = gen_ids[:gen_ids.index(eos_id)]
+                gen_seq = self.tokenizer.decode(gen_ids)
             except Exception as e:
-                gen_text = f"[generation failed: {e}]"
+                gen_seq = f"[generation failed: {e}]"
 
             lines.append(f"--- Sample {i+1} ---")
-            lines.append(f"Prompt:    {prompt_text[:200]}")
-            lines.append(f"True:      {true_text[:300]}...")
-            lines.append(f"Generated: {gen_text[:300]}...")
-            lines.append(f"True len:  {len(true_text)} | Gen len: {len(gen_text)}\n")
+            lines.append(f"Prompt ({len(prompt_ids)-1} tokens): {prompt_text}")
+            lines.append(f"True length:      {len(true_seq)} bp")
+            lines.append(f"Generated length: {len(gen_seq)} bp")
+            lines.append(f"True sequence:\n{true_seq}")
+            lines.append(f"Generated sequence:\n{gen_seq}\n")
 
         sample_path = os.path.join(args.output_dir, f"samples_step{state.global_step}.txt")
         with open(sample_path, "w") as f:
             f.write("\n".join(lines))
         try:
+            import mlflow
             mlflow.log_artifact(sample_path)
         except Exception as e:
             log.warning(f"Failed to log generation samples: {e}")
@@ -181,10 +238,13 @@ def parse_args():
     # MLflow
     p.add_argument("--mlflow_tracking_uri", type=str, default=None)
     p.add_argument("--mlflow_experiment", type=str, default=None)
+    p.add_argument("--motif_registry_path", type=str, default=None, 
+                   help="Path to motif registry (for data lineage tracking)")
 
     # Resume / early stopping
     p.add_argument("--resume_from_checkpoint", type=str, default=None)
     p.add_argument("--early_stopping_patience", type=int, default=10)
+    p.add_argument("--gradient_checkpointing", action="store_true")
 
     return p.parse_args()
 
@@ -192,13 +252,15 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # --- MLflow env vars (must be set before Trainer init) ---
+    # --- MLflow setup (use HF's built-in integration) ---
     report_to = "none"
     if args.mlflow_tracking_uri:
-        os.environ["MLFLOW_TRACKING_URI"] = args.mlflow_tracking_uri
+        import mlflow
+        mlflow.set_tracking_uri(args.mlflow_tracking_uri)
+        if args.mlflow_experiment:
+            mlflow.set_experiment(args.mlflow_experiment)
         report_to = "mlflow"
-    if args.mlflow_experiment:
-        os.environ["MLFLOW_EXPERIMENT_NAME"] = args.mlflow_experiment
+        log.info(f"MLflow tracking: {args.mlflow_tracking_uri}, experiment: {args.mlflow_experiment}")
 
     # --- Tokenizer + Dataset ---
     log.info(f"Loading tokenizer from {args.vocab_path}")
@@ -251,9 +313,19 @@ def main():
         save_total_limit=3,
         report_to=report_to,
         remove_unused_columns=False,
+        gradient_checkpointing=args.gradient_checkpointing,
     )
 
     # --- Trainer ---
+    callbacks = [
+        EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience),
+        GenerationSampleCallback(val_ds, tokenizer),
+    ]
+    
+    # Add data lineage tracking if MLflow is enabled
+    if args.mlflow_tracking_uri:
+        callbacks.append(DataLineageCallback(args))
+    
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -261,11 +333,7 @@ def main():
         eval_dataset=val_ds,
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        callbacks=[
-            EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience),
-            PlasmidMLflowCallback(),
-            GenerationSampleCallback(val_ds, tokenizer, max_new_tokens=512),
-        ],
+        callbacks=callbacks,
     )
 
     # --- Train ---

@@ -6,25 +6,29 @@ import pyarrow.parquet as pq
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from plasmid_llm.tokenizer import PlasmidTokenizer
-
 
 class PlasmidDataset(Dataset):
     """Dataset that reads prompt/completion pairs from parquet and tokenizes them.
 
     Each sample is: <prompt tokens> <SEP> <completion tokens> <EOS> padded/truncated to max_seq_len.
     Labels are the same as input_ids shifted right (for causal LM), with prompt tokens masked (-100).
+    
+    Args:
+        parquet_path: Path to parquet file with prompt/completion columns
+        tokenizer: Any tokenizer with encode() method and token ID properties
+        max_seq_len: Maximum sequence length for padding/truncation
     """
 
     def __init__(
         self,
         parquet_path: str,
-        tokenizer: PlasmidTokenizer,
+        tokenizer,
         max_seq_len: int = 4096,
     ):
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
         self.pad_id = tokenizer.pad_token_id
+        self.bos_id = tokenizer.bos_token_id
         self.sep_id = tokenizer.sep_token_id
         self.eos_id = tokenizer.eos_token_id
 
@@ -43,14 +47,14 @@ class PlasmidDataset(Dataset):
         prompt_ids = self.tokenizer.encode(self.prompts[idx])
         completion_ids = self.tokenizer.encode(self.completions[idx])
 
-        # Concatenate: prompt + SEP + completion + EOS
-        input_ids = prompt_ids + [self.sep_id] + completion_ids + [self.eos_id]
+        # Concatenate: BOS + prompt + SEP + completion + EOS
+        input_ids = [self.bos_id] + prompt_ids + [self.sep_id] + completion_ids + [self.eos_id]
 
         # Truncate to max_seq_len
         input_ids = input_ids[: self.max_seq_len]
 
-        # Build labels: mask prompt portion with -100, predict completion tokens
-        prompt_len = len(prompt_ids) + 1  # +1 for SEP
+        # Build labels: mask BOS + prompt + SEP with -100, predict completion tokens
+        prompt_len = 1 + len(prompt_ids) + 1  # BOS + prompt + SEP
         labels = [-100] * min(prompt_len, len(input_ids)) + input_ids[prompt_len:]
 
         # Pad
@@ -68,7 +72,7 @@ class PlasmidDataset(Dataset):
 
 
 def train_val_split(
-    dataset: PlasmidDataset,
+    dataset: Dataset,
     val_split: float = 0.05,
     seed: int = 42,
 ) -> tuple[Subset, Subset]:
@@ -81,7 +85,7 @@ def train_val_split(
 
 
 def build_dataloaders(
-    dataset: PlasmidDataset,
+    dataset: Dataset,
     batch_size: int = 32,
     val_split: float = 0.05,
     seed: int = 42,
@@ -105,3 +109,61 @@ def build_dataloaders(
         pin_memory=True,
     )
     return train_loader, val_loader
+
+
+class PlasmidPromptsDataset(Dataset):
+    """Dataset of prompts for RL training.
+    
+    Loads from training_pairs parquet and filters to has_hard_tokens=True.
+    Returns prompts formatted for generation.
+    """
+
+    def __init__(
+        self,
+        parquet_path: str,
+        tokenizer,
+        filter_hard_tokens: bool = True,
+    ):
+        self.tokenizer = tokenizer
+
+        # Load data
+        table = pq.read_table(parquet_path)
+        col_names = table.column_names
+
+        # Check if has_hard_tokens column exists
+        if "has_hard_tokens" in col_names and filter_hard_tokens:
+            # Filter to only prompts with hard tokens
+            has_hard = table.column("has_hard_tokens").to_pylist()
+            indices = [i for i, h in enumerate(has_hard) if h]
+            table = table.take(indices)
+
+        # Extract prompt column (everything before <SEP>)
+        if "token_prompt" in col_names:
+            self.prompts = table.column("token_prompt").to_pylist()
+        elif "full_text" in col_names:
+            # Parse prompts from full_text: extract everything before <SEP>
+            import re
+            full_texts = table.column("full_text").to_pylist()
+            self.prompts = []
+            for text in full_texts:
+                match = re.search(r"(.*?)<SEP>", text)
+                if match:
+                    self.prompts.append(match.group(1))
+                else:
+                    # Fallback: use everything before first DNA sequence
+                    self.prompts.append(text.split("A")[0].split("T")[0].split("C")[0].split("G")[0])
+        else:
+            raise ValueError(f"No valid prompt column found. Available: {col_names}")
+
+    def __len__(self) -> int:
+        return len(self.prompts)
+
+    def __getitem__(self, idx: int) -> dict:
+        prompt = self.prompts[idx]
+        # Add SEP token for generation
+        prompt_with_sep = prompt + "<SEP>"
+        
+        return {
+            "input_ids": torch.tensor(self.tokenizer.encode(prompt_with_sep), dtype=torch.long),
+            "prompt": prompt,  # Keep original for reward calculation
+        }
