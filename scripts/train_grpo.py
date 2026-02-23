@@ -247,9 +247,12 @@ def main():
     if config.mlflow_tracking_uri:
         import mlflow
         mlflow.set_tracking_uri(config.mlflow_tracking_uri)
-        mlflow.set_experiment(config.mlflow_experiment)
+        exp = mlflow.set_experiment(config.mlflow_experiment)
+        # Set env vars so HF's built-in MLflowCallback picks up the same experiment
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = config.mlflow_experiment
+        os.environ["MLFLOW_TRACKING_URI"] = config.mlflow_tracking_uri
         report_to = "mlflow"
-        log.info(f"MLflow: {config.mlflow_tracking_uri} / {config.mlflow_experiment}")
+        log.info(f"MLflow: {config.mlflow_tracking_uri} / {config.mlflow_experiment} (id={exp.experiment_id})")
 
     # Define reward function wrapper — TRL 0.16+ signature: (prompts, completions, **kwargs)
     def reward_fn(prompts: list[str], completions: list[str], **kwargs) -> list[float]:

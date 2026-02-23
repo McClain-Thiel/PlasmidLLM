@@ -1,7 +1,7 @@
 """GRPO post-training config for g6-big (L4 GPU, 22GB VRAM).
 
-Conservative settings: batch=2, grad_accum=8, num_generations=4.
-No vLLM — native generation is sufficient for 17M-param model.
+Smoke test used 2.4GB with batch=2, num_gen=2 at 8k completion.
+Scaling to batch=4, num_gen=16 (64 seqs/step, ~16x more throughput).
 """
 
 from pathlib import Path
@@ -19,14 +19,14 @@ config = PostTrainingConfig(
 
     # GRPO hyperparameters
     learning_rate=5e-6,
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=8,   # effective batch = 16
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=4,   # effective batch = 16 prompts, 16 gens each = 256 seqs
     num_train_epochs=1,
     max_steps=5000,
 
-    # Sampling — 8k completions on L4
-    num_generations=4,               # completions per prompt
-    max_completion_length=8192,      # full-length plasmid sequences
+    # Sampling — 8k completions, 16 generations per prompt
+    num_generations=16,
+    max_completion_length=8192,
     temperature=0.8,
     top_k=50,
     top_p=0.95,
