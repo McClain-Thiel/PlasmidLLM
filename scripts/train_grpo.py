@@ -113,6 +113,38 @@ def build_prompt_dataset(parquet_path: str, filter_hard_tokens: bool = True) -> 
     return datasets.Dataset.from_dict({"prompt": prompts})
 
 
+class GRPOMetricsCallback(TrainerCallback):
+    """Print key GRPO metrics to stdout on each log step."""
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs or not state.is_world_process_zero:
+            return
+        step = state.global_step
+        reward = logs.get("reward", logs.get("rewards/reward_fn/mean"))
+        reward_std = logs.get("reward_std", logs.get("rewards/reward_fn/std"))
+        kl = logs.get("kl")
+        loss = logs.get("loss")
+        clip = logs.get("completions/clipped_ratio")
+        mean_len = logs.get("completions/mean_length")
+        step_time = logs.get("step_time")
+        parts = [f"step={step}"]
+        if reward is not None:
+            parts.append(f"reward={reward:.4f}")
+        if reward_std is not None:
+            parts.append(f"reward_std={reward_std:.4f}")
+        if kl is not None:
+            parts.append(f"kl={kl:.5f}")
+        if loss is not None:
+            parts.append(f"loss={loss:.6f}")
+        if clip is not None:
+            parts.append(f"clip={clip:.2f}")
+        if mean_len is not None:
+            parts.append(f"len={mean_len:.0f}")
+        if step_time is not None:
+            parts.append(f"time={step_time:.1f}s")
+        log.info(" | ".join(parts))
+
+
 class GRPOLineageCallback(TrainerCallback):
     """Log GRPO config and data lineage to MLflow."""
 
@@ -313,8 +345,8 @@ def main():
 
     # Create GRPO trainer
     log.info("Initializing GRPO trainer...")
-    callbacks = []
-    if config.mlflow_tracking_uri:
+    callbacks = [GRPOMetricsCallback()]
+    if report_to == "mlflow":
         callbacks.append(GRPOLineageCallback(config))
 
     trainer = GRPOTrainer(

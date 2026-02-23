@@ -20,12 +20,12 @@ config = PostTrainingConfig(
     # GRPO hyperparameters
     learning_rate=5e-6,
     per_device_train_batch_size=4,
-    gradient_accumulation_steps=4,   # effective batch = 16 prompts, 16 gens each = 256 seqs
+    gradient_accumulation_steps=1,   # update every step — RL benefits from fast updates
     num_train_epochs=1,
     max_steps=5000,
 
-    # Sampling — 8k completions, 16 generations per prompt
-    num_generations=16,
+    # Sampling — 8k completions, 8 generations per prompt
+    num_generations=8,
     max_completion_length=8192,
     temperature=0.8,
     top_k=50,
