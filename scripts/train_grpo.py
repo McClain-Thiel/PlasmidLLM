@@ -281,13 +281,16 @@ def main():
             import mlflow
             mlflow.set_tracking_uri(config.mlflow_tracking_uri)
             exp = mlflow.set_experiment(config.mlflow_experiment)
-            if exp is not None:
-                os.environ["MLFLOW_EXPERIMENT_NAME"] = config.mlflow_experiment
-                os.environ["MLFLOW_TRACKING_URI"] = config.mlflow_tracking_uri
-                report_to = "mlflow"
-                log.info(f"MLflow: {config.mlflow_tracking_uri} / {config.mlflow_experiment} (id={exp.experiment_id})")
-            else:
-                log.warning("MLflow set_experiment returned None — disabling MLflow logging")
+            if exp is None:
+                # Databricks mlflow 3.9+ may return None for new experiments — create explicitly
+                log.info("set_experiment returned None, creating experiment explicitly...")
+                exp_id = mlflow.create_experiment(config.mlflow_experiment)
+                exp = mlflow.set_experiment(experiment_id=exp_id)
+            os.environ["MLFLOW_EXPERIMENT_NAME"] = config.mlflow_experiment
+            os.environ["MLFLOW_TRACKING_URI"] = config.mlflow_tracking_uri
+            report_to = "mlflow"
+            exp_id = exp.experiment_id if exp else "unknown"
+            log.info(f"MLflow: {config.mlflow_tracking_uri} / {config.mlflow_experiment} (id={exp_id})")
         except Exception as e:
             log.warning(f"MLflow setup failed: {e} — continuing without MLflow")
 

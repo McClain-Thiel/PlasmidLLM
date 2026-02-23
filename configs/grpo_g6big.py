@@ -18,7 +18,7 @@ config = PostTrainingConfig(
     motif_lookup=Path("/mnt/s3/phd-research-storage-1758274488/addgene_clean/tokenization/motif_registry.parquet"),
 
     # GRPO hyperparameters
-    learning_rate=5e-6,
+    learning_rate=1e-4,              # aggressive — 17M param model needs strong signal
     per_device_train_batch_size=8,   # must be divisible by num_generations
     gradient_accumulation_steps=1,   # update every step — RL benefits from fast updates
     num_train_epochs=1,
@@ -51,5 +51,5 @@ config = PostTrainingConfig(
 
     # MLflow — Databricks hosted tracking
     mlflow_tracking_uri="databricks",
-    mlflow_experiment="/Users/mcclain.thiel@gmail.com/PlasmidLLM",
+    mlflow_experiment="/Users/mcclain.thiel@gmail.com/tracking/PlasmidLLM",
 )
