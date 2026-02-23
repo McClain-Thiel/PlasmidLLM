@@ -19,7 +19,7 @@ config = PostTrainingConfig(
 
     # GRPO hyperparameters
     learning_rate=5e-6,
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=8,   # must be divisible by num_generations
     gradient_accumulation_steps=1,   # update every step — RL benefits from fast updates
     num_train_epochs=1,
     max_steps=5000,
