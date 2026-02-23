@@ -45,7 +45,7 @@ config = PostTrainingConfig(
     use_vllm=False,
     dataloader_num_workers=0,
 
-    # MLflow — Databricks
-    mlflow_tracking_uri="databricks",
-    mlflow_experiment="/Users/mcclain.thiel@gmail.com/PlasmidLLM",
+    # MLflow — disabled for smoke test
+    mlflow_tracking_uri=None,
+    mlflow_experiment="plasmid_grpo_smoke",
 )
