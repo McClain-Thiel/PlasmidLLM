@@ -67,6 +67,21 @@ def load_motif_lookup(path: str) -> pd.DataFrame:
     """
     df = pd.read_parquet(path)
 
+    # Derive is_cds from category (motif_registry.parquet uses 'category' not 'is_cds')
+    if "is_cds" not in df.columns and "category" in df.columns:
+        df["is_cds"] = df["category"].isin(CDS_CATEGORIES)
+
+    # Split 'sequence' column into dna_seq / protein_seq based on seq_type
+    if "dna_seq" not in df.columns and "sequence" in df.columns:
+        df["dna_seq"] = df.apply(
+            lambda r: r["sequence"] if pd.notna(r.get("seq_type")) and r["seq_type"] != "protein" else None,
+            axis=1,
+        )
+        df["protein_seq"] = df.apply(
+            lambda r: r["sequence"] if r.get("seq_type") == "protein" else None,
+            axis=1,
+        )
+
     # For CDS tokens with DNA sequences, compute protein translations
     mask_cds_dna = df["is_cds"] & df["dna_seq"].notna() & (df["seq_type"] != "protein")
     df.loc[mask_cds_dna, "protein_seq"] = df.loc[mask_cds_dna, "dna_seq"].apply(

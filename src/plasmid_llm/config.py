@@ -126,18 +126,17 @@ class PostTrainingConfig:
     max_steps: Optional[int] = None
     
     # Sampling parameters
-    num_generations_per_prompt: int = 16  # How many completions to generate per prompt
-    max_new_tokens: int = 8000
+    num_generations: int = 16         # How many completions to generate per prompt
+    max_completion_length: int = 8000
     temperature: float = 0.8
     top_k: int = 50
     top_p: float = 0.95
     
-    # GRPO-specific (from TRL)
-    num_ppo_epochs: int = 4
-    kl_penalty: str = "kl"  # "kl", "abs", or "mse"
-    kl_coef: float = 0.05
-    clip_range: float = 0.2
-    vf_coef: float = 0.1
+    # GRPO-specific (TRL 0.16+ naming)
+    num_iterations: int = 1           # inner optimization epochs per batch
+    beta: float = 0.05                # KL divergence penalty
+    epsilon: float = 0.2              # PPO clipping range
+    loss_type: str = "grpo"           # "grpo" or "dapo"
     
     # Training
     output_dir: Path = field(default_factory=lambda: Path("output/post_training"))
@@ -182,13 +181,14 @@ class PostTrainingConfig:
             # GRPO params
             "learning_rate": self.learning_rate,
             "batch_size": self.per_device_train_batch_size,
-            "num_generations_per_prompt": self.num_generations_per_prompt,
-            "max_new_tokens": self.max_new_tokens,
+            "num_generations": self.num_generations,
+            "max_completion_length": self.max_completion_length,
             "temperature": self.temperature,
-            "num_ppo_epochs": self.num_ppo_epochs,
-            "kl_coef": self.kl_coef,
-            "kl_penalty": self.kl_penalty,
-            
+            "num_iterations": self.num_iterations,
+            "beta": self.beta,
+            "epsilon": self.epsilon,
+            "loss_type": self.loss_type,
+
             # Sampling
             "top_k": self.top_k,
             "top_p": self.top_p,

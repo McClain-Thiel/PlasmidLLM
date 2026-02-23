@@ -19,7 +19,7 @@ config = PretrainingConfig(
     output_dir=Path("/opt/dlami/nvme/output/pretrain_v4"),
     per_device_train_batch_size=16,
     learning_rate=3e-4,
-    max_steps=100_000,
+    max_steps=30_000,
     warmup_steps=1000,
 
     # System — L4 supports bf16
@@ -29,11 +29,11 @@ config = PretrainingConfig(
 
     # Eval & saving
     eval_steps=500,
-    save_steps=5000,
+    save_steps=500,
     logging_steps=10,
     early_stopping_patience=10,
 
-    # MLflow
-    mlflow_tracking_uri=None,
-    mlflow_experiment="plasmid_pretrain_v4",
+    # MLflow — Databricks hosted tracking
+    mlflow_tracking_uri="databricks",
+    mlflow_experiment="/Users/mcclain.thiel@gmail.com/plasmid_pretrain_v4",
 )

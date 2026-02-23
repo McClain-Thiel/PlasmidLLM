@@ -60,45 +60,87 @@ def compute_metrics(eval_pred):
     return {"token_accuracy": acc}
 
 
-class ConfigLineageCallback(TrainerCallback):
-    """Log config-based data lineage to MLflow."""
+class MLflowExtrasCallback(TrainerCallback):
+    """Log perplexity metrics and checkpoint artifacts to MLflow.
+
+    HF's built-in MLflowCallback logs metrics before custom callbacks run,
+    so we log perplexity directly to MLflow ourselves. We also upload
+    checkpoint directories as artifacts on each save.
+    """
 
     def __init__(self, config: PretrainingConfig):
         self.config = config
+        self._mlflow = None
+
+    def _get_mlflow(self):
+        if self._mlflow is None:
+            import mlflow
+            self._mlflow = mlflow
+        return self._mlflow
 
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         if not state.is_world_process_zero:
             return
         try:
-            import mlflow
-
-            # Log all config params
+            mlflow = self._get_mlflow()
             params = self.config.to_mlflow_params()
             params["git_commit"] = _get_git_commit()
-            
             if model:
                 n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
                 params["total_params"] = n_params
-
             mlflow.log_params(params)
             log.info(f"Logged {len(params)} config params to MLflow")
-
         except Exception as e:
             log.warning(f"Config lineage logging failed: {e}")
 
     def on_log(self, args, state, control, logs=None, **kwargs):
         if not logs or not state.is_world_process_zero:
             return
+        import math
         try:
-            import math
-
-            # Add perplexity
-            if "loss" in logs and "train_perplexity" not in logs:
-                logs["train_perplexity"] = math.exp(min(logs["loss"], 20))
-            if "eval_loss" in logs and "eval_perplexity" not in logs:
-                logs["eval_perplexity"] = math.exp(min(logs["eval_loss"], 20))
+            mlflow = self._get_mlflow()
+            metrics = {}
+            if "loss" in logs:
+                metrics["train_perplexity"] = math.exp(min(logs["loss"], 20))
+            if "eval_loss" in logs:
+                metrics["eval_perplexity"] = math.exp(min(logs["eval_loss"], 20))
+            if metrics:
+                mlflow.log_metrics(metrics, step=state.global_step)
         except Exception as e:
-            log.warning(f"Perplexity computation failed: {e}")
+            log.warning(f"Perplexity logging failed: {e}")
+
+    def on_save(self, args, state, control, model=None, tokenizer=None, **kwargs):
+        if not state.is_world_process_zero:
+            return
+        try:
+            mlflow = self._get_mlflow()
+            checkpoint_dir = Path(args.output_dir) / f"checkpoint-{state.global_step}"
+            if not checkpoint_dir.exists():
+                return
+
+            # Ensure model config is saved alongside weights
+            if model is not None and hasattr(model, "config"):
+                model.config.save_pretrained(str(checkpoint_dir))
+
+            # Copy tokenizer files into checkpoint so it's self-contained
+            vocab_src = Path(args.output_dir) / "vocab.json"
+            if vocab_src.exists():
+                import shutil
+                shutil.copy2(vocab_src, checkpoint_dir / "vocab.json")
+
+            # Copy special_tokens.txt for full reproducibility
+            st_src = Path(args.output_dir).parent / "data" / "special_tokens.txt"
+            if not st_src.exists():
+                # Try relative to script
+                st_src = Path(__file__).resolve().parent.parent / "data" / "special_tokens.txt"
+            if st_src.exists():
+                import shutil
+                shutil.copy2(st_src, checkpoint_dir / "special_tokens.txt")
+
+            mlflow.log_artifacts(str(checkpoint_dir), artifact_path=f"checkpoints/checkpoint-{state.global_step}")
+            log.info(f"Logged checkpoint-{state.global_step} to MLflow artifacts (weights + config + tokenizer)")
+        except Exception as e:
+            log.warning(f"Checkpoint artifact logging failed: {e}")
 
 
 def load_config(config_path: Path) -> PretrainingConfig:
@@ -189,15 +231,27 @@ def main():
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model: {n_params:,} params | vocab={padded_vocab}")
 
+    # Load .env for Databricks credentials
+    import os
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, val = line.split("=", 1)
+                os.environ.setdefault(key.strip(), val.strip())
+        log.info(f"Loaded env vars from {env_file}")
+
     # Setup MLflow
     report_to = "none"
-    if config.mlflow_tracking_uri:
+    mlflow_uri = config.mlflow_tracking_uri
+    if mlflow_uri:
         import mlflow
 
-        mlflow.set_tracking_uri(config.mlflow_tracking_uri)
+        mlflow.set_tracking_uri(mlflow_uri)
         mlflow.set_experiment(config.mlflow_experiment)
         report_to = "mlflow"
-        log.info(f"MLflow: {config.mlflow_tracking_uri} / {config.mlflow_experiment}")
+        log.info(f"MLflow: {mlflow_uri} / {config.mlflow_experiment}")
 
     # HF TrainingArguments
     training_args = TrainingArguments(
@@ -228,9 +282,11 @@ def main():
     )
 
     # Callbacks
-    callbacks = [EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience)]
-    if config.mlflow_tracking_uri:
-        callbacks.append(ConfigLineageCallback(config))
+    callbacks = [
+        EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience),
+    ]
+    if mlflow_uri:
+        callbacks.append(MLflowExtrasCallback(config))
 
     # Trainer
     trainer = Trainer(
@@ -252,6 +308,13 @@ def main():
     log.info(f"Saving final model to {final_dir}")
     trainer.save_model(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
+    model.config.save_pretrained(str(final_dir))
+
+    # Log final model to MLflow
+    if mlflow_uri:
+        import mlflow
+        mlflow.log_artifacts(str(final_dir), artifact_path="final_model")
+        log.info("Logged final model to MLflow artifacts")
 
     log.info("Done!")
 
