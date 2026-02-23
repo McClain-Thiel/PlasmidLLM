@@ -39,6 +39,11 @@ from post_training.reward import load_motif_lookup, plasmid_reward_fn
 AutoConfig.register("plasmid_lm", PlasmidLMConfig)
 AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 
+# TRL's create_model_from_path does getattr(transformers, "PlasmidLMForCausalLM")
+# so the class must be visible on the transformers module
+import transformers
+transformers.PlasmidLMForCausalLM = PlasmidLMForCausalLM
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
