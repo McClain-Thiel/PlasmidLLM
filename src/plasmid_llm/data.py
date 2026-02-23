@@ -36,7 +36,8 @@ class PlasmidDataset(Dataset):
         # Support both column naming conventions
         table = pq.read_table(parquet_path)
         col_names = table.column_names
-        self.prompts = table.column("token_prompt").to_pylist()
+        prompt_col = "token_prompt" if "token_prompt" in col_names else "prompt"
+        self.prompts = table.column(prompt_col).to_pylist()
         completion_col = "token_completion" if "token_completion" in col_names else "sequence"
         self.completions = table.column(completion_col).to_pylist()
 
@@ -44,17 +45,30 @@ class PlasmidDataset(Dataset):
         return len(self.prompts)
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        prompt_ids = self.tokenizer.encode(self.prompts[idx])
+        prompt_str = self.prompts[idx]
+        prompt_ids = self.tokenizer.encode(prompt_str)
         completion_ids = self.tokenizer.encode(self.completions[idx])
 
-        # Concatenate: BOS + prompt + SEP + completion + EOS
-        input_ids = [self.bos_id] + prompt_ids + [self.sep_id] + completion_ids + [self.eos_id]
+        # Check if prompt already contains BOS and separator (<SEQ> or <SEP>)
+        has_bos = prompt_ids and prompt_ids[0] == self.bos_id
+        seq_token_id = self.tokenizer.convert_tokens_to_ids("<SEQ>") if "<SEQ>" in prompt_str else None
+        has_sep = (seq_token_id is not None and seq_token_id in prompt_ids) or (
+            prompt_ids and prompt_ids[-1] == self.sep_id
+        )
+
+        if has_bos and has_sep:
+            # Prompt already formatted: <BOS>...<SEQ> — just append completion + EOS
+            input_ids = prompt_ids + completion_ids + [self.eos_id]
+            prompt_len = len(prompt_ids)
+        else:
+            # Legacy format: wrap with BOS + SEP
+            input_ids = [self.bos_id] + prompt_ids + [self.sep_id] + completion_ids + [self.eos_id]
+            prompt_len = 1 + len(prompt_ids) + 1  # BOS + prompt + SEP
 
         # Truncate to max_seq_len
         input_ids = input_ids[: self.max_seq_len]
 
-        # Build labels: mask BOS + prompt + SEP with -100, predict completion tokens
-        prompt_len = 1 + len(prompt_ids) + 1  # BOS + prompt + SEP
+        # Build labels: mask prompt with -100, predict completion tokens
         labels = [-100] * min(prompt_len, len(input_ids)) + input_ids[prompt_len:]
 
         # Pad
