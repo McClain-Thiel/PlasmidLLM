@@ -46,7 +46,19 @@ def build_prompt_dataset(parquet_path: str, filter_hard_tokens: bool = True) -> 
     GRPOTrainer handles tokenization internally — we just need to provide
     prompt strings. Each prompt gets <SEP> appended for generation.
     """
-    table = pq.read_table(parquet_path)
+    # Read only lightweight columns — avoid pulling huge sequence/full_text over S3
+    meta = pq.ParquetFile(parquet_path).schema.names
+    need_cols = []
+    for c in ["prompt", "token_prompt", "reward_motifs", "has_hard_tokens"]:
+        if c in meta:
+            need_cols.append(c)
+    # Fallback: if no prompt column, we need full_text
+    if "prompt" not in need_cols and "token_prompt" not in need_cols:
+        if "full_text" in meta:
+            need_cols.append("full_text")
+
+    log.info(f"Reading columns {need_cols} from {parquet_path}")
+    table = pq.read_table(parquet_path, columns=need_cols)
     col_names = table.column_names
 
     # Filter to prompts with hard tokens
@@ -54,9 +66,16 @@ def build_prompt_dataset(parquet_path: str, filter_hard_tokens: bool = True) -> 
         has_hard = table.column("has_hard_tokens").to_pylist()
         indices = [i for i, h in enumerate(has_hard) if h]
         table = table.take(indices)
+    elif "reward_motifs" in col_names and filter_hard_tokens:
+        # reward_motifs is non-empty for prompts with scorable motifs
+        motifs = table.column("reward_motifs").to_pylist()
+        indices = [i for i, m in enumerate(motifs) if m]
+        table = table.take(indices)
 
     # Extract prompt column
-    if "token_prompt" in col_names:
+    if "prompt" in col_names:
+        prompts = table.column("prompt").to_pylist()
+    elif "token_prompt" in col_names:
         prompts = table.column("token_prompt").to_pylist()
     elif "full_text" in col_names:
         full_texts = table.column("full_text").to_pylist()
@@ -72,6 +91,7 @@ def build_prompt_dataset(parquet_path: str, filter_hard_tokens: bool = True) -> 
 
     # Append <SEP> for generation
     prompts = [p + "<SEP>" for p in prompts]
+    log.info(f"Built {len(prompts)} prompts (filtered={filter_hard_tokens})")
 
     return datasets.Dataset.from_dict({"prompt": prompts})
 
