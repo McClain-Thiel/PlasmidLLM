@@ -23,9 +23,21 @@ from transformers import TrainerCallback
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from transformers import AutoConfig, AutoModelForCausalLM
+
 from src.plasmid_llm.config import PostTrainingConfig
-from src.plasmid_llm.models.hf_plasmid_lm import PlasmidLMForCausalLM, PlasmidLMTokenizer
+from src.plasmid_llm.models.hf_plasmid_lm import (
+    PlasmidLMConfig,
+    PlasmidLMForCausalLM,
+    PlasmidLMModel,
+    PlasmidLMTokenizer,
+)
 from post_training.reward import load_motif_lookup, plasmid_reward_fn
+
+# Register custom model so AutoConfig/AutoModelForCausalLM can find it
+# (required by TRL's GRPOTrainer for creating the reference model)
+AutoConfig.register("plasmid_lm", PlasmidLMConfig)
+AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
