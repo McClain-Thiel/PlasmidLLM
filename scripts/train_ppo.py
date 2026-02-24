@@ -369,6 +369,7 @@ def main():
         whiten_rewards=config.whiten_rewards,
 
         # Logging
+        num_sample_generations=0,  # disable eval sampling (no eval_dataset)
         logging_steps=config.logging_steps,
         save_steps=config.save_steps,
         report_to=report_to,
