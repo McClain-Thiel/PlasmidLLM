@@ -250,8 +250,8 @@ def plasmid_reward_fn(
     prompts: List[str],
     completions: List[str],
     lookup_df: pd.DataFrame,
-    eos_bonus: float = 0.1,
-    length_penalty_threshold: int = 6000,
+    eos_bonus: float = 0.15,
+    length_penalty_threshold: int = 3500,
 ) -> List[float]:
     """
     Batch reward function for RL training.

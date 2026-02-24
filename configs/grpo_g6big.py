@@ -24,9 +24,9 @@ config = PostTrainingConfig(
     num_train_epochs=1,
     max_steps=5000,
 
-    # Sampling — 8k completions, 8 generations per prompt
+    # Sampling — match pretrain context (4096 tokens); model never learned to stop at 8k
     num_generations=8,
-    max_completion_length=8192,
+    max_completion_length=4096,
     temperature=0.8,
     top_k=50,
     top_p=0.95,
