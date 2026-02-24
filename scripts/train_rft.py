@@ -565,6 +565,8 @@ def main():
         if hasattr(model, "config"):
             model.config.save_pretrained(str(checkpoint_dir))
 
+        # Prepare checkpoint for vLLM loading in next iteration
+        prepare_checkpoint_for_vllm(str(checkpoint_dir))
         log.info(f"  Saved checkpoint to {checkpoint_dir}")
         current_checkpoint = checkpoint_dir
 
@@ -574,10 +576,13 @@ def main():
             except Exception as e:
                 log.warning(f"MLflow artifact upload failed: {e}")
 
-        # Clean up for next iteration
+        # Clean up for next iteration — must free GPU for vLLM
+        # SFTTrainer leaves optimizer state, gradients, etc. on GPU
         del trainer, sft_dataset
+        model.to("cpu")
         gc.collect()
         torch.cuda.empty_cache()
+        log.info(f"  GPU memory freed for next iteration")
 
     log.info(f"\nRFT complete! Final model at {current_checkpoint}")
 
