@@ -193,13 +193,13 @@ def generate_completions_vllm(
     config: RFTConfig,
 ) -> list[tuple[str, str]]:
     """Generate completions using vLLM for 10-20x throughput."""
+    # Force vLLM v0 engine BEFORE import — v1 reads env at import time
+    # v0 runs in single process so AutoModel registrations carry over
+    os.environ["VLLM_USE_V1"] = "0"
     from vllm import LLM, SamplingParams
 
     # Ensure checkpoint has model source files + auto_map for trust_remote_code
     prepare_checkpoint_for_vllm(model_path)
-
-    # Force vLLM v0 engine (single-process) so AutoModel registrations carry over
-    os.environ["VLLM_USE_V1"] = "0"
 
     log.info(f"Initializing vLLM with model from {model_path}...")
     llm = LLM(
