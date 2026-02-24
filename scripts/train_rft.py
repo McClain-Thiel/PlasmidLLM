@@ -577,12 +577,15 @@ def main():
                 log.warning(f"MLflow artifact upload failed: {e}")
 
         # Clean up for next iteration — must free GPU for vLLM
-        # SFTTrainer leaves optimizer state, gradients, etc. on GPU
+        # SFTTrainer/vLLM create NCCL process groups that hold GPU memory
         del trainer, sft_dataset
         model.to("cpu")
+        if torch.distributed.is_initialized():
+            torch.distributed.destroy_process_group()
         gc.collect()
         torch.cuda.empty_cache()
-        log.info(f"  GPU memory freed for next iteration")
+        free_mem = torch.cuda.mem_get_info()[0] / 1e9
+        log.info(f"  GPU memory freed: {free_mem:.1f} GiB available")
 
     log.info(f"\nRFT complete! Final model at {current_checkpoint}")
 
