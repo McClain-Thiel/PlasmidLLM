@@ -19,9 +19,10 @@ from __future__ import annotations
 import os
 
 # vLLM v1 EngineCore subprocess can't pickle custom HF config classes (known bug
-# https://github.com/vllm-project/vllm/issues/14925). Force v0 single-process
-# engine. MUST be set before `import vllm`.
-os.environ["VLLM_USE_V1"] = "0"
+# https://github.com/vllm-project/vllm/issues/14925). Disable multiprocessing
+# so AutoModel registrations from this process are visible. MUST be set before
+# `import vllm`.
+os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 
 import argparse
 import gc
