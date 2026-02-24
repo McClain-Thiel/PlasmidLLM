@@ -22,7 +22,7 @@ config = PostTrainingConfig(
     motif_lookup=Path("/mnt/s3/phd-research-storage-1758274488/addgene_clean/tokenization/motif_registry.parquet"),
 
     # Training hyperparameters
-    learning_rate=5e-5,              # moderate — let RLOO find the right direction
+    learning_rate=1e-3,              # high — RLOO advantages are unnormalized (~0.01), need strong lr
     per_device_train_batch_size=8,   # must be divisible by num_generations
     gradient_accumulation_steps=1,
     num_train_epochs=1,
