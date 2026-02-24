@@ -211,7 +211,7 @@ def generate_completions_vllm(
         model=model_path,
         tokenizer=model_path,
         max_model_len=config.max_completion_length + 512,  # prompt + completion
-        gpu_memory_utilization=0.85,
+        gpu_memory_utilization=0.4,  # low — model is 68MB, leaves room for SFT residual state
         trust_remote_code=True,
         hf_overrides={"architectures": ["TransformersForCausalLM"]},
         dtype="bfloat16",
