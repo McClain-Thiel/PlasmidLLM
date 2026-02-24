@@ -250,29 +250,51 @@ def plasmid_reward_fn(
     prompts: List[str],
     completions: List[str],
     lookup_df: pd.DataFrame,
+    eos_bonus: float = 0.1,
+    length_penalty_threshold: int = 6000,
 ) -> List[float]:
     """
     Batch reward function for RL training.
+
+    Reward = motif_alignment_score + eos_bonus (if terminated) - length_penalty (if too long).
+    This prevents the model from gaming the reward by just generating max-length sequences.
 
     Args:
         prompts: List of prompt strings
         completions: List of generated DNA sequences
         lookup_df: Loaded motif lookup DataFrame
+        eos_bonus: Bonus for sequences that contain <EOS> (proper termination)
+        length_penalty_threshold: Penalize sequences longer than this (in DNA chars)
 
     Returns:
-        List of reward floats in [0, 1]
+        List of reward floats
     """
     rewards = []
     for prompt, completion in zip(prompts, completions):
-        seq = completion.upper()
-        # Strip any special tokens from completion
-        seq = re.sub(r"<[^>]+>", "", seq)
+        raw = completion.upper()
+
+        # Check for proper termination before stripping tokens
+        has_eos = "<EOS>" in completion or "</s>" in completion
+
+        # Strip special tokens and non-DNA chars
+        seq = re.sub(r"<[^>]+>", "", raw)
         seq = re.sub(r"[^ATGCN]", "", seq)
 
         if len(seq) < 100:
             rewards.append(0.0)
             continue
 
-        rewards.append(compute_reward(prompt, seq, lookup_df))
+        # Core motif alignment reward
+        motif_reward = compute_reward(prompt, seq, lookup_df)
+
+        # Bonus for proper EOS termination (model should learn to stop)
+        reward = motif_reward + (eos_bonus if has_eos else 0.0)
+
+        # Soft length penalty for excessively long sequences
+        if len(seq) > length_penalty_threshold:
+            excess = (len(seq) - length_penalty_threshold) / length_penalty_threshold
+            reward *= max(0.5, 1.0 - 0.3 * excess)  # scale down, floor at 50%
+
+        rewards.append(reward)
 
     return rewards
