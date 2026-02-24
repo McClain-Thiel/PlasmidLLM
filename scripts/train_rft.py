@@ -196,7 +196,9 @@ def generate_completions_vllm(
         max_model_len=config.max_completion_length + 512,  # prompt + completion
         gpu_memory_utilization=0.85,
         trust_remote_code=True,
+        hf_overrides={"architectures": ["TransformersForCausalLM"]},
         dtype="bfloat16",
+        enforce_eager=True,  # skip torch.compile — avoids long startup on custom arch
     )
 
     sampling_params = SamplingParams(
