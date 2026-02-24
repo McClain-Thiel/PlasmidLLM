@@ -16,10 +16,16 @@ Usage:
 
 from __future__ import annotations
 
+import os
+
+# vLLM v1 EngineCore subprocess can't pickle custom HF config classes (known bug
+# https://github.com/vllm-project/vllm/issues/14925). Force v0 single-process
+# engine. MUST be set before `import vllm`.
+os.environ["VLLM_USE_V1"] = "0"
+
 import argparse
 import gc
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -193,9 +199,6 @@ def generate_completions_vllm(
     config: RFTConfig,
 ) -> list[tuple[str, str]]:
     """Generate completions using vLLM for 10-20x throughput."""
-    # Force vLLM v0 engine BEFORE import — v1 reads env at import time
-    # v0 runs in single process so AutoModel registrations carry over
-    os.environ["VLLM_USE_V1"] = "0"
     from vllm import LLM, SamplingParams
 
     # Ensure checkpoint has model source files + auto_map for trust_remote_code
