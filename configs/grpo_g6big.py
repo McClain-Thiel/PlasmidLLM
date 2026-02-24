@@ -33,7 +33,7 @@ config = PostTrainingConfig(
 
     # GRPO-specific
     num_iterations=1,
-    beta=0.04,
+    beta=0.2,                        # higher KL penalty to prevent divergence at lr=1e-4
     epsilon=0.2,
     loss_type="grpo",
 
