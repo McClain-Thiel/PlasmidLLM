@@ -44,7 +44,7 @@ from trl import SFTConfig, SFTTrainer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoTokenizer
 
 from src.plasmid_llm.models.hf_plasmid_lm import (
     PlasmidLMConfig,
@@ -59,6 +59,7 @@ from post_training.reward import load_motif_lookup, plasmid_reward_fn
 AutoConfig.register("plasmid_lm", PlasmidLMConfig)
 AutoModel.register(PlasmidLMConfig, PlasmidLMModel)
 AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
+AutoTokenizer.register(PlasmidLMConfig, slow_tokenizer_class=PlasmidLMTokenizer)
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
