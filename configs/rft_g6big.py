@@ -26,9 +26,10 @@ config = RFTConfig(
     num_rft_iterations=5,
     reward_threshold=0.10,        # start low — we'll adjust based on actual distribution
 
-    # Generation — one completion per prompt, 4096 tokens to match pretrain context
+    # Generation — shorter completions (1024) for fast iteration; 4x faster than 4096
+    # Model never produces EOS anyway, so shorter = faster with proportional motif content
     gen_batch_size=32,            # 17M model is small, fits larger batches
-    max_completion_length=4096,
+    max_completion_length=1024,
     temperature=1.0,
     top_p=0.95,
     num_samples_per_prompt=1,     # 1 = fast; generates across many prompts instead
@@ -39,7 +40,7 @@ config = RFTConfig(
     sft_epochs=1,                 # single pass through filtered data
     sft_batch_size=4,
     gradient_accumulation_steps=4,  # effective batch = 16
-    max_seq_length=4096,
+    max_seq_length=1536,          # prompt (~100-200 tokens) + completion (1024)
 
     # Output
     output_dir=Path("/opt/dlami/nvme/output/rft_v1"),
