@@ -25,8 +25,9 @@ config = PPORunConfig(
     training_pairs=Path("/mnt/s3/phd-research-storage-1758274488/databricks_export/training_pairs_v4.parquet"),
     motif_lookup=Path("/mnt/s3/phd-research-storage-1758274488/addgene_clean/tokenization/motif_registry.parquet"),
 
-    # Training — conservative lr to avoid policy collapse
-    learning_rate=1e-5,
+    # Training — very conservative to prevent entropy collapse
+    # v1 collapsed: entropy 1000→28, KL 5→47 by step 640 with lr=1e-5, kl_coef=0.05
+    learning_rate=3e-6,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,  # effective batch = 16
     max_steps=5000,
@@ -36,19 +37,19 @@ config = PPORunConfig(
     temperature=1.0,
     local_rollout_forward_batch_size=8,  # generation batch size (no grad)
 
-    # PPO algorithm
-    num_ppo_epochs=4,         # inner optimization epochs per batch
+    # PPO algorithm — strong KL constraint to prevent collapse
+    num_ppo_epochs=2,         # fewer inner epochs = less overfitting per batch
     num_mini_batches=1,       # single minibatch (small model, fits in memory)
-    kl_coef=0.05,             # light KL penalty — allow exploration
-    cliprange=0.2,            # standard PPO clipping
-    vf_coef=0.1,              # value loss weight (low — reward learning is secondary)
+    kl_coef=0.5,              # 10x stronger KL penalty (was 0.05, entropy collapsed)
+    cliprange=0.1,            # tighter clipping (was 0.2)
+    vf_coef=0.1,              # value loss weight
     cliprange_value=0.2,
     gamma=1.0,                # no discounting (we care about total reward, not temporal)
     lam=0.95,                 # GAE lambda
     whiten_rewards=False,     # don't normalize — our rewards are already bounded [0, ~0.5]
 
     # Output
-    output_dir=Path("/opt/dlami/nvme/output/ppo_v1"),
+    output_dir=Path("/opt/dlami/nvme/output/ppo_v2"),
     save_steps=500,
     logging_steps=1,
     seed=42,
