@@ -147,14 +147,56 @@ def load_prompts(parquet_path: str, max_prompts: int = 0) -> list[str]:
     return prompts
 
 
+def generate_completions_vllm(
+    model_path: str,
+    tokenizer: PlasmidLMTokenizer,
+    prompts: list[str],
+    config: RFTConfig,
+) -> list[tuple[str, str]]:
+    """Generate completions using vLLM for 10-20x throughput."""
+    from vllm import LLM, SamplingParams
+
+    log.info(f"Initializing vLLM with model from {model_path}...")
+    llm = LLM(
+        model=model_path,
+        tokenizer=model_path,
+        max_model_len=config.max_completion_length + 512,  # prompt + completion
+        gpu_memory_utilization=0.85,
+        trust_remote_code=True,
+    )
+
+    sampling_params = SamplingParams(
+        temperature=config.temperature,
+        top_p=config.top_p,
+        max_tokens=config.max_completion_length,
+    )
+
+    log.info(f"Generating {len(prompts)} completions with vLLM...")
+    outputs = llm.generate(prompts, sampling_params)
+
+    results = []
+    for prompt, output in zip(prompts, outputs):
+        completion = output.outputs[0].text
+        results.append((prompt, completion))
+
+    log.info(f"vLLM generated {len(results)} completions")
+
+    # Free vLLM GPU memory so SFT can use it
+    del llm
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return results
+
+
 @torch.no_grad()
-def generate_completions(
+def generate_completions_native(
     model: PlasmidLMForCausalLM,
     tokenizer: PlasmidLMTokenizer,
     prompts: list[str],
     config: RFTConfig,
 ) -> list[tuple[str, str]]:
-    """Generate completions for all prompts. Returns list of (prompt, completion)."""
+    """Generate completions using native model.generate() (slower, no vLLM needed)."""
     model.eval()
     device = next(model.parameters()).device
     results = []
@@ -164,13 +206,12 @@ def generate_completions(
     for start in range(0, len(prompts), config.gen_batch_size):
         batch_prompts = prompts[start:start + config.gen_batch_size]
 
-        # Tokenize with left-padding for generation
         encoded = tokenizer(
             batch_prompts,
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=512,  # prompts are short
+            max_length=512,
         ).to(device)
 
         outputs = model.generate(
@@ -182,7 +223,6 @@ def generate_completions(
             pad_token_id=tokenizer.pad_token_id,
         )
 
-        # Decode only the completion part (after the prompt)
         for i, prompt in enumerate(batch_prompts):
             prompt_len = encoded["input_ids"][i].ne(tokenizer.pad_token_id).sum().item()
             completion_ids = outputs[i][prompt_len:]
@@ -192,7 +232,6 @@ def generate_completions(
         batch_idx = start // config.gen_batch_size
         n_batches = (len(prompts) + config.gen_batch_size - 1) // config.gen_batch_size
         if batch_idx % 10 == 0 or batch_idx == n_batches - 1:
-            import time
             elapsed = _time.time() - _gen_start
             eta = (elapsed / max(batch_idx + 1, 1)) * (n_batches - batch_idx - 1) if elapsed > 0 else 0
             log.info(f"Generated {len(results)}/{len(prompts)} completions "
@@ -314,6 +353,15 @@ def main():
         except Exception as e:
             log.warning(f"MLflow setup failed: {e}")
 
+    # Check vLLM availability
+    use_vllm = False
+    try:
+        import vllm
+        use_vllm = True
+        log.info("vLLM available — using for generation (10-20x faster)")
+    except ImportError:
+        log.info("vLLM not available — using native model.generate()")
+
     # Load model and tokenizer
     log.info(f"Loading model from {config.model_checkpoint}")
     model = PlasmidLMForCausalLM.from_pretrained(str(config.model_checkpoint))
@@ -360,10 +408,18 @@ def main():
 
         # Phase 1: Generate completions
         log.info(f"Phase 1: Generating completions for {len(iter_prompts)} prompts...")
-        model.to("cuda" if torch.cuda.is_available() else "cpu")
         all_pairs = []
         for sample_idx in range(config.num_samples_per_prompt):
-            pairs = generate_completions(model, tokenizer, iter_prompts, config)
+            if use_vllm:
+                # Move model to CPU so vLLM can claim GPU
+                model.to("cpu")
+                torch.cuda.empty_cache()
+                pairs = generate_completions_vllm(
+                    str(current_checkpoint), tokenizer, iter_prompts, config
+                )
+            else:
+                model.to("cuda" if torch.cuda.is_available() else "cpu")
+                pairs = generate_completions_native(model, tokenizer, iter_prompts, config)
             all_pairs.extend(pairs)
             if config.num_samples_per_prompt > 1:
                 log.info(f"  Sample {sample_idx+1}/{config.num_samples_per_prompt}: {len(pairs)} completions")
@@ -404,6 +460,7 @@ def main():
 
         # Phase 3: SFT on filtered data
         log.info(f"Phase 3: SFT on {len(filtered)} high-reward examples...")
+        model.to("cuda" if torch.cuda.is_available() else "cpu")
         sft_dataset = build_sft_dataset(filtered, tokenizer)
 
         iter_output = config.output_dir / f"iter_{iteration}"
@@ -413,7 +470,7 @@ def main():
             per_device_train_batch_size=config.sft_batch_size,
             gradient_accumulation_steps=config.gradient_accumulation_steps,
             learning_rate=config.learning_rate,
-            max_seq_length=config.max_seq_length,
+            max_length=config.max_seq_length,
             logging_steps=config.logging_steps,
             save_steps=config.save_steps,
             save_total_limit=2,
@@ -441,7 +498,8 @@ def main():
         trainer.save_model(str(checkpoint_dir))
         tokenizer.save_pretrained(str(checkpoint_dir))
 
-        # Copy vocab and special tokens for self-containment
+        # Copy vocab, special tokens, and config for self-containment
+        # (vLLM needs config.json + vocab.json to reload model in next iteration)
         for src_dir in [config.model_checkpoint, current_checkpoint]:
             vocab_src = Path(src_dir) / "vocab.json"
             if vocab_src.exists():
@@ -450,6 +508,9 @@ def main():
         st_src = Path(__file__).resolve().parent.parent / "data" / "special_tokens.txt"
         if st_src.exists():
             shutil.copy2(st_src, checkpoint_dir / "special_tokens.txt")
+        # Save model config (HF format) — needed by vLLM's AutoModel loader
+        if hasattr(model, "config"):
+            model.config.save_pretrained(str(checkpoint_dir))
 
         log.info(f"  Saved checkpoint to {checkpoint_dir}")
         current_checkpoint = checkpoint_dir
