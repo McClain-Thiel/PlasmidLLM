@@ -24,16 +24,16 @@ config = PostTrainingConfig(
     num_train_epochs=1,
     max_steps=5000,
 
-    # Sampling — match pretrain context (4096 tokens); model never learned to stop at 8k
+    # Sampling — high temperature + no top_k for generation diversity (critical for GRPO signal)
     num_generations=8,
     max_completion_length=4096,
-    temperature=0.8,
-    top_k=50,
+    temperature=1.2,                 # high temp for diverse generations → better GRPO advantages
+    top_k=0,                         # disabled — let temperature drive diversity
     top_p=0.95,
 
     # GRPO-specific
     num_iterations=1,
-    beta=0.2,                        # higher KL penalty to prevent divergence at lr=1e-4
+    beta=0.1,                        # moderate KL penalty — allow exploration
     epsilon=0.2,
     loss_type="grpo",
 
