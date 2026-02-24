@@ -24,15 +24,15 @@ config = RFTConfig(
 
     # RFT iterations
     num_rft_iterations=5,
-    reward_threshold=0.15,        # keep completions above this (~top 50% based on GRPO data)
+    reward_threshold=0.10,        # start low — we'll adjust based on actual distribution
 
     # Generation — one completion per prompt, 4096 tokens to match pretrain context
-    gen_batch_size=16,            # larger batches for generation efficiency
+    gen_batch_size=32,            # 17M model is small, fits larger batches
     max_completion_length=4096,
     temperature=1.0,
     top_p=0.95,
-    num_samples_per_prompt=1,     # 1 = fast first pass; bump to 2-4 for better coverage
-    max_prompts_per_iter=5000,    # 5000 prompts × 4096 tokens ≈ manageable generation time
+    num_samples_per_prompt=1,     # 1 = fast; generates across many prompts instead
+    max_prompts_per_iter=2000,    # 2000 prompts balances gen time vs SFT data size
 
     # SFT training — conservative to avoid forgetting
     learning_rate=5e-5,

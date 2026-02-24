@@ -158,6 +158,8 @@ def generate_completions(
     model.eval()
     device = next(model.parameters()).device
     results = []
+    import time as _time
+    _gen_start = _time.time()
 
     for start in range(0, len(prompts), config.gen_batch_size):
         batch_prompts = prompts[start:start + config.gen_batch_size]
@@ -187,8 +189,14 @@ def generate_completions(
             completion = tokenizer.decode(completion_ids, skip_special_tokens=False)
             results.append((prompt, completion))
 
-        if (start // config.gen_batch_size) % 50 == 0:
-            log.info(f"Generated {len(results)}/{len(prompts)} completions")
+        batch_idx = start // config.gen_batch_size
+        n_batches = (len(prompts) + config.gen_batch_size - 1) // config.gen_batch_size
+        if batch_idx % 10 == 0 or batch_idx == n_batches - 1:
+            import time
+            elapsed = _time.time() - _gen_start
+            eta = (elapsed / max(batch_idx + 1, 1)) * (n_batches - batch_idx - 1) if elapsed > 0 else 0
+            log.info(f"Generated {len(results)}/{len(prompts)} completions "
+                     f"(batch {batch_idx+1}/{n_batches}, ETA {eta/60:.1f}min)")
 
     log.info(f"Generated {len(results)} completions total")
     return results
@@ -214,6 +222,10 @@ def score_and_filter(
         if reward >= threshold:
             filtered.append((prompt, completion, reward))
 
+    # Compute percentiles for threshold tuning
+    pcts = np.percentile(all_rewards, [10, 25, 50, 75, 90]) if len(all_rewards) > 0 else [0]*5
+    n_zero = int((all_rewards == 0).sum())
+
     stats = {
         "total": len(pairs),
         "filtered": len(filtered),
@@ -224,6 +236,9 @@ def score_and_filter(
         "min_reward": float(all_rewards.min()),
         "std_reward": float(all_rewards.std()),
         "mean_filtered_reward": float(np.mean([r for _, _, r in filtered])) if filtered else 0.0,
+        "p10": float(pcts[0]), "p25": float(pcts[1]), "p50": float(pcts[2]),
+        "p75": float(pcts[3]), "p90": float(pcts[4]),
+        "n_zero": n_zero,
     }
     return filtered, stats
 
@@ -360,6 +375,9 @@ def main():
         log.info(f"  Reward distribution: mean={stats['mean_reward']:.4f}, "
                  f"median={stats['median_reward']:.4f}, "
                  f"max={stats['max_reward']:.4f}, std={stats['std_reward']:.4f}")
+        log.info(f"  Percentiles: p10={stats['p10']:.4f} p25={stats['p25']:.4f} "
+                 f"p50={stats['p50']:.4f} p75={stats['p75']:.4f} p90={stats['p90']:.4f}")
+        log.info(f"  Zero-reward: {stats['n_zero']}/{stats['total']}")
         log.info(f"  Kept {stats['filtered']}/{stats['total']} completions "
                  f"({stats['keep_rate']:.1%}) above threshold {config.reward_threshold}")
         log.info(f"  Filtered mean reward: {stats['mean_filtered_reward']:.4f}")
