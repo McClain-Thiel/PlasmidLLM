@@ -24,10 +24,12 @@ config = PostTrainingConfig(
     num_train_epochs=1,
     max_steps=5000,
 
-    # Sampling — high temperature + no top_k for generation diversity (critical for GRPO signal)
+    # Sampling — short completions (1024) for more diversity between generations
+    # At 4096 tokens, 8 generations are nearly identical (reward_std=0.004).
+    # At 1024, per-token randomness compounds to structural differences → better GRPO signal.
     num_generations=8,
-    max_completion_length=4096,
-    temperature=1.2,                 # high temp for diverse generations → better GRPO advantages
+    max_completion_length=1024,
+    temperature=1.0,                 # moderate temp — shorter seqs already give diversity
     top_k=0,                         # disabled — let temperature drive diversity
     top_p=0.95,
 
