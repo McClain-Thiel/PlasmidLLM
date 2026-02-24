@@ -37,12 +37,21 @@ from trl import SFTConfig, SFTTrainer
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM
+
 from src.plasmid_llm.models.hf_plasmid_lm import (
     PlasmidLMConfig,
     PlasmidLMForCausalLM,
+    PlasmidLMModel,
     PlasmidLMTokenizer,
 )
 from post_training.reward import load_motif_lookup, plasmid_reward_fn
+
+# Register custom model so AutoConfig/AutoModel/AutoModelForCausalLM can find it
+# (vLLM's TransformersForCausalLM needs these registrations)
+AutoConfig.register("plasmid_lm", PlasmidLMConfig)
+AutoModel.register(PlasmidLMConfig, PlasmidLMModel)
+AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -188,6 +197,9 @@ def generate_completions_vllm(
 
     # Ensure checkpoint has model source files + auto_map for trust_remote_code
     prepare_checkpoint_for_vllm(model_path)
+
+    # Force vLLM v0 engine (single-process) so AutoModel registrations carry over
+    os.environ["VLLM_USE_V1"] = "0"
 
     log.info(f"Initializing vLLM with model from {model_path}...")
     llm = LLM(
