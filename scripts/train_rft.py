@@ -147,6 +147,36 @@ def load_prompts(parquet_path: str, max_prompts: int = 0) -> list[str]:
     return prompts
 
 
+def prepare_checkpoint_for_vllm(checkpoint_dir: str) -> None:
+    """Copy model source files and add auto_map to config.json so vLLM can load."""
+    import json
+
+    checkpoint_path = Path(checkpoint_dir)
+    src_dir = Path(__file__).resolve().parent.parent / "src" / "plasmid_llm" / "models" / "hf_plasmid_lm"
+
+    # Copy model source files
+    for fname in ["configuration_plasmid_lm.py", "modeling_plasmid_lm.py", "tokenization_plasmid_lm.py"]:
+        src = src_dir / fname
+        dst = checkpoint_path / fname
+        if src.exists() and not dst.exists():
+            shutil.copy2(src, dst)
+            log.info(f"  Copied {fname} to checkpoint dir")
+
+    # Add auto_map to config.json if missing
+    config_path = checkpoint_path / "config.json"
+    if config_path.exists():
+        cfg = json.loads(config_path.read_text())
+        if "auto_map" not in cfg:
+            cfg["auto_map"] = {
+                "AutoConfig": "configuration_plasmid_lm.PlasmidLMConfig",
+                "AutoModel": "modeling_plasmid_lm.PlasmidLMModel",
+                "AutoModelForCausalLM": "modeling_plasmid_lm.PlasmidLMForCausalLM",
+                "AutoTokenizer": ["tokenization_plasmid_lm.PlasmidLMTokenizer", None],
+            }
+            config_path.write_text(json.dumps(cfg, indent=2))
+            log.info("  Added auto_map to config.json")
+
+
 def generate_completions_vllm(
     model_path: str,
     tokenizer: PlasmidLMTokenizer,
@@ -156,6 +186,9 @@ def generate_completions_vllm(
     """Generate completions using vLLM for 10-20x throughput."""
     from vllm import LLM, SamplingParams
 
+    # Ensure checkpoint has model source files + auto_map for trust_remote_code
+    prepare_checkpoint_for_vllm(model_path)
+
     log.info(f"Initializing vLLM with model from {model_path}...")
     llm = LLM(
         model=model_path,
@@ -163,6 +196,8 @@ def generate_completions_vllm(
         max_model_len=config.max_completion_length + 512,  # prompt + completion
         gpu_memory_utilization=0.85,
         trust_remote_code=True,
+        hf_overrides={"architectures": ["TransformersForCausalLM"]},
+        dtype="bfloat16",
     )
 
     sampling_params = SamplingParams(
