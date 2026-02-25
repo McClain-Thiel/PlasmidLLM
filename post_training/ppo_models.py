@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 
-from post_training.reward import plasmid_reward_fn
+from post_training.reward import build_category_index, plasmid_reward_fn
 
 
 # ── HF-compatible backbone wrapper ──────────────────────────────────────────
@@ -88,10 +88,12 @@ class PlasmidRewardWrapper(nn.Module):
 
     base_model_prefix = "backbone"
 
-    def __init__(self, tokenizer, lookup_df: pd.DataFrame):
+    def __init__(self, tokenizer, lookup_df: pd.DataFrame, alpha: float = 0.0):
         super().__init__()
         self.tokenizer = tokenizer
         self.lookup_df = lookup_df
+        self.alpha = alpha
+        self.category_index = build_category_index(lookup_df)
         self.backbone = _RewardBackbone()
 
     def score(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -112,7 +114,10 @@ class PlasmidRewardWrapper(nn.Module):
                 prompts.append(text)
                 completions.append("")
 
-        rewards = plasmid_reward_fn(prompts, completions, self.lookup_df)
+        rewards = plasmid_reward_fn(
+            prompts, completions, self.lookup_df,
+            alpha=self.alpha, category_index=self.category_index,
+        )
         scores = torch.tensor(rewards, device=hidden_states.device, dtype=torch.float32)
 
         # Expand scalar to every position: (batch, seq_len, 1)

@@ -32,7 +32,7 @@ from src.plasmid_llm.models.hf_plasmid_lm import (
     PlasmidLMModel,
     PlasmidLMTokenizer,
 )
-from post_training.reward import load_motif_lookup, plasmid_reward_fn
+from post_training.reward import build_category_index, load_motif_lookup, plasmid_reward_fn
 
 # Register custom model so AutoConfig/AutoModelForCausalLM can find it
 # (required by TRL's GRPOTrainer for creating the reference model)
@@ -116,6 +116,9 @@ def build_prompt_dataset(parquet_path: str, filter_hard_tokens: bool = True) -> 
 class GRPOMetricsCallback(TrainerCallback):
     """Print key GRPO metrics to stdout on each log step."""
 
+    def __init__(self, curriculum_state: dict | None = None):
+        self.curriculum_state = curriculum_state
+
     def on_log(self, args, state, control, logs=None, **kwargs):
         if not logs or not state.is_world_process_zero:
             return
@@ -128,6 +131,8 @@ class GRPOMetricsCallback(TrainerCallback):
         mean_len = logs.get("completions/mean_length")
         step_time = logs.get("step_time")
         parts = [f"step={step}"]
+        if self.curriculum_state is not None:
+            parts.append(f"alpha={self.curriculum_state['alpha']:.3f}")
         if reward is not None:
             parts.append(f"reward={reward:.4f}")
         if reward_std is not None:
@@ -143,6 +148,22 @@ class GRPOMetricsCallback(TrainerCallback):
         if step_time is not None:
             parts.append(f"time={step_time:.1f}s")
         log.info(" | ".join(parts))
+
+
+class CurriculumCallback(TrainerCallback):
+    """Linearly ramp curriculum alpha from start to end over warmup steps."""
+
+    def __init__(self, curriculum_state: dict, config: PostTrainingConfig):
+        self.curriculum_state = curriculum_state
+        self.alpha_start = config.curriculum_alpha_start
+        self.alpha_end = config.curriculum_alpha_end
+        self.warmup_steps = max(config.curriculum_alpha_warmup_steps, 1)
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        progress = min(state.global_step / self.warmup_steps, 1.0)
+        self.curriculum_state["alpha"] = (
+            self.alpha_start + progress * (self.alpha_end - self.alpha_start)
+        )
 
 
 class GRPOLineageCallback(TrainerCallback):
@@ -269,6 +290,16 @@ def main():
     lookup_df = load_motif_lookup(str(config.motif_lookup))
     log.info(f"Motif lookup loaded: {len(lookup_df)} entries, {len(lookup_df.index.unique())} unique tokens")
 
+    # Build category index for curriculum presence scoring
+    category_index = build_category_index(lookup_df)
+    log.info(f"Category index built: {list(category_index.keys())} "
+             f"({sum(len(v) for v in category_index.values())} representative entries)")
+
+    # Curriculum alpha state — mutable dict so the reward_fn closure sees updates
+    curriculum_state = {"alpha": config.curriculum_alpha_start}
+    log.info(f"Curriculum: alpha {config.curriculum_alpha_start} -> {config.curriculum_alpha_end} "
+             f"over {config.curriculum_alpha_warmup_steps} steps")
+
     # Build HF Dataset with "prompt" column (GRPOTrainer tokenizes internally)
     log.info(f"Loading prompts from {config.training_pairs}")
     dataset = build_prompt_dataset(str(config.training_pairs), filter_hard_tokens=True)
@@ -307,7 +338,11 @@ def main():
                 texts.append("".join(m.get("content", "") for m in c if isinstance(m, dict)))
             else:
                 texts.append(str(c))
-        return plasmid_reward_fn(prompts, texts, lookup_df)
+        return plasmid_reward_fn(
+            prompts, texts, lookup_df,
+            alpha=curriculum_state["alpha"],
+            category_index=category_index,
+        )
 
     # GRPO configuration — TRL 0.16+ parameter names
     grpo_config = GRPOConfig(
@@ -348,7 +383,10 @@ def main():
 
     # Create GRPO trainer
     log.info("Initializing GRPO trainer...")
-    callbacks = [GRPOMetricsCallback()]
+    callbacks = [
+        GRPOMetricsCallback(curriculum_state),
+        CurriculumCallback(curriculum_state, config),
+    ]
     if report_to == "mlflow":
         callbacks.append(GRPOLineageCallback(config))
 

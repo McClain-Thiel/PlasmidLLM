@@ -150,6 +150,11 @@ class PostTrainingConfig:
     use_vllm: bool = True  # Use vLLM for fast sampling
     dataloader_num_workers: int = 4
     
+    # Curriculum reward scheduling
+    curriculum_alpha_start: float = 0.0   # alpha at step 0 (0 = presence only)
+    curriculum_alpha_end: float = 1.0     # alpha at warmup end (1 = exact match only)
+    curriculum_alpha_warmup_steps: int = 1000
+    
     # MLflow tracking
     mlflow_tracking_uri: Optional[str] = None
     mlflow_experiment: str = "plasmid_post_training"
@@ -194,4 +199,9 @@ class PostTrainingConfig:
             "top_p": self.top_p,
             "use_vllm": self.use_vllm,
             "seed": self.seed,
+
+            # Curriculum
+            "curriculum_alpha_start": self.curriculum_alpha_start,
+            "curriculum_alpha_end": self.curriculum_alpha_end,
+            "curriculum_alpha_warmup_steps": self.curriculum_alpha_warmup_steps,
         }

@@ -92,6 +92,12 @@ class PPORunConfig:
     seed: int = 42
     bf16: bool = True
 
+    # Curriculum reward scheduling (alpha blending)
+    # alpha=0.0 → structure-only (any valid component), alpha=1.0 → exact match only
+    alpha_start: float = 0.0
+    alpha_end: float = 1.0
+    alpha_warmup_steps: int = 1000  # linear ramp from alpha_start → alpha_end
+
     # MLflow
     mlflow_tracking_uri: Optional[str] = None
     mlflow_experiment: str = "plasmid_post_training"
@@ -171,7 +177,7 @@ class PPOMetricsCallback(TrainerCallback):
         step = state.global_step
         parts = [f"step={step}"]
         for key in ["objective/scores", "objective/kl", "loss/policy", "loss/value",
-                     "val/clipfrac", "val/ratio", "objective/entropy"]:
+                     "val/clipfrac", "val/ratio", "objective/entropy", "curriculum/alpha"]:
             val = logs.get(key)
             if val is not None:
                 short = key.split("/")[-1]
@@ -212,6 +218,9 @@ class PPOLineageCallback(TrainerCallback):
                 "cliprange": self.config.cliprange,
                 "vf_coef": self.config.vf_coef,
                 "num_ppo_epochs": self.config.num_ppo_epochs,
+                "alpha_start": self.config.alpha_start,
+                "alpha_end": self.config.alpha_end,
+                "alpha_warmup_steps": self.config.alpha_warmup_steps,
                 "git_commit": _get_git_commit(),
                 "architecture": "plasmid_lm_ppo",
             }
@@ -249,6 +258,28 @@ class PPOLineageCallback(TrainerCallback):
             log.info(f"Logged checkpoint-{state.global_step} to MLflow artifacts")
         except Exception as e:
             log.warning(f"Checkpoint artifact logging failed: {e}")
+
+
+class CurriculumAlphaCallback(TrainerCallback):
+    """Update reward model alpha on a linear schedule each training step."""
+
+    def __init__(self, reward_model: "PlasmidRewardWrapper", config: PPORunConfig):
+        self.reward_model = reward_model
+        self.alpha_start = config.alpha_start
+        self.alpha_end = config.alpha_end
+        self.warmup_steps = config.alpha_warmup_steps
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        if self.warmup_steps <= 0:
+            alpha = self.alpha_end
+        else:
+            t = min(state.global_step / self.warmup_steps, 1.0)
+            alpha = self.alpha_start + t * (self.alpha_end - self.alpha_start)
+        self.reward_model.alpha = alpha
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs is not None and state.is_world_process_zero:
+            logs["curriculum/alpha"] = self.reward_model.alpha
 
 
 def load_config(config_path: Path) -> PPORunConfig:
@@ -311,8 +342,9 @@ def main():
     lookup_df = load_motif_lookup(str(config.motif_lookup))
     log.info(f"Motif lookup loaded: {len(lookup_df)} entries, {len(lookup_df.index.unique())} unique tokens")
 
-    reward_model = PlasmidRewardWrapper(tokenizer, lookup_df)
-    log.info("Reward model: Smith-Waterman alignment wrapper")
+    reward_model = PlasmidRewardWrapper(tokenizer, lookup_df, alpha=config.alpha_start)
+    log.info(f"Reward model: Smith-Waterman alignment wrapper (alpha={config.alpha_start:.2f}→{config.alpha_end:.2f} over {config.alpha_warmup_steps} steps)")
+    log.info(f"  Category index: {len(reward_model.category_index)} categories")
 
     # ── Dataset — pre-tokenized prompts ──────────────────────────────────────
 
@@ -386,7 +418,7 @@ def main():
     # ── Create PPO trainer ───────────────────────────────────────────────────
 
     log.info("Initializing PPO trainer...")
-    callbacks = [PPOMetricsCallback()]
+    callbacks = [PPOMetricsCallback(), CurriculumAlphaCallback(reward_model, config)]
     if report_to == "mlflow":
         callbacks.append(PPOLineageCallback(config))
 
@@ -408,6 +440,7 @@ def main():
     log.info(f"  kl_coef={config.kl_coef}, cliprange={config.cliprange}")
     log.info(f"  num_ppo_epochs={config.num_ppo_epochs}")
     log.info(f"  batch={config.per_device_train_batch_size} x grad_accum={config.gradient_accumulation_steps}")
+    log.info(f"  curriculum: alpha {config.alpha_start:.2f}→{config.alpha_end:.2f} over {config.alpha_warmup_steps} steps")
     trainer.train()
 
     # ── Save final model ─────────────────────────────────────────────────────

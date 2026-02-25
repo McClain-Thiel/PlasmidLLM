@@ -48,8 +48,15 @@ config = PPORunConfig(
     lam=0.95,                 # GAE lambda
     whiten_rewards=False,     # don't normalize — our rewards are already bounded [0, ~0.5]
 
+    # Curriculum — teach structure first, then specificity
+    # Phase 1 (steps 0-1000): alpha 0.0→1.0, reward any valid component of right category
+    # Phase 2 (steps 1000+): alpha=1.0, reward only the exact conditioned component
+    alpha_start=0.0,
+    alpha_end=1.0,
+    alpha_warmup_steps=1000,
+
     # Output
-    output_dir=Path("/opt/dlami/nvme/output/ppo_v2"),
+    output_dir=Path("/opt/dlami/nvme/output/ppo_v3"),
     save_steps=500,
     logging_steps=1,
     seed=42,

@@ -22,6 +22,9 @@ QC_THRESHOLD = 0.70
 # Tokens with known poor registry coverage — exclude from reward by default
 EXCLUDE_TOKENS = {"<ELEM_IRES>", "<ELEM_TRACRRNA>"}
 
+# Max representative entries per category for presence scoring (performance cap)
+MAX_CATEGORY_REPRESENTATIVES = 10
+
 
 # ── Loading ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +104,52 @@ def load_motif_lookup(path: str) -> pd.DataFrame:
     df.index.name = "token_idx"
 
     return df
+
+
+def _extract_category(token: str) -> Optional[str]:
+    """Extract category prefix from a hard token, e.g. '<ORI_COLE1>' -> 'ORI'."""
+    inner = token.strip("<>")
+    for prefix in HARD_PREFIXES:
+        if inner.startswith(prefix):
+            return prefix.rstrip("_")
+    return None
+
+
+def build_category_index(
+    lookup_df: pd.DataFrame, max_per_category: int = MAX_CATEGORY_REPRESENTATIVES
+) -> dict:
+    """Pre-group lookup entries by category with a capped representative subset.
+
+    For each category (ORI, AMR, PROM, ...), selects up to *max_per_category*
+    representative entries spread across distinct tokens to maximize diversity.
+
+    Returns:
+        Dict mapping category str -> DataFrame subset of lookup_df
+    """
+    # Derive category from token if not already a column
+    if "category" not in lookup_df.columns:
+        lookup_df = lookup_df.copy()
+        lookup_df["category"] = lookup_df["token"].apply(
+            lambda t: _extract_category(t)
+        )
+
+    index = {}
+    for cat, group in lookup_df.groupby("category"):
+        if cat is None:
+            continue
+        # Pick up to max_per_category entries, one per unique token first
+        unique_tokens = group["token"].unique()
+        if len(unique_tokens) <= max_per_category:
+            # Take one row per token
+            reps = group.groupby("token").first().reset_index()
+        else:
+            # Sample tokens, then take first row of each
+            sampled = np.random.RandomState(42).choice(
+                unique_tokens, size=max_per_category, replace=False
+            )
+            reps = group[group["token"].isin(sampled)].groupby("token").first().reset_index()
+        index[cat] = reps
+    return index
 
 
 # ── Alignment ─────────────────────────────────────────────────────────────────
@@ -208,16 +257,67 @@ def score_motif(
     }
 
 
+def score_category_presence(
+    category: str,
+    candidate_seq: str,
+    category_index: dict,
+) -> float:
+    """Score whether *any* valid instance of a category is present in the candidate.
+
+    Aligns against all representative entries for the category and returns the
+    max normalized score. This is the "structural presence" signal — did the model
+    produce *any* valid ORI, regardless of which one the prompt specified?
+
+    Returns:
+        Best score_ratio in [0, 1] across all representatives, or 0.0 if the
+        category has no entries.
+    """
+    reps = category_index.get(category)
+    if reps is None or reps.empty:
+        return 0.0
+
+    best_ratio = 0.0
+    for _, row in reps.iterrows():
+        # DNA alignment
+        if pd.notna(row.get("dna_seq")):
+            ratio = align_dna_score(
+                row["dna_seq"], candidate_seq, int(row["dna_max_score"])
+            )
+            best_ratio = max(best_ratio, ratio)
+
+        # Protein alignment (CDS only)
+        if row.get("is_cds") and pd.notna(row.get("protein_seq")):
+            ratio = align_protein_score(
+                row["protein_seq"], candidate_seq, int(row["protein_max_score"])
+            )
+            best_ratio = max(best_ratio, ratio)
+
+        # Early exit if we already found a strong match
+        if best_ratio >= QC_THRESHOLD:
+            break
+
+    return best_ratio
+
+
 def compute_reward(
     prompt: str,
     candidate_seq: str,
     lookup_df: pd.DataFrame,
+    alpha: float = 1.0,
+    category_index: Optional[dict] = None,
     return_details: bool = False,
 ) -> float | Tuple[float, dict]:
     """
     Compute scalar reward for a generated sequence.
 
-    Reward = mean of per-motif score_ratios across all hard tokens.
+    When *alpha* = 1.0 (default), reward = mean of exact-token alignment scores
+    (original behavior). When *alpha* < 1.0 and *category_index* is provided,
+    each per-token score is blended:
+
+        blended = alpha * specific_score + (1 - alpha) * presence_score
+
+    where *presence_score* rewards generating any valid instance of the token's
+    category (e.g. any ORI, not just ColE1).
     """
     candidate_seq = candidate_seq.upper().strip()
     hard_tokens = parse_hard_tokens(prompt, lookup_df)
@@ -225,22 +325,45 @@ def compute_reward(
     if not hard_tokens:
         if return_details:
             return 0.0, {"reward": 0.0, "n_hard_tokens": 0, "n_found": 0,
-                         "qc_pass_rate": 0.0, "per_motif": []}
+                         "qc_pass_rate": 0.0, "per_motif": [], "alpha": alpha}
         return 0.0
 
-    per_motif = [score_motif(t, candidate_seq, lookup_df) for t in hard_tokens]
-    scores = [m["score_ratio"] for m in per_motif]
+    need_presence = alpha < 1.0 and category_index is not None
+
+    per_motif = []
+    per_motif_presence = []
+    blended_scores = []
+
+    for token in hard_tokens:
+        motif_result = score_motif(token, candidate_seq, lookup_df)
+        specific = motif_result["score_ratio"]
+        per_motif.append(motif_result)
+
+        if need_presence:
+            cat = _extract_category(token)
+            presence = score_category_presence(cat, candidate_seq, category_index) if cat else 0.0
+            per_motif_presence.append({"token": token, "category": cat, "score_ratio": presence})
+            blended = alpha * specific + (1.0 - alpha) * presence
+        else:
+            blended = specific
+
+        blended_scores.append(blended)
+
     n_found = sum(1 for m in per_motif if m["found"])
-    reward = float(np.mean(scores))
+    reward = float(np.mean(blended_scores))
 
     if return_details:
-        return reward, {
+        details = {
             "reward": round(reward, 4),
             "n_hard_tokens": len(hard_tokens),
             "n_found": n_found,
             "qc_pass_rate": round(n_found / len(per_motif), 4),
             "per_motif": per_motif,
+            "alpha": alpha,
         }
+        if need_presence:
+            details["per_motif_presence"] = per_motif_presence
+        return reward, details
     return reward
 
 
@@ -250,6 +373,8 @@ def plasmid_reward_fn(
     prompts: List[str],
     completions: List[str],
     lookup_df: pd.DataFrame,
+    alpha: float = 1.0,
+    category_index: Optional[dict] = None,
     eos_bonus: float = 0.15,
     length_penalty_threshold: int = 3500,
 ) -> List[float]:
@@ -257,12 +382,13 @@ def plasmid_reward_fn(
     Batch reward function for RL training.
 
     Reward = motif_alignment_score + eos_bonus (if terminated) - length_penalty (if too long).
-    This prevents the model from gaming the reward by just generating max-length sequences.
 
     Args:
         prompts: List of prompt strings
         completions: List of generated DNA sequences
         lookup_df: Loaded motif lookup DataFrame
+        alpha: Curriculum blending weight (0.0 = presence only, 1.0 = exact match only)
+        category_index: Pre-built category index from build_category_index()
         eos_bonus: Bonus for sequences that contain <EOS> (proper termination)
         length_penalty_threshold: Penalize sequences longer than this (in DNA chars)
 
@@ -284,8 +410,11 @@ def plasmid_reward_fn(
             rewards.append(0.0)
             continue
 
-        # Core motif alignment reward
-        motif_reward = compute_reward(prompt, seq, lookup_df)
+        # Core motif alignment reward (blended via alpha)
+        motif_reward = compute_reward(
+            prompt, seq, lookup_df,
+            alpha=alpha, category_index=category_index,
+        )
 
         # Bonus for proper EOS termination (model should learn to stop)
         reward = motif_reward + (eos_bonus if has_eos else 0.0)

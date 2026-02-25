@@ -9,8 +9,10 @@ pytest.importorskip("Bio")
 pytest.importorskip("pandas")
 
 from post_training.reward import (
-    parse_hard_tokens,
+    _extract_category,
+    build_category_index,
     compute_reward,
+    parse_hard_tokens,
     plasmid_reward_fn,
     safe_translate,
 )
@@ -113,6 +115,127 @@ class TestRewardFunction:
         
         rewards = plasmid_reward_fn(prompts, short_completion, lookup_df)
         assert rewards[0] == 0.0
+
+
+class TestCurriculumReward:
+    """Tests for alpha-blended curriculum reward scheduling using real plasmid data."""
+
+    REGISTRY_PATH = Path("data/motif_registry.parquet")
+    PAIRS_PATH = Path("data/training_pairs_sample.parquet")
+
+    @pytest.fixture(scope="class")
+    def real_data(self):
+        """Load motif registry and training pairs; skip if files unavailable."""
+        import pandas as pd
+        from post_training.reward import load_motif_lookup
+
+        if not self.REGISTRY_PATH.exists() or not self.PAIRS_PATH.exists():
+            pytest.skip("Real data files not available (motif_registry / training_pairs_sample)")
+
+        lookup_df = load_motif_lookup(str(self.REGISTRY_PATH))
+        pairs = pd.read_parquet(self.PAIRS_PATH)
+        category_index = build_category_index(lookup_df)
+        return lookup_df, pairs, category_index
+
+    @staticmethod
+    def _pick_pair(pairs, token_must_contain: str):
+        """Find the shortest training pair whose prompt contains a specific token."""
+        mask = pairs["prompt"].str.contains(token_must_contain, regex=False)
+        subset = pairs[mask].sort_values("sequence_length")
+        assert len(subset) > 0, f"No rows with {token_must_contain}"
+        row = subset.iloc[0]
+        return row["prompt"], row["sequence"]
+
+    def test_alpha_1_matches_original(self, real_data):
+        """alpha=1.0 with category_index must reproduce no-alpha behavior exactly."""
+        lookup_df, pairs, category_index = real_data
+        prompt, seq = self._pick_pair(pairs, "<AMR_KANAMYCIN>")
+
+        reward_original = compute_reward(prompt, seq, lookup_df)
+        reward_alpha1 = compute_reward(
+            prompt, seq, lookup_df, alpha=1.0, category_index=category_index,
+        )
+
+        assert reward_original == reward_alpha1
+
+    def test_alpha_1_no_category_index(self, real_data):
+        """alpha=1.0 with category_index=None must also match default behavior."""
+        lookup_df, pairs, _ = real_data
+        prompt, seq = self._pick_pair(pairs, "<AMR_KANAMYCIN>")
+
+        reward_default = compute_reward(prompt, seq, lookup_df)
+        reward_none = compute_reward(
+            prompt, seq, lookup_df, alpha=1.0, category_index=None,
+        )
+
+        assert reward_default == reward_none
+
+    def test_alpha_0_rewards_category_presence(self, real_data):
+        """alpha=0.0 should reward a real plasmid whose AMR is the wrong subtype.
+
+        Uses a kanamycin prompt evaluated against an ampicillin plasmid's sequence.
+        The ampicillin sequence genuinely contains an AMR gene, just not the one
+        the prompt asked for — presence scoring should give credit.
+        """
+        lookup_df, pairs, category_index = real_data
+        kan_prompt, _ = self._pick_pair(pairs, "<AMR_KANAMYCIN>")
+        _, amp_seq = self._pick_pair(pairs, "<AMR_AMPICILLIN>")
+
+        # Evaluate amp sequence against kan prompt
+        reward_exact = compute_reward(
+            kan_prompt, amp_seq, lookup_df, alpha=1.0, category_index=category_index,
+        )
+        reward_presence = compute_reward(
+            kan_prompt, amp_seq, lookup_df, alpha=0.0, category_index=category_index,
+        )
+
+        assert reward_presence > 0.0, "Presence reward should be positive for real sequence"
+        assert reward_presence > reward_exact, (
+            f"Presence reward ({reward_presence:.4f}) should exceed exact-match "
+            f"reward ({reward_exact:.4f}) when AMR subtype is mismatched"
+        )
+
+    def test_alpha_blend_interpolates(self, real_data):
+        """alpha=0.5 should produce a reward between alpha=0 and alpha=1."""
+        lookup_df, pairs, category_index = real_data
+        kan_prompt, _ = self._pick_pair(pairs, "<AMR_KANAMYCIN>")
+        _, amp_seq = self._pick_pair(pairs, "<AMR_AMPICILLIN>")
+
+        reward_0 = compute_reward(
+            kan_prompt, amp_seq, lookup_df, alpha=0.0, category_index=category_index,
+        )
+        reward_1 = compute_reward(
+            kan_prompt, amp_seq, lookup_df, alpha=1.0, category_index=category_index,
+        )
+        reward_mid = compute_reward(
+            kan_prompt, amp_seq, lookup_df, alpha=0.5, category_index=category_index,
+        )
+
+        low, high = min(reward_0, reward_1), max(reward_0, reward_1)
+        assert low <= reward_mid <= high, (
+            f"Blended reward {reward_mid:.4f} outside [{low:.4f}, {high:.4f}]"
+        )
+
+    def test_plasmid_reward_fn_passes_alpha(self, real_data):
+        """Batch API should pass alpha through and produce different rewards."""
+        lookup_df, pairs, category_index = real_data
+        kan_prompt, _ = self._pick_pair(pairs, "<AMR_KANAMYCIN>")
+        _, amp_seq = self._pick_pair(pairs, "<AMR_AMPICILLIN>")
+
+        prompts = [kan_prompt]
+        completions = [amp_seq]
+
+        rewards_exact = plasmid_reward_fn(
+            prompts, completions, lookup_df, alpha=1.0, category_index=category_index,
+        )
+        rewards_presence = plasmid_reward_fn(
+            prompts, completions, lookup_df, alpha=0.0, category_index=category_index,
+        )
+
+        assert rewards_presence[0] > rewards_exact[0], (
+            f"Presence reward ({rewards_presence[0]:.4f}) should exceed exact "
+            f"({rewards_exact[0]:.4f}) via batch API"
+        )
 
 
 @pytest.mark.integration
