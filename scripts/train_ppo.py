@@ -97,6 +97,7 @@ class PPORunConfig:
     alpha_start: float = 0.0
     alpha_end: float = 1.0
     alpha_warmup_steps: int = 1000  # linear ramp from alpha_start → alpha_end
+    alpha_plateau_steps: int = 0    # hold alpha_start constant for this many steps before ramping
 
     # MLflow
     mlflow_tracking_uri: Optional[str] = None
@@ -261,22 +262,35 @@ class PPOLineageCallback(TrainerCallback):
 
 
 class CurriculumAlphaCallback(TrainerCallback):
-    """Update reward model alpha on a linear schedule each training step."""
+    """Update reward model alpha on a linear schedule each training step.
+
+    Supports two modes:
+      - Simple ramp: alpha goes from alpha_start → alpha_end over warmup_steps
+      - Two-phase:   alpha holds at alpha_start for plateau_steps, THEN ramps
+                     to alpha_end over warmup_steps
+    """
 
     def __init__(self, reward_model: "PlasmidRewardWrapper", config: PPORunConfig):
         self.reward_model = reward_model
         self.alpha_start = config.alpha_start
         self.alpha_end = config.alpha_end
         self.warmup_steps = config.alpha_warmup_steps
+        self.plateau_steps = getattr(config, "alpha_plateau_steps", 0)
 
     def on_step_end(self, args, state, control, **kwargs):
         # NOTE: TRL's experimental PPOTrainer does not call on_step_begin,
         # only on_step_end. Alpha updates here take effect on the next step's
         # reward computation (off-by-one is negligible over 1000-step ramp).
-        if self.warmup_steps <= 0:
+        step = state.global_step
+
+        if step < self.plateau_steps:
+            # Phase 1: hold alpha_start constant
+            alpha = self.alpha_start
+        elif self.warmup_steps <= 0:
             alpha = self.alpha_end
         else:
-            t = min(state.global_step / self.warmup_steps, 1.0)
+            ramp_step = step - self.plateau_steps
+            t = min(ramp_step / self.warmup_steps, 1.0)
             alpha = self.alpha_start + t * (self.alpha_end - self.alpha_start)
         self.reward_model.alpha = alpha
 
@@ -443,7 +457,8 @@ def main():
     log.info(f"  kl_coef={config.kl_coef}, cliprange={config.cliprange}")
     log.info(f"  num_ppo_epochs={config.num_ppo_epochs}")
     log.info(f"  batch={config.per_device_train_batch_size} x grad_accum={config.gradient_accumulation_steps}")
-    log.info(f"  curriculum: alpha {config.alpha_start:.2f}→{config.alpha_end:.2f} over {config.alpha_warmup_steps} steps")
+    plateau = getattr(config, "alpha_plateau_steps", 0)
+    log.info(f"  curriculum: alpha {config.alpha_start:.2f}→{config.alpha_end:.2f} over {config.alpha_warmup_steps} steps (plateau={plateau})")
     trainer.train()
 
     # ── Save final model ─────────────────────────────────────────────────────
