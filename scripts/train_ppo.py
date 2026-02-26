@@ -269,7 +269,10 @@ class CurriculumAlphaCallback(TrainerCallback):
         self.alpha_end = config.alpha_end
         self.warmup_steps = config.alpha_warmup_steps
 
-    def on_step_begin(self, args, state, control, **kwargs):
+    def on_step_end(self, args, state, control, **kwargs):
+        # NOTE: TRL's experimental PPOTrainer does not call on_step_begin,
+        # only on_step_end. Alpha updates here take effect on the next step's
+        # reward computation (off-by-one is negligible over 1000-step ramp).
         if self.warmup_steps <= 0:
             alpha = self.alpha_end
         else:
