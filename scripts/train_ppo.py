@@ -261,6 +261,21 @@ class PPOLineageCallback(TrainerCallback):
             log.warning(f"Checkpoint artifact logging failed: {e}")
 
 
+class MaxStepsStopCallback(TrainerCallback):
+    """Force training to stop at max_steps.
+
+    TRL's experimental PPOTrainer may use total_episodes (not max_steps) for
+    its loop length.  This callback ensures we actually stop at max_steps.
+    """
+
+    def __init__(self, max_steps: int):
+        self.max_steps = max_steps
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step >= self.max_steps:
+            control.should_training_stop = True
+
+
 class CurriculumAlphaCallback(TrainerCallback):
     """Update reward model alpha on a linear schedule each training step.
 
@@ -435,7 +450,11 @@ def main():
     # ── Create PPO trainer ───────────────────────────────────────────────────
 
     log.info("Initializing PPO trainer...")
-    callbacks = [PPOMetricsCallback(), CurriculumAlphaCallback(reward_model, config)]
+    callbacks = [
+        PPOMetricsCallback(),
+        CurriculumAlphaCallback(reward_model, config),
+        MaxStepsStopCallback(config.max_steps),
+    ]
     if report_to == "mlflow":
         callbacks.append(PPOLineageCallback(config))
 
