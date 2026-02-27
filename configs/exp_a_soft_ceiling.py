@@ -28,6 +28,7 @@ config = PPORunConfig(
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
     max_steps=400,  # Short experiment
+    total_episodes=6400,  # 400 steps × batch_size(4) × grad_accum(4)
 
     # Generation
     response_length=1024,
