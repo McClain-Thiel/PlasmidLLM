@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pyarrow.parquet as pq
 import torch
-from torch.utils.data import DataLoader, Dataset, Subset
+from torch.utils.data import Dataset, Subset
 
 
 class PlasmidDataset(Dataset):
@@ -98,86 +98,3 @@ def train_val_split(
     return Subset(dataset, indices[val_size:]), Subset(dataset, indices[:val_size])
 
 
-def build_dataloaders(
-    dataset: Dataset,
-    batch_size: int = 32,
-    val_split: float = 0.05,
-    seed: int = 42,
-    num_workers: int = 4,
-) -> tuple[DataLoader, DataLoader]:
-    """Build train and validation DataLoaders."""
-    train_ds, val_ds = train_val_split(dataset, val_split, seed)
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
-    val_loader = DataLoader(
-        val_ds,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    return train_loader, val_loader
-
-
-class PlasmidPromptsDataset(Dataset):
-    """Dataset of prompts for RL training.
-    
-    Loads from training_pairs parquet and filters to has_hard_tokens=True.
-    Returns prompts formatted for generation.
-    """
-
-    def __init__(
-        self,
-        parquet_path: str,
-        tokenizer,
-        filter_hard_tokens: bool = True,
-    ):
-        self.tokenizer = tokenizer
-
-        # Load data
-        table = pq.read_table(parquet_path)
-        col_names = table.column_names
-
-        # Check if has_hard_tokens column exists
-        if "has_hard_tokens" in col_names and filter_hard_tokens:
-            # Filter to only prompts with hard tokens
-            has_hard = table.column("has_hard_tokens").to_pylist()
-            indices = [i for i, h in enumerate(has_hard) if h]
-            table = table.take(indices)
-
-        # Extract prompt column (everything before <SEP>)
-        if "token_prompt" in col_names:
-            self.prompts = table.column("token_prompt").to_pylist()
-        elif "full_text" in col_names:
-            # Parse prompts from full_text: extract everything before <SEP>
-            import re
-            full_texts = table.column("full_text").to_pylist()
-            self.prompts = []
-            for text in full_texts:
-                match = re.search(r"(.*?)<SEP>", text)
-                if match:
-                    self.prompts.append(match.group(1))
-                else:
-                    # Fallback: use everything before first DNA sequence
-                    self.prompts.append(text.split("A")[0].split("T")[0].split("C")[0].split("G")[0])
-        else:
-            raise ValueError(f"No valid prompt column found. Available: {col_names}")
-
-    def __len__(self) -> int:
-        return len(self.prompts)
-
-    def __getitem__(self, idx: int) -> dict:
-        prompt = self.prompts[idx]
-        # Add SEP token for generation
-        prompt_with_sep = prompt + "<SEP>"
-        
-        return {
-            "input_ids": torch.tensor(self.tokenizer.encode(prompt_with_sep), dtype=torch.long),
-            "prompt": prompt,  # Keep original for reward calculation
-        }

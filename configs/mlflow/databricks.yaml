@@ -1,3 +1,0 @@
-tracking_uri: databricks
-experiment_name: /Users/${oc.env:USER,default}/PlasmidLLM
-run_name: ""

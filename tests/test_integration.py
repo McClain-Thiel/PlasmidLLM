@@ -258,72 +258,6 @@ class TestDataset:
         assert mask_count > 0
 
 
-class TestPromptsDataset:
-    """Test prompts dataset for RL training."""
-    
-    @pytest.fixture
-    def tokenizer(self):
-        """Create tokenizer fixture."""
-        from plasmid_llm.models.hf_plasmid_lm import PlasmidLMTokenizer
-        import json
-        import tempfile
-        
-        with open(SPECIAL_TOKENS_PATH) as f:
-            tokens = [line.strip() for line in f if line.strip()]
-        
-        vocab = {t: i for i, t in enumerate(tokens)}
-        next_id = len(vocab)
-        for base in "ATCGNatcgn":
-            if base not in vocab:
-                vocab[base] = next_id
-                next_id += 1
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(vocab, f)
-            vocab_path = f.name
-        
-        tok = PlasmidLMTokenizer(vocab_path)
-        
-        import os
-        os.unlink(vocab_path)
-        
-        return tok
-    
-    def test_prompts_dataset_creation(self, tokenizer):
-        """Test creating prompts dataset."""
-        from plasmid_llm.data import PlasmidPromptsDataset
-        
-        dataset = PlasmidPromptsDataset(
-            str(TRAINING_PAIRS_PATH),
-            tokenizer,
-            filter_hard_tokens=False  # Don't filter for testing
-        )
-        
-        assert len(dataset) > 0
-    
-    def test_prompts_dataset_getitem(self, tokenizer):
-        """Test getting prompts from dataset."""
-        from plasmid_llm.data import PlasmidPromptsDataset
-        
-        dataset = PlasmidPromptsDataset(
-            str(TRAINING_PAIRS_PATH),
-            tokenizer,
-            filter_hard_tokens=False
-        )
-        
-        item = dataset[0]
-        
-        assert "input_ids" in item
-        assert "prompt" in item
-        
-        assert isinstance(item["input_ids"], torch.Tensor)
-        assert isinstance(item["prompt"], str)
-        
-        # Prompt should contain <SEQ> at the end (added by dataset)
-        # Original prompt has <SEQ> added to make prompt_with_sep
-        assert "<BOS>" in item["prompt"] or len(item["prompt"]) > 0
-
-
 @pytest.mark.skipif(
     not (DATA_DIR / "motif_registry.parquet").exists(),
     reason="Motif lookup required"
@@ -367,29 +301,23 @@ class TestRewardFunction:
 
 def test_config_classes():
     """Test config dataclasses."""
-    from plasmid_llm.config import PretrainingConfig, PostTrainingConfig
-    
-    # Test PretrainingConfig
+    from plasmid_llm.config import PretrainingConfig
+
     pretrain_config = PretrainingConfig(
         training_pairs=TRAINING_PAIRS_PATH,
         special_tokens=SPECIAL_TOKENS_PATH,
         hidden_size=128,
         num_hidden_layers=2,
     )
-    
+
     assert pretrain_config.training_pairs.exists()
     assert pretrain_config.special_tokens.exists()
     assert pretrain_config.hidden_size == 128
-    
+
     # Test to_mlflow_params
     params = pretrain_config.to_mlflow_params()
     assert "training_pairs" in params
     assert "training_pairs_hash" in params
-    
-    # Test PostTrainingConfig (requires a model checkpoint, so we skip validation)
-    # Just test that the class exists and has right structure
-    assert hasattr(PostTrainingConfig, 'training_pairs')
-    assert hasattr(PostTrainingConfig, 'motif_lookup')
 
 
 if __name__ == "__main__":

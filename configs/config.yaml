@@ -1,6 +1,0 @@
-defaults:
-  - data: default
-  - train: default
-  - model: transformer
-  - mlflow: databricks
-  - _self_

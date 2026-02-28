@@ -98,11 +98,11 @@ def test_imports():
     from plasmid_llm.data import PlasmidDataset
     print("  ✓ PlasmidDataset")
     
-    from plasmid_llm.data import PlasmidPromptsDataset
-    print("  ✓ PlasmidPromptsDataset")
-    
-    from plasmid_llm.config import PretrainingConfig, PostTrainingConfig
-    print("  ✓ Config classes")
+    from plasmid_llm.config import PretrainingConfig
+    print("  ✓ PretrainingConfig")
+
+    from plasmid_llm.utils import load_config, setup_mlflow
+    print("  ✓ plasmid_llm.utils")
 
 
 def main():

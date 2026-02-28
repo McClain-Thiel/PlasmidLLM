@@ -103,5 +103,6 @@
   "<VEC_PLANT>": 101,
   "<VEC_REPORTER>": 102,
   "<VEC_RETROVIRAL>": 103,
-  "<VEC_YEAST>": 104
+  "<VEC_YEAST>": 104,
+  "<MASK>": 105
 }
