@@ -177,7 +177,11 @@ class PolicyActor:
     def _compute_sequence_log_probs(
         self, model: torch.nn.Module, full_ids: torch.Tensor, prompt_len: int
     ) -> torch.Tensor:
-        """Compute sum of per-token log probs for completion tokens.
+        """Compute mean per-token log probs for completion tokens.
+
+        Returns per-token average (not sum) so that loss/KL magnitudes are
+        independent of sequence length, preventing gradient explosion on
+        long completions.
 
         Args:
             model: PlasmidLMForCausalLM instance.
@@ -185,9 +189,9 @@ class PolicyActor:
             prompt_len: Number of prompt tokens (log probs start after this).
 
         Returns:
-            (batch,) sum of log probs over completion tokens.
+            (batch,) mean per-token log probs over completion tokens.
         """
-        ctx = torch.cuda.amp.autocast(dtype=torch.bfloat16) if self.bf16 else torch.no_grad()
+        ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if self.bf16 else torch.no_grad()
         with ctx:
             outputs = model(input_ids=full_ids)
             logits = outputs.logits  # (batch, seq_len, vocab)
@@ -206,7 +210,9 @@ class PolicyActor:
         mask = shift_labels != self.tokenizer.pad_token_id
         token_log_probs = token_log_probs * mask.float()
 
-        return token_log_probs.sum(dim=-1)  # (batch,)
+        # Per-token mean (not sum) — keeps loss scale independent of seq length
+        token_counts = mask.sum(dim=-1).clamp(min=1)
+        return token_log_probs.sum(dim=-1) / token_counts  # (batch,)
 
     def train_step(self, rollout_batch: Dict) -> Dict:
         """Apply a single gradient update from pre-computed rollouts + advantages.
