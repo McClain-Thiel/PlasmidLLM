@@ -102,7 +102,7 @@ register_reward("motif_alignment", motif_alignment_reward)
 def score_sequences_chunk(
     prompts: List[str],
     completions: List[str],
-    context_ref: ray.ObjectRef,
+    context: dict,
     reward_fn_name: str,
 ) -> List[float]:
     """Score a chunk of sequences on a single CPU worker.
@@ -110,13 +110,12 @@ def score_sequences_chunk(
     Args:
         prompts: Batch of prompt strings.
         completions: Corresponding generated completions.
-        context_ref: ObjectRef to the scoring context dict (zero-copy from object store).
+        context: Scoring context dict (resolved from ObjectRef by Ray).
         reward_fn_name: Name of registered reward function to use.
 
     Returns:
         List of scalar rewards.
     """
-    context = ray.get(context_ref)
     fn = get_reward_fn(reward_fn_name)
     return [fn(p, c, context) for p, c in zip(prompts, completions)]
 
