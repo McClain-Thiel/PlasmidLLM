@@ -3,7 +3,7 @@
 REINFORCE with KL penalty, short completions for diversity,
 curriculum alpha ramp from presence -> exact scoring.
 
-v2: per-token log probs, lower lr, stronger KL constraint.
+v3: EMA baseline, smooth length reward, lower lr, stronger KL.
 """
 
 from pathlib import Path
@@ -34,17 +34,17 @@ config = RayPostTrainingConfig(
     top_p=0.95,
 
     # Training — conservative to prevent KL explosion
-    learning_rate=5e-5,
+    learning_rate=1e-5,
     max_steps=5000,
     gradient_accumulation_steps=1,
     max_grad_norm=1.0,
     weight_decay=0.01,
-    warmup_steps=200,
+    warmup_steps=500,
     bf16=True,
     seed=42,
 
-    # REINFORCE-specific — stronger KL constraint
-    kl_coef=0.5,
+    # REINFORCE-specific — strong KL constraint
+    kl_coef=1.0,
 
     # Curriculum — ramp from presence to exact scoring
     curriculum_alpha_start=0.0,
@@ -58,7 +58,7 @@ config = RayPostTrainingConfig(
     length_penalty_threshold=3500,
 
     # Output & logging
-    output_dir=Path("/opt/dlami/nvme/output/ray_reinforce_v2"),
+    output_dir=Path("/opt/dlami/nvme/output/ray_reinforce_v3"),
     save_steps=500,
     logging_steps=1,
 

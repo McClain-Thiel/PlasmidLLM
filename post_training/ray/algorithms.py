@@ -55,16 +55,20 @@ class Algorithm(ABC):
 
 
 class REINFORCE(Algorithm):
-    """REINFORCE with KL penalty.
+    """REINFORCE with KL penalty and exponential moving average baseline.
 
-    advantage = reward - batch_mean(reward)
+    advantage = reward - ema_baseline
     loss = -mean(advantage * log_prob) + kl_coef * mean(KL)
 
     where KL = log_prob - ref_log_prob (per-sequence KL divergence estimate).
+    The EMA baseline avoids zero-advantage collapse when a full batch has
+    identical (e.g. all-zero) rewards.
     """
 
-    def __init__(self, kl_coef: float = 0.1):
+    def __init__(self, kl_coef: float = 0.1, baseline_ema: float = 0.95):
         self.kl_coef = kl_coef
+        self.baseline_ema = baseline_ema
+        self._baseline = None
 
     def compute_advantages(
         self,
@@ -72,7 +76,15 @@ class REINFORCE(Algorithm):
         log_probs: torch.Tensor,
         ref_log_probs: torch.Tensor,
     ) -> torch.Tensor:
-        return rewards - rewards.mean()
+        batch_mean = rewards.mean().item()
+        if self._baseline is None:
+            self._baseline = batch_mean
+        else:
+            self._baseline = (
+                self.baseline_ema * self._baseline
+                + (1 - self.baseline_ema) * batch_mean
+            )
+        return rewards - self._baseline
 
     def compute_loss(
         self,

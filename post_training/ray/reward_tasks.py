@@ -76,14 +76,20 @@ def motif_alignment_reward(prompt: str, completion: str, context: dict) -> float
     seq = re.sub(r"<[^>]+>", "", raw)
     seq = re.sub(r"[^ATGCN]", "", seq)
 
-    if len(seq) < 100:
+    # Length-based shaping: smooth ramp from 0→1 over [0, min_len] instead
+    # of a hard cliff. This keeps gradient signal for short sequences.
+    min_len = context.get("min_sequence_length", 500)
+    length_factor = min(1.0, len(seq) / max(min_len, 1))
+
+    if len(seq) < 20:
+        # Truly degenerate — no DNA content at all
         return 0.0
 
     motif_reward = compute_reward(
         prompt, seq, lookup_df, alpha=alpha, category_index=category_index
     )
 
-    reward = motif_reward + (eos_bonus if has_eos else 0.0)
+    reward = motif_reward * length_factor + (eos_bonus if has_eos else 0.0)
 
     if len(seq) > length_penalty_threshold:
         excess = (len(seq) - length_penalty_threshold) / length_penalty_threshold
