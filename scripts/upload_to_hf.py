@@ -120,9 +120,30 @@ The model generates DNA bases (A/T/C/G) after the `<SEP>` token until it produce
 | Vector Type (VEC) | Lentiviral, CRISPR, Bacterial, AAV, ... | 10 |
 | Other | Tags, elements, species, backbones | ~55 |
 
+## Post-Training (RL) — Sampling Experiments
+
+We are actively running REINFORCE with KL penalty to improve motif placement accuracy. The policy is trained against a Smith-Waterman alignment reward that scores whether generated sequences contain the motifs specified in the prompt.
+
+**Setup**: Ray-based distributed training — GPU policy actor generates completions, CPU workers score with parasail alignment. Curriculum learning ramps `alpha` from 0 (presence-only scoring) to 1 (exact-match scoring) over 2000 steps.
+
+**Key findings from sampling runs**:
+
+| Run | LR | KL coef | Log probs | Result |
+|-----|-----|---------|-----------|--------|
+| v1 | 1e-4 | 0.1 | sum over tokens | KL explosion at step ~120, collapsed to reward=0 |
+| v2 | 5e-5 | 0.5 | per-token mean | Collapsed at step ~150 — short-sequence mode collapse |
+| v3 | 1e-5 | 1.0 | per-token mean + EMA baseline + smooth length reward | Stable through step 250+, ongoing |
+
+**Critical fixes discovered**:
+1. **Per-token normalization**: Summing log probs over 1000+ tokens made KL/loss magnitudes ~1000x too large. Switching to per-token mean stabilized gradients.
+2. **Smooth length reward**: Hard reward=0 cliff for sequences <100bp caused irrecoverable mode collapse. Replaced with smooth ramp over [0, 500bp].
+3. **EMA reward baseline**: Batch-mean baseline gave zero advantage when all rewards collapsed. EMA (decay=0.95) retains memory of previous rewards, providing negative advantage signal to push away from degenerate outputs.
+
+**MLflow tracking**: Experiments logged to Databricks MLflow at experiment path `/Users/mcclain.thiel@gmail.com/tracking/PlasmidLLM`.
+
 ## Limitations
 
-- This is a **pretrained base model** -- it learns sequence statistics but has not been optimized for motif placement accuracy. Post-training with RL significantly improves functional element fidelity.
+- This is a **pretrained base model** — it learns sequence statistics but has not been optimized for motif placement accuracy. Post-training with RL significantly improves functional element fidelity.
 - Generated sequences are **not experimentally validated**. Always verify computationally (e.g., with pLannotate) and experimentally before synthesis.
 - The model was trained on Addgene plasmids, which are biased toward commonly deposited vectors (mammalian expression, bacterial cloning, CRISPR).
 - Maximum context of 16K tokens (~16 kbp), which covers most but not all plasmids.
