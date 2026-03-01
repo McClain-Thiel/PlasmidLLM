@@ -310,9 +310,14 @@ def compute_reward(
     """
     Compute scalar reward for a generated sequence.
 
-    When *alpha* = 1.0 (default), reward = mean of exact-token alignment scores
-    (original behavior). When *alpha* < 1.0 and *category_index* is provided,
-    each per-token score is blended:
+    Reward = **sum** of per-component blended scores. Each component's
+    score_ratio (from Smith-Waterman) already captures both percent identity
+    and coverage (alignment_score / self_alignment_score). Summing instead
+    of averaging gives the model a bigger signal for placing more motifs and
+    naturally rewards longer sequences (more room for components).
+
+    When *alpha* < 1.0 and *category_index* is provided, each per-token
+    score is blended:
 
         blended = alpha * specific_score + (1 - alpha) * presence_score
 
@@ -350,7 +355,7 @@ def compute_reward(
         blended_scores.append(blended)
 
     n_found = sum(1 for m in per_motif if m["found"])
-    reward = float(np.mean(blended_scores))
+    reward = float(np.sum(blended_scores))
 
     if return_details:
         details = {
