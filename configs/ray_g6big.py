@@ -3,7 +3,7 @@
 REINFORCE with KL penalty, short completions for diversity,
 curriculum alpha ramp from presence -> exact scoring.
 
-v3: EMA baseline, smooth length reward, lower lr, stronger KL.
+v4: Sum-of-components reward (not mean). Rewards placing more motifs.
 """
 
 from pathlib import Path
@@ -58,7 +58,7 @@ config = RayPostTrainingConfig(
     length_penalty_threshold=3500,
 
     # Output & logging
-    output_dir=Path("/opt/dlami/nvme/output/ray_reinforce_v3"),
+    output_dir=Path("/opt/dlami/nvme/output/ray_reinforce_v4"),
     save_steps=500,
     logging_steps=1,
 
