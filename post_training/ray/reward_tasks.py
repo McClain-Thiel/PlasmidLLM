@@ -49,23 +49,17 @@ def get_reward_fn(name: str) -> RewardFunction:
 def motif_alignment_reward(prompt: str, completion: str, context: dict) -> float:
     """Score a single sequence using Smith-Waterman motif alignment.
 
-    Wraps ``compute_reward`` from ``post_training/reward.py`` plus EOS bonus
-    and length penalty logic from ``plasmid_reward_fn``.
+    Reward = sum of per-component scores (each capped at 1.0) + small EOS bonus.
+    No length penalties — the sum naturally rewards placing more motifs.
 
     Expected context keys:
         lookup_df: pd.DataFrame — loaded motif lookup
-        category_index: dict — pre-built category index
-        alpha: float — curriculum blending weight
         eos_bonus: float — bonus for proper EOS termination
-        length_penalty_threshold: int — penalize sequences longer than this
     """
     from post_training.reward import compute_reward
 
     lookup_df = context["lookup_df"]
-    category_index = context["category_index"]
-    alpha = context.get("alpha", 1.0)
     eos_bonus = context.get("eos_bonus", 0.15)
-    length_penalty_threshold = context.get("length_penalty_threshold", 3500)
 
     raw = completion.upper()
 
@@ -76,26 +70,12 @@ def motif_alignment_reward(prompt: str, completion: str, context: dict) -> float
     seq = re.sub(r"<[^>]+>", "", raw)
     seq = re.sub(r"[^ATGCN]", "", seq)
 
-    # Length-based shaping: smooth ramp from 0→1 over [0, min_len] instead
-    # of a hard cliff. This keeps gradient signal for short sequences.
-    min_len = context.get("min_sequence_length", 500)
-    length_factor = min(1.0, len(seq) / max(min_len, 1))
-
     if len(seq) < 20:
-        # Truly degenerate — no DNA content at all
         return 0.0
 
-    motif_reward = compute_reward(
-        prompt, seq, lookup_df, alpha=alpha, category_index=category_index
-    )
+    motif_reward = compute_reward(prompt, seq, lookup_df)
 
-    reward = motif_reward * length_factor + (eos_bonus if has_eos else 0.0)
-
-    if len(seq) > length_penalty_threshold:
-        excess = (len(seq) - length_penalty_threshold) / length_penalty_threshold
-        reward *= max(0.5, 1.0 - 0.3 * excess)
-
-    return reward
+    return motif_reward + (eos_bonus if has_eos else 0.0)
 
 
 register_reward("motif_alignment", motif_alignment_reward)

@@ -303,26 +303,24 @@ def compute_reward(
     prompt: str,
     candidate_seq: str,
     lookup_df: pd.DataFrame,
-    alpha: float = 1.0,
-    category_index: Optional[dict] = None,
     return_details: bool = False,
+    # Legacy kwargs accepted but ignored (for backward compat)
+    **kwargs,
 ) -> float | Tuple[float, dict]:
     """
     Compute scalar reward for a generated sequence.
 
-    Reward = **sum** of per-component blended scores. Each component's
-    score_ratio (from Smith-Waterman) already captures both percent identity
-    and coverage (alignment_score / self_alignment_score). Summing instead
-    of averaging gives the model a bigger signal for placing more motifs and
-    naturally rewards longer sequences (more room for components).
+    Reward = **sum** of per-component scores, where each component
+    contributes up to 1.0. Per-component score is capped at 1.0 via
+    ``min(1.0, score_ratio / QC_THRESHOLD)``, so:
 
-    When *alpha* < 1.0 and *category_index* is provided, each per-token
-    score is blended:
+    - Components with good alignment (score_ratio >= 0.70) → 1.0
+    - Partial matches → proportional credit (e.g. 0.35 → 0.5)
+    - Missing components → 0.0
 
-        blended = alpha * specific_score + (1 - alpha) * presence_score
-
-    where *presence_score* rewards generating any valid instance of the token's
-    category (e.g. any ORI, not just ColE1).
+    This rewards placing more motifs and naturally incentivizes longer
+    sequences. The score_ratio from Smith-Waterman already captures both
+    percent identity and coverage (alignment_score / self_alignment_score).
     """
     candidate_seq = candidate_seq.upper().strip()
     hard_tokens = parse_hard_tokens(prompt, lookup_df)
@@ -330,32 +328,21 @@ def compute_reward(
     if not hard_tokens:
         if return_details:
             return 0.0, {"reward": 0.0, "n_hard_tokens": 0, "n_found": 0,
-                         "qc_pass_rate": 0.0, "per_motif": [], "alpha": alpha}
+                         "qc_pass_rate": 0.0, "per_motif": []}
         return 0.0
 
-    need_presence = alpha < 1.0 and category_index is not None
-
     per_motif = []
-    per_motif_presence = []
-    blended_scores = []
+    component_scores = []
 
     for token in hard_tokens:
         motif_result = score_motif(token, candidate_seq, lookup_df)
-        specific = motif_result["score_ratio"]
         per_motif.append(motif_result)
-
-        if need_presence:
-            cat = _extract_category(token)
-            presence = score_category_presence(cat, candidate_seq, category_index) if cat else 0.0
-            per_motif_presence.append({"token": token, "category": cat, "score_ratio": presence})
-            blended = alpha * specific + (1.0 - alpha) * presence
-        else:
-            blended = specific
-
-        blended_scores.append(blended)
+        # Each component contributes up to 1.0 — full credit at QC_THRESHOLD
+        component_score = min(1.0, motif_result["score_ratio"] / QC_THRESHOLD)
+        component_scores.append(component_score)
 
     n_found = sum(1 for m in per_motif if m["found"])
-    reward = float(np.sum(blended_scores))
+    reward = float(np.sum(component_scores))
 
     if return_details:
         details = {
@@ -364,10 +351,8 @@ def compute_reward(
             "n_found": n_found,
             "qc_pass_rate": round(n_found / len(per_motif), 4),
             "per_motif": per_motif,
-            "alpha": alpha,
+            "component_scores": [round(s, 4) for s in component_scores],
         }
-        if need_presence:
-            details["per_motif_presence"] = per_motif_presence
         return reward, details
     return reward
 

@@ -102,8 +102,66 @@ class REINFORCE(Algorithm):
         return pg_loss + self.kl_coef * kl
 
 
+class GRPO(Algorithm):
+    """Group Relative Policy Optimization (DeepSeek-style).
+
+    Generates G completions per prompt, computes group-relative advantages
+    (zero-mean, unit-variance within each prompt's group), and uses a clipped
+    policy gradient loss with KL penalty.
+
+    advantage_i = (reward_i - mean(group)) / std(group)
+    loss = -mean(min(ratio * A, clip(ratio) * A)) + beta * KL
+    """
+
+    def __init__(
+        self,
+        kl_coef: float = 0.05,
+        cliprange: float = 0.2,
+        num_generations: int = 4,
+    ):
+        self.kl_coef = kl_coef
+        self.cliprange = cliprange
+        self.num_generations = num_generations
+
+    def compute_advantages(
+        self,
+        rewards: torch.Tensor,
+        log_probs: torch.Tensor,
+        ref_log_probs: torch.Tensor,
+    ) -> torch.Tensor:
+        G = self.num_generations
+        grouped = rewards.view(-1, G)
+
+        mean = grouped.mean(dim=1, keepdim=True)
+        std = grouped.std(dim=1, keepdim=True).clamp(min=1e-8)
+        advantages = (grouped - mean) / std
+
+        return advantages.view(-1)
+
+    def compute_loss(
+        self,
+        log_probs: torch.Tensor,
+        old_log_probs: torch.Tensor,
+        advantages: torch.Tensor,
+        ref_log_probs: torch.Tensor,
+    ) -> torch.Tensor:
+        # Clipped policy gradient (PPO-style)
+        ratio = torch.exp(log_probs - old_log_probs)
+        clipped = torch.clamp(ratio, 1 - self.cliprange, 1 + self.cliprange)
+
+        pg_loss1 = -advantages.detach() * ratio
+        pg_loss2 = -advantages.detach() * clipped
+        pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+
+        # KL penalty
+        kl = (log_probs - ref_log_probs).mean()
+
+        return pg_loss + self.kl_coef * kl
+
+
 ALGORITHM_REGISTRY = {
     "reinforce": REINFORCE,
+    "grpo": GRPO,
 }
 
 

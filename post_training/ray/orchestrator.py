@@ -53,9 +53,10 @@ class Orchestrator:
         from post_training.ray.algorithms import build_algorithm
         from post_training.ray.policy_actor import PolicyActor
         from post_training.ray.reward_tasks import score_batch_distributed
-        from post_training.reward import build_category_index, load_motif_lookup
+        from post_training.reward import load_motif_lookup
 
         config = self.config
+        G = config.num_generations_per_prompt
 
         # ── Initialize Ray ────────────────────────────────────────────
         if not ray.is_initialized():
@@ -65,20 +66,12 @@ class Orchestrator:
         # ── Load motif registry ───────────────────────────────────────
         log.info(f"Loading motif lookup from {config.motif_lookup}")
         lookup_df = load_motif_lookup(str(config.motif_lookup))
-        category_index = build_category_index(lookup_df)
-        log.info(
-            f"Motif lookup: {len(lookup_df)} entries, "
-            f"categories: {list(category_index.keys())}"
-        )
+        log.info(f"Motif lookup: {len(lookup_df)} entries")
 
-        # Put scoring context into Ray object store (zero-copy to workers)
-        alpha = config.curriculum_alpha_start
+        # Scoring context — no curriculum alpha, just lookup + eos bonus
         scoring_context = {
             "lookup_df": lookup_df,
-            "category_index": category_index,
-            "alpha": alpha,
             "eos_bonus": config.eos_bonus,
-            "length_penalty_threshold": config.length_penalty_threshold,
         }
         context_ref = ray.put(scoring_context)
 
@@ -107,8 +100,14 @@ class Orchestrator:
 
         # ── Build algorithm ───────────────────────────────────────────
         algo_kwargs = {"kl_coef": config.kl_coef}
+        if config.algorithm == "grpo":
+            algo_kwargs["cliprange"] = config.cliprange
+            algo_kwargs["num_generations"] = G
         algorithm = build_algorithm(config.algorithm, **algo_kwargs)
-        log.info(f"Algorithm: {config.algorithm} (kl_coef={config.kl_coef})")
+        log.info(
+            f"Algorithm: {config.algorithm} (kl_coef={config.kl_coef}, "
+            f"G={G}, batch={config.generation_batch_size})"
+        )
 
         # ── MLflow setup ──────────────────────────────────────────────
         self._mlflow_active = setup_mlflow(
@@ -126,14 +125,22 @@ class Orchestrator:
         config.output_dir.mkdir(parents=True, exist_ok=True)
 
         # ── Training loop ─────────────────────────────────────────────
-        log.info(f"Starting training: {config.max_steps} steps")
+        total_seqs_per_step = config.generation_batch_size * G
+        log.info(
+            f"Starting training: {config.max_steps} steps, "
+            f"{total_seqs_per_step} sequences/step ({config.generation_batch_size} prompts × {G} generations)"
+        )
         for step in range(1, config.max_steps + 1):
             step_start = time.time()
 
-            # 1. Sample batch of prompts
-            batch_prompts = next(prompt_iter)
+            # 1. Sample unique prompts, repeat each G times for GRPO
+            unique_prompts = next(prompt_iter)
+            if G > 1:
+                batch_prompts = [p for p in unique_prompts for _ in range(G)]
+            else:
+                batch_prompts = unique_prompts
 
-            # 2. Generate rollouts on GPU
+            # 2. Generate rollouts on GPU (all G*batch_size at once)
             rollout = ray.get(policy.generate_rollouts.remote(batch_prompts))
 
             # 3. Score completions on CPU workers
@@ -146,7 +153,7 @@ class Orchestrator:
             )
             rewards = torch.tensor(rewards_list, dtype=torch.float32)
 
-            # 4. Compute advantages
+            # 4. Compute advantages (group-relative for GRPO)
             advantages = algorithm.compute_advantages(
                 rewards, rollout["log_probs"], rollout["ref_log_probs"]
             )
@@ -163,32 +170,21 @@ class Orchestrator:
             }
             metrics = ray.get(policy.train_step.remote(train_batch))
 
-            # 6. Update curriculum alpha
-            progress = min(step / max(config.curriculum_alpha_warmup_steps, 1), 1.0)
-            new_alpha = (
-                config.curriculum_alpha_start
-                + progress * (config.curriculum_alpha_end - config.curriculum_alpha_start)
-            )
-            if new_alpha != alpha:
-                alpha = new_alpha
-                scoring_context = {
-                    "lookup_df": lookup_df,
-                    "category_index": category_index,
-                    "alpha": alpha,
-                    "eos_bonus": config.eos_bonus,
-                    "length_penalty_threshold": config.length_penalty_threshold,
-                }
-                context_ref = ray.put(scoring_context)
-
             step_time = time.time() - step_start
 
-            # 7. Logging
+            # 6. Logging
             if step % config.logging_steps == 0:
                 reward_mean = rewards.mean().item()
                 reward_std = rewards.std().item()
+                # Per-prompt best reward (across G generations)
+                if G > 1:
+                    reward_best = rewards.view(-1, G).max(dim=1).values.mean().item()
+                else:
+                    reward_best = reward_mean
                 log.info(
-                    f"step={step} | alpha={alpha:.3f} | "
-                    f"reward={reward_mean:.4f} | reward_std={reward_std:.4f} | "
+                    f"step={step} | "
+                    f"reward={reward_mean:.4f} | reward_best={reward_best:.4f} | "
+                    f"reward_std={reward_std:.4f} | "
                     f"loss={metrics['loss']:.6f} | kl={metrics['kl']:.5f} | "
                     f"grad_norm={metrics['grad_norm']:.4f} | "
                     f"lr={metrics['lr']:.2e} | time={step_time:.1f}s"
@@ -198,18 +194,18 @@ class Orchestrator:
                     self._mlflow.log_metrics(
                         {
                             "reward_mean": reward_mean,
+                            "reward_best": reward_best,
                             "reward_std": reward_std,
                             "loss": metrics["loss"],
                             "kl": metrics["kl"],
                             "grad_norm": metrics["grad_norm"],
                             "lr": metrics["lr"],
-                            "alpha": alpha,
                             "step_time": step_time,
                         },
                         step=step,
                     )
 
-            # 8. Checkpointing
+            # 7. Checkpointing
             if step % config.save_steps == 0:
                 ckpt_path = str(config.output_dir / f"checkpoint-{step}")
                 ray.get(policy.save_checkpoint.remote(ckpt_path))
