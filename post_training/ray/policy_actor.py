@@ -289,11 +289,17 @@ class PolicyActor:
         self.model.save_pretrained(str(path))
         self.tokenizer.save_pretrained(str(path))
 
-        # Copy special_tokens.txt for self-containment
+        # Copy custom model/tokenizer code + special_tokens for self-containment
         project_root = Path(__file__).resolve().parent.parent.parent
-        st_src = project_root / "data" / "special_tokens.txt"
-        if st_src.exists():
-            shutil.copy2(st_src, path / "special_tokens.txt")
+        model_dir = project_root / "src" / "plasmid_llm" / "models" / "hf_plasmid_lm"
+        for fname in ["special_tokens.txt"]:
+            src = project_root / "data" / fname
+            if src.exists():
+                shutil.copy2(src, path / fname)
+        for fname in ["configuration_plasmid_lm.py", "modeling_plasmid_lm.py", "tokenization_plasmid_lm.py"]:
+            src = model_dir / fname
+            if src.exists():
+                shutil.copy2(src, path / fname)
 
         log.info(f"Checkpoint saved to {path}")
 
