@@ -76,6 +76,9 @@ class PolicyActor:
         # Load tokenizer
         self.tokenizer = PlasmidLMTokenizer.from_pretrained(model_checkpoint)
         self.tokenizer.padding_side = "left"
+        # Ensure pad_token string is set (HF base class checks this, not just pad_token_id)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = "<PAD>"
 
         # Frozen reference model (same GPU — 68MB is trivial)
         log.info("Creating frozen reference model")
