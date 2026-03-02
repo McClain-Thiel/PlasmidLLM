@@ -89,6 +89,7 @@ class Orchestrator:
             learning_rate=config.learning_rate,
             weight_decay=config.weight_decay,
             warmup_steps=config.warmup_steps,
+            max_steps=config.max_steps,
             max_grad_norm=config.max_grad_norm,
             bf16=config.bf16,
             max_completion_length=config.max_completion_length,

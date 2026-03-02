@@ -36,6 +36,7 @@ class PolicyActor:
         learning_rate: float = 1e-4,
         weight_decay: float = 0.01,
         warmup_steps: int = 100,
+        max_steps: int = 5000,
         max_grad_norm: float = 1.0,
         bf16: bool = True,
         max_completion_length: int = 1024,
@@ -90,11 +91,19 @@ class PolicyActor:
             weight_decay=weight_decay,
         )
 
-        # Linear warmup scheduler
+        # Linear warmup + cosine decay scheduler
+        import math
         self.warmup_steps = warmup_steps
+        self.max_steps = max_steps
+
+        def lr_lambda(step):
+            if step < warmup_steps:
+                return (step + 1) / max(warmup_steps, 1)
+            progress = (step - warmup_steps) / max(max_steps - warmup_steps, 1)
+            return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
+
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer,
-            lr_lambda=lambda step: min(1.0, (step + 1) / max(warmup_steps, 1)),
+            self.optimizer, lr_lambda=lr_lambda,
         )
 
         self._step_count = 0
