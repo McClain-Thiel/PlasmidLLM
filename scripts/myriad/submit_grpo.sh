@@ -21,6 +21,9 @@
 
 set -euo pipefail
 
+# Init module system (needed for non-login shells)
+source /shared/ucl/apps/modules/current/init/bash
+
 echo "=== Job $JOB_ID started at $(date) on $(hostname) ==="
 echo "TMPDIR=$TMPDIR"
 nvidia-smi

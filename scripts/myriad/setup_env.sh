@@ -13,6 +13,9 @@
 # the gcc/cuda/python versions to match what's available on Myriad.
 set -euo pipefail
 
+# Init module system (needed for non-login shells)
+source /shared/ucl/apps/modules/current/init/bash
+
 echo "=== Loading modules ==="
 module purge
 module load gcc-libs/10.2.0
