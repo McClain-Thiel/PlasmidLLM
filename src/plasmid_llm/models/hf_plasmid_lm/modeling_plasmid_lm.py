@@ -49,6 +49,7 @@ class PlasmidLMAttention(nn.Module):
         rope_sin: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         position_offset: int = 0,
+        attention_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         B, S, _ = hidden_states.shape
         q = self.q_proj(hidden_states).view(B, S, self.num_heads, self.head_dim).transpose(1, 2)
@@ -64,8 +65,11 @@ class PlasmidLMAttention(nn.Module):
             v = torch.cat([past_key_value[1], v], dim=2)
         new_kv = (k, v)
 
-        use_causal = past_key_value is None
-        attn = F.scaled_dot_product_attention(q, k, v, is_causal=use_causal)
+        if attention_mask is not None:
+            attn = F.scaled_dot_product_attention(q, k, v, attn_mask=attention_mask)
+        else:
+            use_causal = past_key_value is None
+            attn = F.scaled_dot_product_attention(q, k, v, is_causal=use_causal)
         out = attn.transpose(1, 2).reshape(B, S, -1)
         return self.o_proj(out), new_kv
 
@@ -100,10 +104,11 @@ class PlasmidLMDecoderLayer(nn.Module):
         rope_sin: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         position_offset: int = 0,
+        attention_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
-        attn_out, new_kv = self.self_attn(hidden_states, rope_cos, rope_sin, past_key_value, position_offset)
+        attn_out, new_kv = self.self_attn(hidden_states, rope_cos, rope_sin, past_key_value, position_offset, attention_mask)
         hidden_states = residual + attn_out
 
         residual = hidden_states
@@ -135,13 +140,20 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         self.layers = nn.ModuleList([PlasmidLMDecoderLayer(config) for _ in range(config.num_hidden_layers)])
         self.norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
-        head_dim = config.hidden_size // config.num_attention_heads
-        cos, sin = _rope_freqs(head_dim, config.max_position_embeddings, config.rope_theta)
-        self.register_buffer("rope_cos", cos, persistent=False)
-        self.register_buffer("rope_sin", sin, persistent=False)
+        # Lazy RoPE: computed on first forward call to ensure correct device
+        # placement after from_pretrained (which uses meta device tensors).
+        self.register_buffer("rope_cos", None, persistent=False)
+        self.register_buffer("rope_sin", None, persistent=False)
 
         self.gradient_checkpointing = False
         self.post_init()
+
+    def _init_rope(self, device: torch.device) -> None:
+        """Compute and cache RoPE cos/sin on the given device."""
+        head_dim = self.config.hidden_size // self.config.num_attention_heads
+        cos, sin = _rope_freqs(head_dim, self.config.max_position_embeddings, self.config.rope_theta)
+        self.register_buffer("rope_cos", cos.to(device), persistent=False)
+        self.register_buffer("rope_sin", sin.to(device), persistent=False)
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -149,14 +161,69 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
     def set_input_embeddings(self, value):
         self.embed_tokens = value
 
+    def _build_4d_attention_mask(
+        self,
+        attention_mask: Optional[torch.Tensor],
+        seq_len: int,
+        past_seq_len: int,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> Optional[torch.Tensor]:
+        """Build a 4D causal+padding mask for SDPA.
+
+        Returns (B, 1, S, S+past) float mask with 0 for attend and -inf for ignore,
+        or None if no masking is needed (no padding, no past KV).
+        """
+        if attention_mask is None and past_seq_len == 0:
+            # No padding and no cache — SDPA's is_causal=True handles this
+            return None
+
+        total_len = past_seq_len + seq_len
+        # Causal mask: each query position can attend to itself and all prior positions
+        causal = torch.triu(
+            torch.full((seq_len, total_len), float("-inf"), device=device, dtype=dtype),
+            diagonal=past_seq_len + 1,
+        )  # (S, S+past)
+        mask_4d = causal.unsqueeze(0).unsqueeze(0)  # (1, 1, S, S+past)
+
+        if attention_mask is not None:
+            # attention_mask is (B, total_len) with 1=attend, 0=ignore
+            # Use a large finite negative instead of -inf for padding mask.
+            # With left-padding, the first padding positions can only attend
+            # to other padding positions (causal blocks future). If we use
+            # -inf, ALL keys are blocked → softmax([-inf,...]) = NaN.
+            # Using min_dtype keeps at least the self-attention score finite,
+            # so softmax produces a valid (though meaningless) output.
+            min_dtype = torch.finfo(dtype).min
+            pad_mask = torch.where(
+                attention_mask[:, None, None, :].bool(),
+                torch.zeros(1, device=device, dtype=dtype),
+                torch.tensor(min_dtype, device=device, dtype=dtype),
+            )  # (B, 1, 1, total_len)
+            mask_4d = mask_4d + pad_mask
+
+        return mask_4d
+
     def forward(
         self,
         input_ids: torch.Tensor,
         past_key_values: Optional[list] = None,
         position_offset: int = 0,
+        attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> Tuple[torch.Tensor, list, torch.Tensor]:
+        # Lazy RoPE init: compute on first forward for correct device placement
+        if self.rope_cos is None:
+            self._init_rope(input_ids.device)
+
         hidden_states = self.embed_tokens(input_ids)
+
+        past_seq_len = past_key_values[0][0].shape[2] if past_key_values else 0
+        mask_4d = self._build_4d_attention_mask(
+            attention_mask, input_ids.shape[1], past_seq_len,
+            input_ids.device, hidden_states.dtype,
+        )
+
         new_kv_caches = []
         total_aux_loss = torch.tensor(0.0, device=input_ids.device)
         for i, layer in enumerate(self.layers):
@@ -175,7 +242,7 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
                 new_kv = (k, v)
             else:
                 hidden_states, new_kv, layer_aux = layer(
-                    hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset
+                    hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset, mask_4d
                 )
             new_kv_caches.append(new_kv)
             total_aux_loss = total_aux_loss + layer_aux
@@ -223,6 +290,7 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         return {
             "input_ids": input_ids,
             "past_key_values": past_key_values,
+            "attention_mask": attention_mask,
             "use_cache": True,
         }
 
@@ -260,7 +328,9 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         if kv_list is not None:
             position_offset = kv_list[0][0].shape[2]
 
-        hidden_states, new_kv_list, aux_loss = self.model(input_ids, kv_list, position_offset)
+        hidden_states, new_kv_list, aux_loss = self.model(
+            input_ids, kv_list, position_offset, attention_mask=attention_mask
+        )
         logits = self.lm_head(hidden_states)
 
         loss = None
