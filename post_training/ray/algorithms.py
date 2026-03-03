@@ -36,18 +36,20 @@ class Algorithm(ABC):
     @abstractmethod
     def compute_loss(
         self,
-        log_probs: torch.Tensor,
-        old_log_probs: torch.Tensor,
+        per_token_logps: torch.Tensor,
+        old_per_token_logps: torch.Tensor,
         advantages: torch.Tensor,
-        ref_log_probs: torch.Tensor,
+        ref_per_token_logps: torch.Tensor,
+        mask: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute scalar policy gradient loss.
+        """Compute scalar policy gradient loss from per-token log probs.
 
         Args:
-            log_probs: (batch,) current policy log probs.
-            old_log_probs: (batch,) log probs from rollout time.
-            advantages: (batch,) advantage estimates.
-            ref_log_probs: (batch,) reference policy log probs.
+            per_token_logps: (batch, seq_len) current policy per-token log probs.
+            old_per_token_logps: (batch, seq_len) log probs from rollout time.
+            advantages: (batch,) per-sequence advantage estimates.
+            ref_per_token_logps: (batch, seq_len) reference policy per-token log probs.
+            mask: (batch, seq_len) boolean mask for real (non-pad) tokens.
 
         Returns:
             Scalar loss tensor.
@@ -88,16 +90,23 @@ class REINFORCE(Algorithm):
 
     def compute_loss(
         self,
-        log_probs: torch.Tensor,
-        old_log_probs: torch.Tensor,
+        per_token_logps: torch.Tensor,
+        old_per_token_logps: torch.Tensor,
         advantages: torch.Tensor,
-        ref_log_probs: torch.Tensor,
+        ref_per_token_logps: torch.Tensor,
+        mask: torch.Tensor,
     ) -> torch.Tensor:
+        # Sequence-level log probs for REINFORCE (sum over tokens)
+        log_probs = (per_token_logps * mask.float()).sum(-1) / mask.sum(-1).clamp(min=1)
+        ref_log_probs = (ref_per_token_logps * mask.float()).sum(-1) / mask.sum(-1).clamp(min=1)
+
         # Policy gradient: -E[A * log pi]
         pg_loss = -(advantages.detach() * log_probs).mean()
 
-        # KL penalty: E[log pi - log pi_ref]
-        kl = (log_probs - ref_log_probs).mean()
+        # k3 KL estimator (non-negative, unbiased)
+        log_ratio = ref_per_token_logps - per_token_logps  # log(ref/pi)
+        per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
+        kl = ((per_token_kl * mask.float()).sum(-1) / mask.sum(-1).clamp(min=1)).mean()
 
         return pg_loss + self.kl_coef * kl
 
@@ -140,23 +149,30 @@ class GRPO(Algorithm):
 
     def compute_loss(
         self,
-        log_probs: torch.Tensor,
-        old_log_probs: torch.Tensor,
+        per_token_logps: torch.Tensor,
+        old_per_token_logps: torch.Tensor,
         advantages: torch.Tensor,
-        ref_log_probs: torch.Tensor,
+        ref_per_token_logps: torch.Tensor,
+        mask: torch.Tensor,
     ) -> torch.Tensor:
-        # Clipped policy gradient (PPO-style)
-        ratio = torch.exp(log_probs - old_log_probs)
+        # Per-token ratios (batch, seq_len)
+        ratio = torch.exp(per_token_logps - old_per_token_logps)
         clipped = torch.clamp(ratio, 1 - self.cliprange, 1 + self.cliprange)
 
-        pg_loss1 = -advantages.detach() * ratio
-        pg_loss2 = -advantages.detach() * clipped
-        pg_loss = torch.max(pg_loss1, pg_loss2).mean()
+        # Advantage is per-sequence, broadcast across tokens
+        adv = advantages.detach().unsqueeze(1)  # (batch, 1)
+        per_token_loss1 = adv * ratio
+        per_token_loss2 = adv * clipped
+        per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
 
-        # KL penalty
-        kl = (log_probs - ref_log_probs).mean()
+        # k3 KL estimator (non-negative, unbiased)
+        log_ratio = ref_per_token_logps - per_token_logps  # log(ref/pi)
+        per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
+        per_token_loss = per_token_loss + self.kl_coef * per_token_kl
 
-        return pg_loss + self.kl_coef * kl
+        # Masked mean: average over tokens, then over batch
+        loss = ((per_token_loss * mask.float()).sum(-1) / mask.sum(-1).clamp(min=1)).mean()
+        return loss
 
 
 ALGORITHM_REGISTRY = {

@@ -54,6 +54,8 @@ class PolicyActor:
                 sys.path.insert(0, p)
 
         from plasmid_llm.models.hf_plasmid_lm import (
+            PlasmidKmerTokenizer,
+            PlasmidLMConfig,
             PlasmidLMForCausalLM,
             PlasmidLMTokenizer,
         )
@@ -73,8 +75,18 @@ class PolicyActor:
         self.model.to(self.device)
         self.model.train()
 
-        # Load tokenizer
-        self.tokenizer = PlasmidLMTokenizer.from_pretrained(model_checkpoint)
+        # Load tokenizer — detect type from checkpoint config
+        model_config = PlasmidLMConfig.from_pretrained(model_checkpoint)
+        if getattr(model_config, "tokenizer_type", "char") == "kmer":
+            vocab_file = str(Path(model_checkpoint) / "vocab.json")
+            self.tokenizer = PlasmidKmerTokenizer(
+                vocab_file,
+                k=model_config.kmer_k,
+                stride=model_config.kmer_stride,
+            )
+            log.info(f"Loaded kmer tokenizer (k={model_config.kmer_k}, stride={model_config.kmer_stride})")
+        else:
+            self.tokenizer = PlasmidLMTokenizer.from_pretrained(model_checkpoint)
         self.tokenizer.padding_side = "left"
         # Ensure pad_token string is set (HF base class checks this, not just pad_token_id)
         if self.tokenizer.pad_token is None:
@@ -124,8 +136,11 @@ class PolicyActor:
                 prompts: list[str] — input prompts
                 completion_texts: list[str] — decoded completions
                 completion_ids: tensor (batch, max_completion_len) — token ids
-                log_probs: tensor (batch,) — sum of per-token log probs under policy
-                ref_log_probs: tensor (batch,) — sum of per-token log probs under ref model
+                log_probs: tensor (batch,) — sequence-level log probs (for advantages)
+                ref_log_probs: tensor (batch,) — sequence-level ref log probs
+                per_token_log_probs: tensor (batch, completion_len) — per-token policy
+                ref_per_token_log_probs: tensor (batch, completion_len) — per-token ref
+                completion_mask: tensor (batch, completion_len) — True for real tokens
         """
         self.model.eval()
 
@@ -166,13 +181,20 @@ class PolicyActor:
             completion_ids, skip_special_tokens=False
         )
 
-        # Compute log probs under policy and reference
+        # Compute per-token log probs under policy and reference
         full_ids = output_ids
-        log_probs = self._compute_sequence_log_probs(self.model, full_ids, prompt_len)
         with torch.no_grad():
-            ref_log_probs = self._compute_sequence_log_probs(
+            per_token_lp, mask = self._compute_per_token_log_probs(
+                self.model, full_ids, prompt_len
+            )
+            ref_per_token_lp, _ = self._compute_per_token_log_probs(
                 self.ref_model, full_ids, prompt_len
             )
+
+        # Sequence-level log probs (mean over tokens) for advantage computation
+        token_counts = mask.sum(dim=-1).clamp(min=1)
+        log_probs = per_token_lp.sum(dim=-1) / token_counts
+        ref_log_probs = ref_per_token_lp.sum(dim=-1) / token_counts
 
         self.model.train()
 
@@ -184,16 +206,16 @@ class PolicyActor:
             "prompt_len": prompt_len,
             "log_probs": log_probs.cpu(),
             "ref_log_probs": ref_log_probs.cpu(),
+            "per_token_log_probs": per_token_lp.cpu(),
+            "ref_per_token_log_probs": ref_per_token_lp.cpu(),
+            "completion_mask": mask.cpu(),
+            "pad_token_id": self.tokenizer.pad_token_id,
         }
 
-    def _compute_sequence_log_probs(
+    def _compute_per_token_log_probs(
         self, model: torch.nn.Module, full_ids: torch.Tensor, prompt_len: int
-    ) -> torch.Tensor:
-        """Compute mean per-token log probs for completion tokens.
-
-        Returns per-token average (not sum) so that loss/KL magnitudes are
-        independent of sequence length, preventing gradient explosion on
-        long completions.
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute per-token log probs for completion tokens.
 
         Args:
             model: PlasmidLMForCausalLM instance.
@@ -201,11 +223,15 @@ class PolicyActor:
             prompt_len: Number of prompt tokens (log probs start after this).
 
         Returns:
-            (batch,) mean per-token log probs over completion tokens.
+            token_log_probs: (batch, completion_len) masked per-token log probs.
+            mask: (batch, completion_len) boolean mask for real tokens.
         """
+        # Derive attention mask from pad tokens — critical for left-padded inputs
+        attention_mask = (full_ids != self.tokenizer.pad_token_id).long()
+
         ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if self.bf16 else torch.no_grad()
         with ctx:
-            outputs = model(input_ids=full_ids)
+            outputs = model(input_ids=full_ids, attention_mask=attention_mask)
             logits = outputs.logits  # (batch, seq_len, vocab)
 
         # Shift: logits[t] predicts token[t+1]
@@ -222,21 +248,25 @@ class PolicyActor:
         mask = shift_labels != self.tokenizer.pad_token_id
         token_log_probs = token_log_probs * mask.float()
 
-        # Per-token mean (not sum) — keeps loss scale independent of seq length
-        token_counts = mask.sum(dim=-1).clamp(min=1)
-        return token_log_probs.sum(dim=-1) / token_counts  # (batch,)
+        return token_log_probs, mask  # (batch, completion_len), (batch, completion_len)
 
     def train_step(self, rollout_batch: Dict) -> Dict:
         """Apply a single gradient update from pre-computed rollouts + advantages.
+
+        Uses per-token log probs for proper PPO-style clipping and k3 KL.
+        Supports gradient accumulation over micro-batches.
 
         Args:
             rollout_batch: Dict with keys:
                 full_ids: (batch, seq_len) token ids
                 prompt_len: int
                 advantages: (batch,) advantage estimates
-                ref_log_probs: (batch,) reference log probs
+                old_per_token_log_probs: (batch, completion_len) from rollout
+                ref_per_token_log_probs: (batch, completion_len) from ref model
+                completion_mask: (batch, completion_len) real token mask
                 algorithm_name: str — which algorithm to use
                 algorithm_kwargs: dict — algorithm constructor kwargs
+                micro_batch_size: int (optional, default=64)
 
         Returns:
             Dict with training metrics.
@@ -246,8 +276,10 @@ class PolicyActor:
         full_ids = rollout_batch["full_ids"].to(self.device)
         prompt_len = rollout_batch["prompt_len"]
         advantages = rollout_batch["advantages"].to(self.device)
-        ref_log_probs = rollout_batch["ref_log_probs"].to(self.device)
-        old_log_probs = rollout_batch["old_log_probs"].to(self.device)
+        old_per_token_lp = rollout_batch["old_per_token_log_probs"].to(self.device)
+        ref_per_token_lp = rollout_batch["ref_per_token_log_probs"].to(self.device)
+        comp_mask = rollout_batch["completion_mask"].to(self.device)
+        micro_bs = rollout_batch.get("micro_batch_size", 64)
 
         algorithm = build_algorithm(
             rollout_batch["algorithm_name"],
@@ -255,14 +287,41 @@ class PolicyActor:
         )
 
         self.model.train()
-
-        # Recompute log probs under current policy (for fresh gradients)
-        log_probs = self._compute_sequence_log_probs(self.model, full_ids, prompt_len)
-
-        loss = algorithm.compute_loss(log_probs, old_log_probs, advantages, ref_log_probs)
-
         self.optimizer.zero_grad()
-        loss.backward()
+
+        batch_size = full_ids.shape[0]
+        num_microbatches = (batch_size + micro_bs - 1) // micro_bs
+        total_loss = 0.0
+        total_kl = 0.0
+
+        for mb in range(num_microbatches):
+            lo = mb * micro_bs
+            hi = min(lo + micro_bs, batch_size)
+
+            mb_ids = full_ids[lo:hi]
+            mb_adv = advantages[lo:hi]
+            mb_old_pt = old_per_token_lp[lo:hi]
+            mb_ref_pt = ref_per_token_lp[lo:hi]
+            mb_mask = comp_mask[lo:hi]
+
+            # Recompute per-token log probs under current policy
+            per_token_lp, _ = self._compute_per_token_log_probs(
+                self.model, mb_ids, prompt_len
+            )
+
+            loss = algorithm.compute_loss(
+                per_token_lp, mb_old_pt, mb_adv, mb_ref_pt, mb_mask
+            )
+            (loss / num_microbatches).backward()
+
+            total_loss += loss.item() / num_microbatches
+            with torch.no_grad():
+                # k3 KL for logging
+                log_ratio = mb_ref_pt - per_token_lp
+                pt_kl = torch.exp(log_ratio) - log_ratio - 1.0
+                total_kl += (
+                    (pt_kl * mb_mask.float()).sum(-1) / mb_mask.sum(-1).clamp(min=1)
+                ).sum().item()
 
         grad_norm = torch.nn.utils.clip_grad_norm_(
             self.model.parameters(), self.max_grad_norm
@@ -272,14 +331,10 @@ class PolicyActor:
         self.scheduler.step()
         self._step_count += 1
 
-        # KL divergence estimate
-        with torch.no_grad():
-            kl = (log_probs - ref_log_probs).mean().item()
-
         return {
-            "loss": loss.item(),
+            "loss": total_loss,
             "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm,
-            "kl": kl,
+            "kl": total_kl / batch_size,
             "lr": self.scheduler.get_last_lr()[0],
             "step": self._step_count,
         }
@@ -305,6 +360,13 @@ class PolicyActor:
                 shutil.copy2(src, path / fname)
 
         log.info(f"Checkpoint saved to {path}")
+
+    def load_weights(self, state_dict: Dict) -> None:
+        """Load weights into policy model (for multi-GPU weight sync)."""
+        self.model.load_state_dict(
+            {k: v.to(self.device) for k, v in state_dict.items()}
+        )
+        log.info("Weights synced from primary actor")
 
     def get_weights(self) -> Dict:
         """Return policy model state dict (for external checkpointing)."""
