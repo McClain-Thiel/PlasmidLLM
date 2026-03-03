@@ -34,7 +34,8 @@ config = PretrainingConfig(
 
     # Training
     output_dir=OUTPUT_ROOT / "kmer6_s4_dense",
-    per_device_train_batch_size=64,
+    per_device_train_batch_size=32,
+    gradient_accumulation_steps=2,
     learning_rate=3e-4,
     max_steps=100_000,
     warmup_steps=1000,

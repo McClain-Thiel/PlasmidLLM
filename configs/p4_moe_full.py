@@ -33,9 +33,10 @@ config = PretrainingConfig(
     moe_intermediate_size=1536,
     aux_loss_coef=0.01,
 
-    # Training — slightly reduced batch for memory
+    # Training — MoE uses more memory: bs=16 * accum=4 = effective 64
     output_dir=OUTPUT_ROOT / "moe_full_char",
-    per_device_train_batch_size=48,
+    per_device_train_batch_size=16,
+    gradient_accumulation_steps=4,
     learning_rate=3e-4,
     max_steps=100_000,
     warmup_steps=1000,

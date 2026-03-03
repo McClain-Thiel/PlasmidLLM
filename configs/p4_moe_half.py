@@ -34,9 +34,10 @@ config = PretrainingConfig(
     moe_intermediate_size=768,
     aux_loss_coef=0.01,
 
-    # Training — same batch as baseline (same active compute)
+    # Training — half-size experts, moderate memory: bs=24 * accum=2 = effective 48
     output_dir=OUTPUT_ROOT / "moe_half_char",
-    per_device_train_batch_size=64,
+    per_device_train_batch_size=24,
+    gradient_accumulation_steps=2,
     learning_rate=3e-4,
     max_steps=100_000,
     warmup_steps=1000,

@@ -26,9 +26,10 @@ config = PretrainingConfig(
     intermediate_size=1536,
     max_seq_len=4096,
 
-    # Training — A100 batch sizes
+    # Training — A100-40GB: bs=32 * accum=2 = effective 64
     output_dir=OUTPUT_ROOT / "baseline_char_dense",
-    per_device_train_batch_size=64,
+    per_device_train_batch_size=32,
+    gradient_accumulation_steps=2,
     learning_rate=3e-4,
     max_steps=100_000,
     warmup_steps=1000,

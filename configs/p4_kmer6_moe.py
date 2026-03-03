@@ -40,7 +40,8 @@ config = PretrainingConfig(
 
     # Training
     output_dir=OUTPUT_ROOT / "kmer6_moe_full",
-    per_device_train_batch_size=48,
+    per_device_train_batch_size=16,
+    gradient_accumulation_steps=4,
     learning_rate=3e-4,
     max_steps=100_000,
     warmup_steps=1000,

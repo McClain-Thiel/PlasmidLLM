@@ -44,6 +44,7 @@ class PretrainingConfig:
     # Training hyperparameters
     output_dir: Path = field(default_factory=lambda: Path("output/pretraining"))
     per_device_train_batch_size: int = 32
+    gradient_accumulation_steps: int = 1
     learning_rate: float = 3e-4
     max_steps: int = 100_000
     warmup_steps: int = 1000

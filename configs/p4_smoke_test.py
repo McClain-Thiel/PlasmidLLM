@@ -24,7 +24,8 @@ config = PretrainingConfig(
 
     # Training — 100 steps only
     output_dir=OUTPUT_ROOT / "smoke_test",
-    per_device_train_batch_size=64,
+    per_device_train_batch_size=32,
+    gradient_accumulation_steps=2,
     learning_rate=3e-4,
     max_steps=100,
     warmup_steps=10,

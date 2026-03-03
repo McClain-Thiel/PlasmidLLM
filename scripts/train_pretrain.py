@@ -278,6 +278,7 @@ def main():
         output_dir=str(config.output_dir),
         per_device_train_batch_size=config.per_device_train_batch_size,
         per_device_eval_batch_size=config.per_device_train_batch_size,
+        gradient_accumulation_steps=config.gradient_accumulation_steps,
         learning_rate=config.learning_rate,
         max_steps=config.max_steps,
         warmup_steps=config.warmup_steps,
