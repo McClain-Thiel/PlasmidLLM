@@ -121,6 +121,28 @@ class MLflowExtrasCallback(TrainerCallback):
         log.info(f"Logged checkpoint-{state.global_step} to MLflow artifacts")
 
 
+class CheckpointEnrichCallback(TrainerCallback):
+    """Copy vocab + config into every checkpoint for self-containment."""
+
+    def on_save(self, args, state, control, model=None, **kwargs):
+        if not state.is_world_process_zero:
+            return
+        checkpoint_dir = Path(args.output_dir) / f"checkpoint-{state.global_step}"
+        if not checkpoint_dir.exists():
+            return
+
+        if model is not None and hasattr(model, "config"):
+            model.config.save_pretrained(str(checkpoint_dir))
+
+        vocab_src = Path(args.output_dir) / "vocab.json"
+        if vocab_src.exists() and not (checkpoint_dir / "vocab.json").exists():
+            shutil.copy2(vocab_src, checkpoint_dir / "vocab.json")
+
+        st_src = Path(__file__).resolve().parent.parent / "data" / "special_tokens.txt"
+        if st_src.exists():
+            shutil.copy2(st_src, checkpoint_dir / "special_tokens.txt")
+
+
 class PerplexityCallback(TrainerCallback):
     """Compute and log perplexity from loss for both train and eval."""
 
@@ -296,7 +318,7 @@ def main():
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        save_total_limit=3,
+        save_total_limit=5,
         report_to=report_to,
         remove_unused_columns=False,
         gradient_checkpointing=config.gradient_checkpointing,
@@ -306,6 +328,7 @@ def main():
     callbacks = [
         EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience),
         PerplexityCallback(),
+        CheckpointEnrichCallback(),
     ]
     if mlflow_active:
         callbacks.append(MLflowExtrasCallback(config))
