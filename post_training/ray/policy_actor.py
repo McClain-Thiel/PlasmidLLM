@@ -299,6 +299,7 @@ class PolicyActor:
         num_microbatches = (batch_size + micro_bs - 1) // micro_bs
         total_loss = 0.0
         total_kl = 0.0
+        total_aux_loss = 0.0
 
         for mb in range(num_microbatches):
             lo = mb * micro_bs
@@ -322,6 +323,7 @@ class PolicyActor:
             # Add MoE load-balancing loss to prevent routing collapse
             if aux_loss is not None:
                 aux_coef = getattr(self.model.config, "aux_loss_coef", 0.01)
+                total_aux_loss += aux_loss.item() / num_microbatches
                 loss = loss + aux_coef * aux_loss
 
             (loss / num_microbatches).backward()
@@ -347,6 +349,9 @@ class PolicyActor:
             "loss": total_loss,
             "grad_norm": grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm,
             "kl": total_kl / batch_size,
+            "aux_loss": total_aux_loss,
+            "adv_mean": advantages.mean().item(),
+            "adv_std": advantages.std().item(),
             "lr": self.scheduler.get_last_lr()[0],
             "step": self._step_count,
         }

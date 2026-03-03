@@ -338,6 +338,8 @@ class Orchestrator:
                     f"reward={reward_mean:.4f} | reward_best={reward_best:.4f} | "
                     f"reward_std={reward_std:.4f} | "
                     f"loss={metrics['loss']:.6f} | kl={metrics['kl']:.5f} | "
+                    f"aux_loss={metrics.get('aux_loss', 0):.5f} | "
+                    f"adv_std={metrics.get('adv_std', 0):.4f} | "
                     f"grad_norm={metrics['grad_norm']:.4f} | "
                     f"lr={metrics['lr']:.2e} | "
                     f"gen={gen_time:.1f}s | total={step_time:.1f}s"
@@ -350,6 +352,9 @@ class Orchestrator:
                     "reward_std": reward_std,
                     "loss": metrics["loss"],
                     "kl_divergence": metrics["kl"],
+                    "aux_loss": metrics.get("aux_loss", 0),
+                    "adv_mean": metrics.get("adv_mean", 0),
+                    "adv_std": metrics.get("adv_std", 0),
                     "grad_norm": metrics["grad_norm"],
                     "lr": metrics["lr"],
                     "step_time": step_time,
