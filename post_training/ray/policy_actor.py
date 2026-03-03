@@ -185,10 +185,10 @@ class PolicyActor:
         # Compute per-token log probs under policy and reference
         full_ids = output_ids
         with torch.no_grad():
-            per_token_lp, mask = self._compute_per_token_log_probs(
+            per_token_lp, mask, _ = self._compute_per_token_log_probs(
                 self.model, full_ids, prompt_len
             )
-            ref_per_token_lp, _ = self._compute_per_token_log_probs(
+            ref_per_token_lp, _, _ = self._compute_per_token_log_probs(
                 self.ref_model, full_ids, prompt_len
             )
 
@@ -215,7 +215,7 @@ class PolicyActor:
 
     def _compute_per_token_log_probs(
         self, model: torch.nn.Module, full_ids: torch.Tensor, prompt_len: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
         """Compute per-token log probs for completion tokens.
 
         Args:
@@ -226,14 +226,19 @@ class PolicyActor:
         Returns:
             token_log_probs: (batch, completion_len) masked per-token log probs.
             mask: (batch, completion_len) boolean mask for real tokens.
+            aux_loss: scalar MoE load-balancing loss, or None if not MoE.
         """
         # Derive attention mask from pad tokens — critical for left-padded inputs
         attention_mask = (full_ids != self.tokenizer.pad_token_id).long()
 
         ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if self.bf16 else contextlib.nullcontext()
         with ctx:
-            outputs = model(input_ids=full_ids, attention_mask=attention_mask)
-            logits = outputs.logits  # (batch, seq_len, vocab)
+            # Call backbone directly to get aux_loss (CausalLM only
+            # includes it when labels are provided, but we need it for RL)
+            hidden_states, _, aux_loss = model.model(
+                input_ids=full_ids, attention_mask=attention_mask
+            )
+            logits = model.lm_head(hidden_states)
 
         # Shift: logits[t] predicts token[t+1]
         shift_logits = logits[:, prompt_len - 1 : -1, :]  # (batch, completion_len, vocab)
@@ -249,7 +254,7 @@ class PolicyActor:
         mask = shift_labels != self.tokenizer.pad_token_id
         token_log_probs = token_log_probs * mask.float()
 
-        return token_log_probs, mask  # (batch, completion_len), (batch, completion_len)
+        return token_log_probs, mask, aux_loss
 
     def train_step(self, rollout_batch: Dict) -> Dict:
         """Apply a single gradient update from pre-computed rollouts + advantages.
@@ -306,13 +311,19 @@ class PolicyActor:
             mb_mask = comp_mask[lo:hi]
 
             # Recompute per-token log probs under current policy
-            per_token_lp, _ = self._compute_per_token_log_probs(
+            per_token_lp, _, aux_loss = self._compute_per_token_log_probs(
                 self.model, mb_ids, prompt_len
             )
 
             loss = algorithm.compute_loss(
                 per_token_lp, mb_old_pt, mb_adv, mb_ref_pt, mb_mask
             )
+
+            # Add MoE load-balancing loss to prevent routing collapse
+            if aux_loss is not None:
+                aux_coef = getattr(self.model.config, "aux_loss_coef", 0.01)
+                loss = loss + aux_coef * aux_loss
+
             (loss / num_microbatches).backward()
 
             total_loss += loss.item() / num_microbatches
