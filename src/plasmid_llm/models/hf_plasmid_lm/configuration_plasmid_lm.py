@@ -18,6 +18,16 @@ class PlasmidLMConfig(PretrainedConfig):
         max_position_embeddings: int = 16384,
         rope_theta: float = 10000.0,
         tie_word_embeddings: bool = True,
+        # MoE
+        use_moe: bool = False,
+        num_experts: int = 6,
+        num_experts_per_tok: int = 2,
+        moe_intermediate_size: int | None = None,
+        aux_loss_coef: float = 0.01,
+        # Tokenizer metadata (informational, saved in checkpoint)
+        tokenizer_type: str = "char",
+        kmer_k: int | None = None,
+        kmer_stride: int | None = None,
         **kwargs,
     ):
         self.hidden_size = hidden_size
@@ -28,6 +38,16 @@ class PlasmidLMConfig(PretrainedConfig):
         self.rms_norm_eps = rms_norm_eps
         self.max_position_embeddings = max_position_embeddings
         self.rope_theta = rope_theta
+        # MoE
+        self.use_moe = use_moe
+        self.num_experts = num_experts
+        self.num_experts_per_tok = num_experts_per_tok
+        self.moe_intermediate_size = moe_intermediate_size or intermediate_size
+        self.aux_loss_coef = aux_loss_coef
+        # Tokenizer metadata
+        self.tokenizer_type = tokenizer_type
+        self.kmer_k = kmer_k
+        self.kmer_stride = kmer_stride
         super().__init__(
             vocab_size=vocab_size,
             tie_word_embeddings=tie_word_embeddings,

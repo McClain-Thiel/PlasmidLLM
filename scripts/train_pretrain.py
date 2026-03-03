@@ -28,9 +28,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from plasmid_llm.config import PretrainingConfig
 from plasmid_llm.data import PlasmidDataset, train_val_split
 from plasmid_llm.models.hf_plasmid_lm import (
+    PlasmidKmerTokenizer,
     PlasmidLMConfig,
     PlasmidLMForCausalLM,
     PlasmidLMTokenizer,
+    build_kmer_vocab,
 )
 from plasmid_llm.utils import _get_git_commit, load_config, load_env_file, setup_mlflow
 
@@ -119,27 +121,77 @@ class MLflowExtrasCallback(TrainerCallback):
         log.info(f"Logged checkpoint-{state.global_step} to MLflow artifacts")
 
 
-def build_tokenizer(special_tokens_path: Path, output_dir: Path) -> PlasmidLMTokenizer:
-    """Build tokenizer from special tokens file."""
-    with open(special_tokens_path) as f:
+class PerplexityCallback(TrainerCallback):
+    """Compute and log perplexity from loss for both train and eval."""
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if not logs or not state.is_world_process_zero:
+            return
+        extra = {}
+        if "loss" in logs:
+            extra["train/perplexity"] = math.exp(min(logs["loss"], 20))
+        if "eval_loss" in logs:
+            extra["eval/perplexity"] = math.exp(min(logs["eval_loss"], 20))
+        if extra:
+            # Log via any active reporter (wandb/mlflow pick these up automatically)
+            logs.update(extra)
+
+
+def _build_run_name(config: PretrainingConfig) -> str:
+    """Build a descriptive W&B run name from config."""
+    parts = []
+    if config.tokenizer_type == "kmer":
+        parts.append(f"kmer{config.kmer_k}_s{config.kmer_stride}")
+    else:
+        parts.append("char")
+    if config.use_moe:
+        parts.append(f"moe{config.num_experts}x{config.moe_intermediate_size or config.intermediate_size}")
+    else:
+        parts.append("dense")
+    parts.append(f"d{config.hidden_size}_L{config.num_hidden_layers}")
+    return "_".join(parts)
+
+
+def _build_wandb_tags(config: PretrainingConfig) -> list[str]:
+    """Build descriptive tags for W&B run."""
+    tags = ["pretraining", config.tokenizer_type]
+    if config.use_moe:
+        tags.append("moe")
+    else:
+        tags.append("dense")
+    if config.tokenizer_type == "kmer":
+        tags.append(f"k={config.kmer_k}")
+        tags.append(f"stride={config.kmer_stride}")
+    return tags
+
+
+def build_tokenizer(config: PretrainingConfig) -> PlasmidLMTokenizer | PlasmidKmerTokenizer:
+    """Build tokenizer from config (char-level or k-mer)."""
+    with open(config.special_tokens) as f:
         special_tokens = [line.strip() for line in f if line.strip()]
 
-    log.info(f"Loaded {len(special_tokens)} special tokens from {special_tokens_path}")
+    log.info(f"Loaded {len(special_tokens)} special tokens from {config.special_tokens}")
+    config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    vocab = {token: idx for idx, token in enumerate(special_tokens)}
-    next_id = len(vocab)
-    for base in "ATCGNatcgn":
-        if base not in vocab:
-            vocab[base] = next_id
-            next_id += 1
-
-    vocab_file = output_dir / "vocab.json"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    with open(vocab_file, "w") as f:
-        json.dump(vocab, f, indent=2)
-
-    log.info(f"Created vocab with {len(vocab)} tokens at {vocab_file}")
-    return PlasmidLMTokenizer(str(vocab_file))
+    if config.tokenizer_type == "kmer":
+        vocab = build_kmer_vocab(special_tokens, k=config.kmer_k)
+        vocab_file = config.output_dir / "vocab.json"
+        with open(vocab_file, "w") as f:
+            json.dump(vocab, f, indent=2)
+        log.info(f"Created k-mer vocab with {len(vocab)} tokens (k={config.kmer_k}, stride={config.kmer_stride})")
+        return PlasmidKmerTokenizer(str(vocab_file), k=config.kmer_k, stride=config.kmer_stride)
+    else:
+        vocab = {token: idx for idx, token in enumerate(special_tokens)}
+        next_id = len(vocab)
+        for base in "ATCGNatcgn":
+            if base not in vocab:
+                vocab[base] = next_id
+                next_id += 1
+        vocab_file = config.output_dir / "vocab.json"
+        with open(vocab_file, "w") as f:
+            json.dump(vocab, f, indent=2)
+        log.info(f"Created char vocab with {len(vocab)} tokens at {vocab_file}")
+        return PlasmidLMTokenizer(str(vocab_file))
 
 
 def main():
@@ -158,7 +210,7 @@ def main():
     log.info(f"Config: {config.training_pairs.name}, output: {config.output_dir}")
 
     # Build tokenizer
-    tokenizer = build_tokenizer(config.special_tokens, config.output_dir)
+    tokenizer = build_tokenizer(config)
 
     # Load dataset
     log.info(f"Loading dataset from {config.training_pairs}")
@@ -180,16 +232,46 @@ def main():
         pad_token_id=tokenizer.pad_token_id,
         bos_token_id=tokenizer.bos_token_id,
         eos_token_id=tokenizer.eos_token_id,
+        # MoE
+        use_moe=config.use_moe,
+        num_experts=config.num_experts,
+        num_experts_per_tok=config.num_experts_per_tok,
+        moe_intermediate_size=config.moe_intermediate_size,
+        aux_loss_coef=config.aux_loss_coef,
+        # Tokenizer metadata
+        tokenizer_type=config.tokenizer_type,
+        kmer_k=config.kmer_k if config.tokenizer_type == "kmer" else None,
+        kmer_stride=config.kmer_stride if config.tokenizer_type == "kmer" else None,
     )
     model = PlasmidLMForCausalLM(model_config)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model: {n_params:,} params | vocab={padded_vocab}")
 
-    # MLflow
-    report_to = "none"
+    # Tracking setup
+    report_to = []
     mlflow_active = setup_mlflow(config.mlflow_tracking_uri, config.mlflow_experiment)
     if mlflow_active:
-        report_to = "mlflow"
+        report_to.append("mlflow")
+
+    wandb_active = False
+    if config.wandb_project:
+        try:
+            import wandb
+            run_name = config.wandb_run_name or _build_run_name(config)
+            wandb.init(
+                project=config.wandb_project,
+                name=run_name,
+                config=config.to_mlflow_params(),  # reuse param dict
+                tags=_build_wandb_tags(config),
+            )
+            report_to.append("wandb")
+            wandb_active = True
+            log.info(f"W&B: project={config.wandb_project}, run={run_name}")
+        except Exception as e:
+            log.warning(f"W&B setup failed: {e} — continuing without W&B")
+
+    if not report_to:
+        report_to = ["none"]
 
     # Training arguments
     training_args = TrainingArguments(
@@ -222,6 +304,7 @@ def main():
     # Callbacks
     callbacks = [
         EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience),
+        PerplexityCallback(),
     ]
     if mlflow_active:
         callbacks.append(MLflowExtrasCallback(config))

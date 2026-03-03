@@ -18,7 +18,12 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from plasmid_llm.models.hf_plasmid_lm import PlasmidLMForCausalLM, PlasmidLMTokenizer
+from plasmid_llm.models.hf_plasmid_lm import (
+    PlasmidKmerTokenizer,
+    PlasmidLMConfig,
+    PlasmidLMForCausalLM,
+    PlasmidLMTokenizer,
+)
 from post_training.reward import (
     QC_THRESHOLD,
     compute_reward,
@@ -81,10 +86,17 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(args.seed)
 
-    # Load model
+    # Load model — auto-detect tokenizer type from checkpoint config
     print(f"Loading model: {args.checkpoint}")
     model = PlasmidLMForCausalLM.from_pretrained(str(args.checkpoint)).to(device)
-    tokenizer = PlasmidLMTokenizer.from_pretrained(str(args.checkpoint))
+    model_config = PlasmidLMConfig.from_pretrained(str(args.checkpoint))
+    if getattr(model_config, "tokenizer_type", "char") == "kmer":
+        k = getattr(model_config, "kmer_k", 6)
+        stride = getattr(model_config, "kmer_stride", 3)
+        tokenizer = PlasmidKmerTokenizer.from_pretrained(str(args.checkpoint), k=k, stride=stride)
+        print(f"Using k-mer tokenizer (k={k}, stride={stride})")
+    else:
+        tokenizer = PlasmidLMTokenizer.from_pretrained(str(args.checkpoint))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = "<PAD>"
 

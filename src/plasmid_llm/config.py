@@ -29,6 +29,18 @@ class PretrainingConfig:
     intermediate_size: int = 1536
     max_seq_len: int = 4096
 
+    # Tokenizer
+    tokenizer_type: str = "char"  # "char" or "kmer"
+    kmer_k: int = 6
+    kmer_stride: int = 3
+
+    # MoE
+    use_moe: bool = False
+    num_experts: int = 6
+    num_experts_per_tok: int = 2
+    moe_intermediate_size: Optional[int] = None  # defaults to intermediate_size
+    aux_loss_coef: float = 0.01
+
     # Training hyperparameters
     output_dir: Path = field(default_factory=lambda: Path("output/pretraining"))
     per_device_train_batch_size: int = 32
@@ -54,6 +66,10 @@ class PretrainingConfig:
     # MLflow tracking
     mlflow_tracking_uri: Optional[str] = None
     mlflow_experiment: str = "plasmid_pretraining"
+
+    # W&B tracking
+    wandb_project: Optional[str] = None
+    wandb_run_name: Optional[str] = None
 
     def __post_init__(self):
         """Convert string paths to Path objects and validate."""
@@ -82,6 +98,16 @@ class PretrainingConfig:
             "num_hidden_layers": self.num_hidden_layers,
             "num_attention_heads": self.num_attention_heads,
             "intermediate_size": self.intermediate_size,
+            # Tokenizer
+            "tokenizer_type": self.tokenizer_type,
+            "kmer_k": self.kmer_k,
+            "kmer_stride": self.kmer_stride,
+            # MoE
+            "use_moe": self.use_moe,
+            "num_experts": self.num_experts,
+            "num_experts_per_tok": self.num_experts_per_tok,
+            "moe_intermediate_size": self.moe_intermediate_size or self.intermediate_size,
+            "aux_loss_coef": self.aux_loss_coef,
 
             # Training
             "batch_size": self.per_device_train_batch_size,

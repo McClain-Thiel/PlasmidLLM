@@ -14,6 +14,7 @@ from transformers.generation import GenerationMixin
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from .configuration_plasmid_lm import PlasmidLMConfig
+from .moe import PlasmidLMSparseMoE
 
 
 def _rope_freqs(dim: int, max_len: int, base: float) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -86,7 +87,11 @@ class PlasmidLMDecoderLayer(nn.Module):
         self.input_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.self_attn = PlasmidLMAttention(config)
         self.post_attention_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.mlp = PlasmidLMMLP(config)
+        self.use_moe = config.use_moe
+        if self.use_moe:
+            self.moe = PlasmidLMSparseMoE(config)
+        else:
+            self.mlp = PlasmidLMMLP(config)
 
     def forward(
         self,
@@ -95,15 +100,20 @@ class PlasmidLMDecoderLayer(nn.Module):
         rope_sin: torch.Tensor,
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         position_offset: int = 0,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         attn_out, new_kv = self.self_attn(hidden_states, rope_cos, rope_sin, past_key_value, position_offset)
         hidden_states = residual + attn_out
 
         residual = hidden_states
-        hidden_states = residual + self.mlp(self.post_attention_layernorm(hidden_states))
-        return hidden_states, new_kv
+        if self.use_moe:
+            moe_out, aux_loss = self.moe(self.post_attention_layernorm(hidden_states))
+            hidden_states = residual + moe_out
+        else:
+            hidden_states = residual + self.mlp(self.post_attention_layernorm(hidden_states))
+            aux_loss = torch.tensor(0.0, device=hidden_states.device)
+        return hidden_states, new_kv, aux_loss
 
 
 class PlasmidLMPreTrainedModel(PreTrainedModel):
@@ -145,32 +155,36 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         past_key_values: Optional[list] = None,
         position_offset: int = 0,
         **kwargs,
-    ) -> Tuple[torch.Tensor, list]:
+    ) -> Tuple[torch.Tensor, list, torch.Tensor]:
         hidden_states = self.embed_tokens(input_ids)
         new_kv_caches = []
+        total_aux_loss = torch.tensor(0.0, device=input_ids.device)
         for i, layer in enumerate(self.layers):
             past_kv = past_key_values[i] if past_key_values else None
             if self.gradient_checkpointing and self.training:
                 # Gradient checkpointing recomputes activations on backward — no past_kv during training
                 def make_ckpt_fn(l):
                     def fn(h, cos, sin):
-                        out, kv = l(h, cos, sin, None, 0)
-                        return out, kv[0], kv[1]
+                        out, kv, aux = l(h, cos, sin, None, 0)
+                        return out, kv[0], kv[1], aux
                     return fn
-                hidden_states, k, v = torch.utils.checkpoint.checkpoint(
+                hidden_states, k, v, layer_aux = torch.utils.checkpoint.checkpoint(
                     make_ckpt_fn(layer), hidden_states, self.rope_cos, self.rope_sin,
                     use_reentrant=False,
                 )
                 new_kv = (k, v)
             else:
-                hidden_states, new_kv = layer(hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset)
+                hidden_states, new_kv, layer_aux = layer(
+                    hidden_states, self.rope_cos, self.rope_sin, past_kv, position_offset
+                )
             new_kv_caches.append(new_kv)
+            total_aux_loss = total_aux_loss + layer_aux
         hidden_states = self.norm(hidden_states)
-        return hidden_states, new_kv_caches
+        return hidden_states, new_kv_caches, total_aux_loss
 
 
 class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
 
     def __init__(self, config: PlasmidLMConfig):
         super().__init__(config)
@@ -246,7 +260,7 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         if kv_list is not None:
             position_offset = kv_list[0][0].shape[2]
 
-        hidden_states, new_kv_list = self.model(input_ids, kv_list, position_offset)
+        hidden_states, new_kv_list, aux_loss = self.model(input_ids, kv_list, position_offset)
         logits = self.lm_head(hidden_states)
 
         loss = None
@@ -258,6 +272,7 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
                 shift_labels.view(-1),
                 ignore_index=-100,
             )
+            loss = loss + self.config.aux_loss_coef * aux_loss
 
         new_cache = None
         if use_cache:
@@ -278,8 +293,8 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         top_k: int = 50,
     ) -> torch.Tensor:
         """Simple autoregressive generation with KV cache."""
-        # Prefill
-        hidden_states, kv_caches = self.model(input_ids)
+        # Prefill (aux_loss ignored during generation)
+        hidden_states, kv_caches, _ = self.model(input_ids)
         logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)
         cur_len = input_ids.shape[1]
 
@@ -294,7 +309,7 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
             next_token = torch.multinomial(probs, 1)
             input_ids = torch.cat([input_ids, next_token], dim=1)
 
-            hidden_states, kv_caches = self.model(next_token, kv_caches, cur_len)
+            hidden_states, kv_caches, _ = self.model(next_token, kv_caches, cur_len)
             logits = self.lm_head(hidden_states).squeeze(1)
             cur_len += 1
 
