@@ -3,8 +3,8 @@
 Coordinates GPU policy actor(s), CPU reward scoring tasks, and algorithm
 layer into a coherent training loop with W&B/MLflow logging and checkpointing.
 
-Multi-GPU: N PolicyActors generate rollouts in parallel, ALL train on the
-merged batch (identical update keeps weights in sync — no weight transfer).
+Multi-GPU: N PolicyActors generate rollouts in parallel. Only the primary
+actor trains; weights are broadcast to secondaries after each update.
 """
 
 from __future__ import annotations
@@ -300,8 +300,7 @@ class Orchestrator:
                 rewards, rollout["log_probs"], rollout["ref_log_probs"]
             )
 
-            # 5. Train step — all actors train on the SAME batch
-            #    (identical data + identical starting weights → weights stay in sync)
+            # 5. Train step — only primary trains, then broadcast weights
             train_batch = {
                 "full_ids": rollout["full_ids"],
                 "prompt_len": rollout["prompt_len"],
@@ -312,11 +311,15 @@ class Orchestrator:
                 "algorithm_name": config.algorithm,
                 "algorithm_kwargs": algo_kwargs,
             }
-            train_futures = [
-                actor.train_step.remote(train_batch) for actor in actors
-            ]
-            all_metrics = ray.get(train_futures)
-            metrics = all_metrics[0]
+            metrics = ray.get(primary.train_step.remote(train_batch))
+
+            # Sync weights to secondary actors
+            if num_gpus > 1:
+                weights = ray.get(primary.get_weights.remote())
+                ray.get([
+                    actor.load_weights.remote(weights)
+                    for actor in actors[1:]
+                ])
 
             step_time = time.time() - step_start
 

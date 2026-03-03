@@ -103,9 +103,8 @@ class REINFORCE(Algorithm):
         # Policy gradient: -E[A * log pi]
         pg_loss = -(advantages.detach() * log_probs).mean()
 
-        # k3 KL estimator (non-negative, unbiased)
-        log_ratio = ref_per_token_logps - per_token_logps  # log(ref/pi)
-        per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
+        # KL penalty: log(pi/ref) — penalizes divergence from reference
+        per_token_kl = per_token_logps - ref_per_token_logps
         kl = ((per_token_kl * mask.float()).sum(-1) / mask.sum(-1).clamp(min=1)).mean()
 
         return pg_loss + self.kl_coef * kl
@@ -165,9 +164,8 @@ class GRPO(Algorithm):
         per_token_loss2 = adv * clipped
         per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
 
-        # k3 KL estimator (non-negative, unbiased)
-        log_ratio = ref_per_token_logps - per_token_logps  # log(ref/pi)
-        per_token_kl = torch.exp(log_ratio) - log_ratio - 1.0
+        # KL penalty: log(pi/ref) — standard GRPO KL divergence term
+        per_token_kl = per_token_logps - ref_per_token_logps
         per_token_loss = per_token_loss + self.kl_coef * per_token_kl
 
         # Masked mean: average over tokens, then over batch

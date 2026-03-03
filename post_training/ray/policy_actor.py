@@ -6,6 +6,7 @@ All GPU work (generation, forward passes, gradient updates) happens here.
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import logging
 import shutil
@@ -229,7 +230,7 @@ class PolicyActor:
         # Derive attention mask from pad tokens — critical for left-padded inputs
         attention_mask = (full_ids != self.tokenizer.pad_token_id).long()
 
-        ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if self.bf16 else torch.no_grad()
+        ctx = torch.amp.autocast("cuda", dtype=torch.bfloat16) if self.bf16 else contextlib.nullcontext()
         with ctx:
             outputs = model(input_ids=full_ids, attention_mask=attention_mask)
             logits = outputs.logits  # (batch, seq_len, vocab)
@@ -253,7 +254,7 @@ class PolicyActor:
     def train_step(self, rollout_batch: Dict) -> Dict:
         """Apply a single gradient update from pre-computed rollouts + advantages.
 
-        Uses per-token log probs for proper PPO-style clipping and k3 KL.
+        Uses per-token log probs for proper PPO-style clipping.
         Supports gradient accumulation over micro-batches.
 
         Args:
