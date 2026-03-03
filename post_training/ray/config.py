@@ -74,6 +74,13 @@ class RayPostTrainingConfig:
     mlflow_tracking_uri: Optional[str] = None
     mlflow_experiment: str = "plasmid_ray_post_training"
 
+    # W&B
+    wandb_project: Optional[str] = None
+    wandb_run_name: Optional[str] = None
+
+    # Multi-GPU
+    num_policy_gpus: int = 1  # Number of GPU actors for parallel generation
+
     def __post_init__(self):
         self.model_checkpoint = Path(self.model_checkpoint)
         self.training_pairs = Path(self.training_pairs)
