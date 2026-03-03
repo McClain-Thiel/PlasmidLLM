@@ -170,7 +170,7 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
 
 
 class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
 
     def __init__(self, config: PlasmidLMConfig):
         super().__init__(config)
