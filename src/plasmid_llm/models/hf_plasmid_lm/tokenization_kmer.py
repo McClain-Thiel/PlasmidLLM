@@ -77,27 +77,14 @@ class PlasmidKmerTokenizer(PreTrainedTokenizer):
         # Store k and stride in kwargs so they're saved/loaded
         kwargs["k"] = k
         kwargs["stride"] = stride
+        # Disable automatic BOS/EOS insertion (transformers 5.x); prompts
+        # already contain <BOS>...<SEP> and the model generates <EOS> itself.
+        kwargs.setdefault("special_tokens_pattern", "none")
         super().__init__(**special_kwargs, **kwargs)
 
     @property
     def vocab_size(self) -> int:
         return len(self._vocab)
-
-    @property
-    def pad_token_id(self) -> int:
-        return self._vocab.get("<PAD>", 0)
-
-    @property
-    def bos_token_id(self) -> int:
-        return self._vocab.get("<BOS>", 1)
-
-    @property
-    def eos_token_id(self) -> int:
-        return self._vocab.get("<EOS>", 2)
-
-    @property
-    def sep_token_id(self) -> int:
-        return self._vocab.get("<SEP>", 3)
 
     def get_vocab(self) -> dict:
         return dict(self._vocab)
