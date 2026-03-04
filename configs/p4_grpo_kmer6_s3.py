@@ -36,7 +36,7 @@ config = RayPostTrainingConfig(
     top_p=0.95,
 
     # Training
-    learning_rate=1e-5,
+    learning_rate=5e-6,
     max_steps=5000,
     gradient_accumulation_steps=1,
     max_grad_norm=1.0,
@@ -46,7 +46,7 @@ config = RayPostTrainingConfig(
     seed=42,
 
     # GRPO-specific
-    kl_coef=0.1,
+    kl_coef=0.3,
     cliprange=0.2,
 
     # Reward — sum of components
@@ -64,7 +64,7 @@ config = RayPostTrainingConfig(
 
     # W&B
     wandb_project="PlasmidLLM",
-    wandb_run_name="grpo_kmer6_s3_dense_ckpt35k",
+    wandb_run_name="grpo_kmer6_s3_lr5e6_kl03",
 
     # MLflow
     mlflow_tracking_uri="databricks",
