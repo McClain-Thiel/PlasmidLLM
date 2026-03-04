@@ -182,6 +182,11 @@ class PolicyActor:
             completion_ids, skip_special_tokens=False
         )
 
+        # Switch to train mode BEFORE computing old log probs so they match
+        # the mode used in train_step (critical for MoE: router dropout/noise
+        # differs between eval and train, causing ratio mismatch)
+        self.model.train()
+
         # Compute per-token log probs under policy and reference
         full_ids = output_ids
         with torch.no_grad():
@@ -196,8 +201,6 @@ class PolicyActor:
         token_counts = mask.sum(dim=-1).clamp(min=1)
         log_probs = per_token_lp.sum(dim=-1) / token_counts
         ref_log_probs = ref_per_token_lp.sum(dim=-1) / token_counts
-
-        self.model.train()
 
         return {
             "prompts": prompts,
@@ -315,6 +318,17 @@ class PolicyActor:
             per_token_lp, _, aux_loss = self._compute_per_token_log_probs(
                 self.model, mb_ids, prompt_len
             )
+
+            # Log ratio stats at step 1 to verify train/eval mode consistency
+            if self._step_count == 0 and mb == 0:
+                with torch.no_grad():
+                    ratio = torch.exp(per_token_lp - mb_old_pt)
+                    masked_ratio = ratio[mb_mask]
+                    log.info(
+                        f"Step 1 ratio check: mean={masked_ratio.mean():.4f}, "
+                        f"std={masked_ratio.std():.4f}, "
+                        f"min={masked_ratio.min():.4f}, max={masked_ratio.max():.4f}"
+                    )
 
             loss = algorithm.compute_loss(
                 per_token_lp, mb_old_pt, mb_adv, mb_ref_pt, mb_mask
