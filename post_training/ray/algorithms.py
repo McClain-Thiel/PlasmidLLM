@@ -142,8 +142,11 @@ class GRPO(Algorithm):
         grouped = rewards.view(-1, G)
 
         mean = grouped.mean(dim=1, keepdim=True)
-        std = grouped.std(dim=1, keepdim=True).clamp(min=1e-8)
-        advantages = (grouped - mean) / std
+        std = grouped.std(dim=1, keepdim=True)
+        # Zero out advantages for groups with near-identical rewards
+        # (std < 0.1) to avoid division-by-zero spikes
+        valid = std > 0.1
+        advantages = torch.where(valid, (grouped - mean) / std.clamp(min=0.1), torch.zeros_like(grouped))
 
         return advantages.view(-1)
 

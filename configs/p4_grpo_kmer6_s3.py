@@ -16,7 +16,7 @@ OUTPUT_ROOT = Path("/opt/dlami/nvme/output")
 
 config = RayPostTrainingConfig(
     # Model — kmer6 stride-3 dense pretrained checkpoint
-    model_checkpoint=OUTPUT_ROOT / "kmer6_s3_dense" / "checkpoint-35000",
+    model_checkpoint=OUTPUT_ROOT / "kmer6_s3_dense" / "checkpoint-60000",
     training_pairs=DATA_DIR / "training_pairs_v4.parquet",
     motif_lookup=DATA_DIR / "motif_registry.parquet",
 
