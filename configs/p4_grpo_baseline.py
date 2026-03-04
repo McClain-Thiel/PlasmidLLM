@@ -15,8 +15,8 @@ DATA_DIR = Path("/opt/dlami/nvme/data")
 OUTPUT_ROOT = Path("/opt/dlami/nvme/output")
 
 config = RayPostTrainingConfig(
-    # Model — char-level dense pretrained checkpoint
-    model_checkpoint=OUTPUT_ROOT / "baseline_char_dense" / "checkpoint-35000",
+    # Model — resume from GRPO checkpoint-1500 (reward improved 1.5 → 3.2)
+    model_checkpoint=OUTPUT_ROOT / "grpo_baseline" / "checkpoint-1500",
     training_pairs=DATA_DIR / "training_pairs_v4.parquet",
     motif_lookup=DATA_DIR / "motif_registry.parquet",
 
@@ -64,7 +64,7 @@ config = RayPostTrainingConfig(
 
     # W&B
     wandb_project="PlasmidLLM",
-    wandb_run_name="grpo_baseline_char_ckpt35k",
+    wandb_run_name="grpo_baseline_char_resume1500",
 
     # MLflow
     mlflow_tracking_uri="databricks",
