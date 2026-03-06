@@ -37,7 +37,7 @@ class TestSubstringScorer:
     """Verify our toy scorer satisfies the Scorer protocol."""
 
     def test_score_returns_tensor(self):
-        from post_training.runners.run_grpo import SubstringScorer
+        from post_training.runners.run import SubstringScorer
 
         scorer = SubstringScorer(targets=["the", "and"])
         result = scorer.score(
@@ -202,7 +202,7 @@ class TestGRPOIntegration:
     def test_grpo_step(self, ray_context):
         from post_training.algorithms import GRPOAlgorithm
         from post_training.common.model import ModelActor
-        from post_training.runners.run_grpo import SubstringScorer
+        from post_training.runners.run import SubstringScorer
 
         ActorCls = ModelActor.options(num_gpus=0)
         actor = ActorCls.remote(MODEL_ID, bf16=False, learning_rate=1e-4)
