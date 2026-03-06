@@ -240,8 +240,12 @@ class ModelActor:
         model = self.ref_model if use_ref else self.model
         full_ids = full_ids.to(self.device)
 
+        was_training = model.training
+        model.eval()
         with torch.no_grad():
             lp, mask = self._completion_log_probs(model, full_ids, prompt_len)
+        if was_training:
+            model.train()
 
         counts = mask.sum(-1).clamp(min=1)
         return LogProbResult(
@@ -262,8 +266,12 @@ class ModelActor:
         full_ids = full_ids.to(self.device)
         attention_mask = (full_ids != self._pad_id).long()
 
+        was_training = model.training
+        model.eval()
         with torch.no_grad(), self._autocast():
             logits = model(input_ids=full_ids, attention_mask=attention_mask).logits
+        if was_training:
+            model.train()
 
         shift_logits = logits[:, prompt_len - 1 : -1, :].float()
         shift_labels = full_ids[:, prompt_len:]
@@ -292,8 +300,12 @@ class ModelActor:
         full_ids = full_ids.to(self.device)
         attention_mask = (full_ids != self._pad_id).long()
 
+        was_training = model.training
+        model.eval()
         with torch.no_grad(), self._autocast():
             logits = model(input_ids=full_ids, attention_mask=attention_mask).logits
+        if was_training:
+            model.train()
 
         shift_logits = logits[:, prompt_len - 1 : -1, :]
         shift_labels = full_ids[:, prompt_len:]
@@ -308,6 +320,8 @@ class ModelActor:
     ) -> dict[str, torch.Tensor]:
         """KL(π ‖ π_ref) per sequence — Schulman unbiased estimator."""
         full_ids = full_ids.to(self.device)
+        was_training = self.model.training
+        self.model.eval()
         with torch.no_grad():
             policy_lp, mask = self._completion_log_probs(
                 self.model, full_ids, prompt_len,
@@ -315,6 +329,8 @@ class ModelActor:
             ref_lp, _ = self._completion_log_probs(
                 self.ref_model, full_ids, prompt_len,
             )
+        if was_training:
+            self.model.train()
 
         log_ratio = ref_lp - policy_lp
         pt_kl = (torch.exp(log_ratio) - log_ratio - 1.0) * mask.float()

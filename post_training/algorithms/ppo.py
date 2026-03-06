@@ -26,11 +26,13 @@ class PPOAlgorithm(Algorithm):
         entropy_coeff: float = 0.01,
         ppo_epochs: int = 4,
         micro_batch_size: int = 64,
+        gen_kwargs: dict | None = None,
     ):
         self.cliprange = cliprange
         self.entropy_coeff = entropy_coeff
         self.ppo_epochs = ppo_epochs
         self.micro_batch_size = micro_batch_size
+        self.gen_kwargs = gen_kwargs or {}
         self._global_step = 0
 
     def compute_advantages(self, rewards: torch.Tensor, **kwargs) -> torch.Tensor:
@@ -49,7 +51,7 @@ class PPOAlgorithm(Algorithm):
             self._global_step, len(prompts),
         )
         with timer("generation") as t_gen:
-            gen = ray.get(actor.generate.remote(prompts))
+            gen = ray.get(actor.generate.remote(prompts, **self.gen_kwargs))
 
         comp_lengths = [len(t) for t in gen.completion_texts]
         log.info(

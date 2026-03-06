@@ -32,11 +32,13 @@ class GRPOAlgorithm(Algorithm):
         cliprange: float = 0.2,
         num_generations: int = 4,
         micro_batch_size: int = 64,
+        gen_kwargs: dict | None = None,
     ):
         self.kl_coef = kl_coef
         self.cliprange = cliprange
         self.num_generations = num_generations
         self.micro_batch_size = micro_batch_size
+        self.gen_kwargs = gen_kwargs or {}
         self._global_step = 0
 
     def compute_advantages(
@@ -74,7 +76,9 @@ class GRPOAlgorithm(Algorithm):
             self._global_step, len(expanded), len(prompts), G, n_actors,
         )
         with timer("generation") as t_gen:
-            gen_futures = [a.generate.remote(s) for a, s in zip(actors, shards)]
+            gen_futures = [
+            a.generate.remote(s, **self.gen_kwargs) for a, s in zip(actors, shards)
+        ]
             generations = ray.get(gen_futures)
 
         all_prompts = [p for g in generations for p in g.prompts]

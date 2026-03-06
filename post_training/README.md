@@ -32,6 +32,12 @@ The actor never imports an algorithm. The algorithm never subclasses the actor. 
 
 ```
 post_training/
+├── config.py           # PostTrainingConfig dataclass
+├── configs/
+│   ├── smoke_test.py       # Quick 20-step pipeline test (gpt2, CPU)
+│   ├── grpo_motif.py       # GRPO + MotifScorer on PlasmidLM
+│   ├── grpo_alignment.py   # GRPO + AlignmentScorer on PlasmidLM
+│   └── ppo_motif.py        # PPO + MotifScorer on PlasmidLM
 ├── common/
 │   ├── model.py        # ModelActor — Ray remote GPU worker
 │   ├── objects.py       # GenerationResult, LogProbResult, etc.
@@ -46,25 +52,115 @@ post_training/
 │   ├── alignment.py     # AlignmentScorer — Smith-Waterman score-ratio
 │   └── motif.py         # MotifScorer — CIGAR-based parasail alignment
 └── runners/
-    └── run_grpo.py      # Example: GRPO training end-to-end
+    ├── run.py           # Config-driven runner (main entrypoint)
+    └── run_grpo.py      # CLI wrapper for quick GRPO experiments
 ```
 
 ## Quick start
 
 ```bash
-# Minimal GRPO run with a toy scorer (uses gpt2 by default)
-python -m post_training.runners.run_grpo
+# Smoke test — 20 steps, gpt2, CPU, no dependencies beyond torch
+python -m post_training.runners.run post_training/configs/smoke_test.py
 
-# Real model, more steps, with wandb
-python -m post_training.runners.run_grpo \
-    --model McClain/PlasmidLM-kmer6-MoE \
-    --steps 100 \
-    --num-actors 2 \
-    --num-generations 8 \
-    --lr 1e-5 \
-    --kl-coef 0.1 \
-    --wandb --wandb-project plasmid-rl
+# Real training — GRPO + motif scorer on PlasmidLM
+python -m post_training.runners.run post_training/configs/grpo_motif.py
+
+# CLI shortcut (builds config from flags, toy scorer only)
+python -m post_training.runners.run_grpo --model gpt2 --steps 10
 ```
+
+## Configuration
+
+Runs are configured via Python files that export a `PostTrainingConfig` dataclass — the same pattern used by `pretraining/configs/`. Each config captures the full `(algorithm, model, scorer)` combination plus all hyperparameters.
+
+```python
+# post_training/configs/my_run.py
+from post_training.config import PostTrainingConfig
+
+config = PostTrainingConfig(
+    # Model
+    model="McClain/PlasmidLM-kmer6-MoE",
+    bf16=True,
+    num_actors=2,
+
+    # Algorithm
+    algorithm="grpo",
+    kl_coef=0.1,
+    cliprange=0.2,
+    num_generations=8,
+
+    # Scorer
+    scorer="motif",
+    scorer_kwargs={"motif_db_path": "data/motif_registry.parquet"},
+
+    # Generation
+    max_new_tokens=1024,
+
+    # Prompts
+    prompts_parquet="data/training_pairs_v4.parquet",
+    prompt_batch_size=8,
+
+    # Training
+    steps=500,
+    learning_rate=1e-5,
+    checkpoint_every=100,
+    checkpoint_dir="checkpoints/my_run",
+
+    # Logging
+    wandb_project="PlasmidLLM",
+    wandb_run_name="grpo_motif_v2",
+)
+```
+
+Then run it:
+
+```bash
+python -m post_training.runners.run post_training/configs/my_run.py
+```
+
+### Config fields
+
+| Group | Field | Default | Description |
+|-------|-------|---------|-------------|
+| **Model** | `model` | `"gpt2"` | HF model id or local path |
+| | `bf16` | `True` | Use bfloat16 mixed precision |
+| | `seed` | `42` | Random seed |
+| **Actor** | `num_actors` | `1` | Number of Ray GPU workers |
+| | `learning_rate` | `1e-5` | Optimizer learning rate |
+| | `weight_decay` | `0.01` | AdamW weight decay |
+| | `warmup_steps` | `100` | LR warmup steps |
+| | `max_grad_norm` | `1.0` | Gradient clipping |
+| **Algorithm** | `algorithm` | `"grpo"` | `"grpo"` or `"ppo"` |
+| | `kl_coef` | `0.1` | KL penalty coefficient (GRPO) |
+| | `cliprange` | `0.2` | PPO/GRPO clip range |
+| | `num_generations` | `4` | Completions per prompt (GRPO) |
+| | `entropy_coeff` | `0.01` | Entropy bonus (PPO) |
+| | `ppo_epochs` | `4` | Epochs per batch (PPO) |
+| | `micro_batch_size` | `64` | Micro-batch size for gradient accumulation |
+| **Scorer** | `scorer` | `"substring"` | `"substring"`, `"alignment"`, or `"motif"` |
+| | `scorer_kwargs` | `{}` | Kwargs passed to scorer constructor |
+| **Generation** | `max_new_tokens` | `64` | Max tokens per completion |
+| | `temperature` | `1.0` | Sampling temperature |
+| | `top_p` | `0.95` | Nucleus sampling threshold |
+| **Prompts** | `prompts_parquet` | `None` | Path to parquet with prompt column |
+| | `prompts_list` | `None` | Inline list of prompts |
+| | `prompt_batch_size` | `4` | Prompts per training step |
+| | `filter_hard_tokens` | `True` | Filter to prompts with hard tokens |
+| **Training** | `steps` | `100` | Total training steps |
+| | `checkpoint_every` | `50` | Save checkpoint every N steps |
+| | `checkpoint_dir` | `"checkpoints/post_training"` | Checkpoint output directory |
+| **Logging** | `wandb_project` | `None` | wandb project (set to enable wandb) |
+| | `wandb_run_name` | `None` | wandb run name (auto-generated if omitted) |
+| | `wandb_entity` | `None` | wandb team/entity |
+
+### Sample configs
+
+| Config | Algorithm | Scorer | Model | Purpose |
+|--------|-----------|--------|-------|---------|
+| `smoke_test.py` | GRPO | substring | gpt2 | Pipeline sanity check, no GPU needed |
+| `grpo_motif.py` | GRPO | motif | PlasmidLM-kmer6-MoE | Production GRPO with CIGAR-based motif scoring |
+| `grpo_alignment.py` | GRPO | alignment | PlasmidLM-kmer6-MoE | Production GRPO with Smith-Waterman scoring |
+| `ppo_motif.py` | PPO | motif | PlasmidLM-kmer6-MoE | PPO alternative for comparison |
 
 ## Actor API surface
 
@@ -121,7 +217,7 @@ Scorers are independent of the training infrastructure. They implement `score_se
 ```python
 from post_training.scorers import build_scorer
 
-scorer = build_scorer("motif", motif_registry=my_registry)
+scorer = build_scorer("motif", motif_db_path="data/motif_registry.parquet")
 ```
 
 The `Scorer` protocol expected by algorithms is minimal — just `score(prompts, completions) -> torch.Tensor`. The scorer ABC in `scorers/base.py` uses `score_sequence` / `score_batch` instead. To bridge the two, wrap your scorer or add a `score` method that calls `score_batch` and converts to a tensor.
@@ -131,16 +227,20 @@ The `Scorer` protocol expected by algorithms is minimal — just `score(prompts,
 Multiple actors train in parallel with gradient averaging:
 
 ```python
-actors = [ModelActor.remote("gpt2") for _ in range(4)]
-GRPOAlgorithm.sync_actors(actors)  # broadcast weights from actor[0]
-
-# Inside algo.step():
-# 1. Each actor generates from its shard of prompts
-# 2. Each actor computes gradients locally
-# 3. Driver averages gradients across actors
-# 4. Each actor applies the same averaged gradient
-# All actors stay in lockstep — no weight broadcast needed after init.
+config = PostTrainingConfig(
+    model="McClain/PlasmidLM-kmer6-MoE",
+    num_actors=4,
+    ...
+)
 ```
+
+Under the hood:
+1. Each actor generates from its shard of prompts
+2. Each actor computes gradients locally
+3. Driver averages gradients across actors
+4. Each actor applies the same averaged gradient
+
+All actors stay in lockstep — no weight broadcast needed after init.
 
 ## Reference model management
 
@@ -172,13 +272,7 @@ The actor holds a frozen copy of the model for KL penalties. By default it stays
            return {"loss": loss, "mean_reward": rewards.mean().item()}
    ```
 
-3. Register it in `algorithms/__init__.py` and use it:
-   ```python
-   algo = build_algorithm("my_algo", hyperparam=0.1)
-   metrics = algo.step(actors, prompts, scorer)
-   ```
-
-The actor is unchanged. The training loop is unchanged. Only the algorithm is new.
+3. Register it in `algorithms/__init__.py` and add an `algorithm_kwargs()` case to `PostTrainingConfig`.
 
 ## Adding a new scorer
 
@@ -201,6 +295,15 @@ The actor is unchanged. The training loop is unchanged. Only the algorithm is ne
    assert scorer.score_sequence(real_prompt, random_dna) < 0.2
    ```
 
+4. Use it in a config:
+   ```python
+   config = PostTrainingConfig(
+       scorer="my_scorer",
+       scorer_kwargs={"threshold": 0.5},
+       ...
+   )
+   ```
+
 ## Logging
 
 ### Console logging
@@ -213,17 +316,24 @@ logging.getLogger("post_training").setLevel(logging.DEBUG)
 
 ### wandb
 
-wandb integration is opt-in. Pass `--wandb` to any runner to enable it:
+wandb integration is opt-in. Set `wandb_project` in your config to enable it:
 
-```bash
-python -m post_training.runners.run_grpo \
-    --wandb \
-    --wandb-project plasmid-rl \
-    --wandb-run-name "grpo-motif-v2" \
-    --wandb-entity my-team
+```python
+config = PostTrainingConfig(
+    wandb_project="PlasmidLLM",
+    wandb_run_name="grpo_motif_v2",
+    wandb_entity="my-team",
+    ...
+)
 ```
 
-All hyperparameters are logged to `wandb.config` at init. Each training step automatically logs metrics under a prefix (`grpo/`, `ppo/`):
+Or with the CLI wrapper:
+
+```bash
+python -m post_training.runners.run_grpo --wandb --wandb-project plasmid-rl
+```
+
+All config fields are logged to `wandb.config` at init. Each training step automatically logs metrics under a prefix (`grpo/`, `ppo/`):
 
 | Metric | Description |
 |--------|-------------|
@@ -238,33 +348,36 @@ All hyperparameters are logged to `wandb.config` at init. Each training step aut
 | `mean_completion_len` | Mean completion length in characters |
 | `time_generation`, `time_scoring`, `time_train`, `time_total` | Phase timings in seconds |
 
-For custom scripts, wandb logging is automatic if a run is active — algorithms call `wandb_log()` internally:
-
-```python
-import wandb
-wandb.init(project="my-project", config={...})
-
-algo = build_algorithm("grpo", ...)
-metrics = algo.step(actors, prompts, scorer)  # auto-logged to wandb
-```
-
-If wandb is not installed or no run is active, all logging calls are silent no-ops.
+If wandb is not installed or no project is set, all logging calls are silent no-ops.
 
 ## Combinatorics
 
-The point of this design is combinatorial flexibility. Once you trust your scorers, any run is just a choice of three things:
-
-```
-(algorithm, model, scorer)
-```
-
-Everything else is hyperparameters. The registries make this programmatic:
+The point of this design is combinatorial flexibility. Once you trust your scorers, any run is just a config file picking three things:
 
 ```python
-for algo_name in ["grpo", "ppo"]:
-    for scorer_name in ["alignment", "motif"]:
-        algo = build_algorithm(algo_name, **algo_hparams)
-        scorer = build_scorer(scorer_name, **scorer_kwargs)
-        for step in range(n_steps):
-            metrics = algo.step(actors, prompts, scorer)
+config = PostTrainingConfig(
+    algorithm="grpo",                    # ← swap algorithm
+    model="McClain/PlasmidLM-kmer6-MoE", # ← swap model
+    scorer="motif",                       # ← swap scorer
+    ...
+)
+```
+
+Everything else is hyperparameters. To sweep, just write multiple configs or generate them programmatically:
+
+```python
+from post_training.config import PostTrainingConfig
+from post_training.runners.run import run
+
+for algo in ["grpo", "ppo"]:
+    for scorer in ["alignment", "motif"]:
+        cfg = PostTrainingConfig(
+            algorithm=algo,
+            scorer=scorer,
+            model="McClain/PlasmidLM-kmer6-MoE",
+            wandb_project="PlasmidLLM",
+            wandb_run_name=f"{algo}_{scorer}",
+            ...
+        )
+        run(cfg)
 ```

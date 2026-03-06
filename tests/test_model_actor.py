@@ -210,6 +210,7 @@ class TestGRPOIntegration:
         algo = GRPOAlgorithm(
             kl_coef=0.1, cliprange=0.2,
             num_generations=2, micro_batch_size=4,
+            gen_kwargs={"max_new_tokens": 16},
         )
         scorer = SubstringScorer(targets=["the"])
 
