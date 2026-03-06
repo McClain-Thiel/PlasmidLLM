@@ -8,7 +8,7 @@ from pathlib import Path
 
 from vllm import LLM, SamplingParams
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from plasmid_llm.models.hf_plasmid_lm import PlasmidLMTokenizer
 

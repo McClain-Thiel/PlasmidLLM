@@ -5,6 +5,7 @@ description = "Language models for plasmid DNA sequence generation"
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.1,<2.10",
+    "transformers>=4.38",
     "tokenizers>=0.15",
     "pyarrow>=14.0",
     "pandas>=2.0",
@@ -26,7 +27,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/plasmid_llm"]
+packages = ["plasmid_llm"]
 
 [tool.ruff]
 line-length = 100

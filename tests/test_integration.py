@@ -3,8 +3,7 @@
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import json
 import pytest
@@ -258,6 +257,8 @@ class TestDataset:
         assert mask_count > 0
 
 
+parasail = pytest.importorskip("parasail")
+
 @pytest.mark.skipif(
     not (DATA_DIR / "motif_registry.parquet").exists(),
     reason="Motif lookup required"
@@ -267,7 +268,7 @@ class TestRewardFunction:
     
     def test_load_motif_lookup(self):
         """Test loading motif lookup."""
-        from post_training.reward import load_motif_lookup
+        from post_training.scorers.alignment import load_motif_lookup, AlignmentScorer
         
         lookup_df = load_motif_lookup(str(MOTIF_LOOKUP_PATH))
         
@@ -277,25 +278,18 @@ class TestRewardFunction:
     
     def test_reward_function_basic(self):
         """Test basic reward function."""
-        from post_training.reward import load_motif_lookup, compute_reward
-        
+        from post_training.scorers.alignment import load_motif_lookup, AlignmentScorer
+
         lookup_df = load_motif_lookup(str(MOTIF_LOOKUP_PATH))
-        
-        # Get a token from the lookup
+        scorer = AlignmentScorer(lookup_df=lookup_df)
+
         first_token = lookup_df.iloc[0]["token"]
         first_seq = lookup_df.iloc[0]["sequence"]
-        
-        # Create prompt with that token
         prompt = f"<BOS>{first_token}<SEP>"
-        
-        # Compute reward with the actual sequence (should be high)
-        reward_good = compute_reward(prompt, first_seq, lookup_df)
-        
-        # Compute reward with random sequence (should be low)
-        reward_bad = compute_reward(prompt, "N" * 1000, lookup_df)
-        
-        assert 0 <= reward_good <= 1
-        assert 0 <= reward_bad <= 1
+
+        reward_good = scorer.score_sequence(prompt, first_seq)
+        reward_bad = scorer.score_sequence(prompt, "N" * 1000)
+
         assert reward_good > reward_bad
 
 

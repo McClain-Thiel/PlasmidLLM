@@ -5,7 +5,7 @@ import torch
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from plasmid_llm.models.hf_plasmid_lm import (
     PlasmidLMConfig,
