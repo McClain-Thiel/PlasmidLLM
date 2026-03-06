@@ -103,7 +103,10 @@ class PostTrainingConfig:
 
     def algorithm_kwargs(self) -> dict[str, Any]:
         """Kwargs to pass to the algorithm constructor."""
-        shared = dict(micro_batch_size=self.micro_batch_size)
+        shared = dict(
+            micro_batch_size=self.micro_batch_size,
+            gen_kwargs=self.generation_kwargs(),
+        )
         if self.algorithm == "grpo":
             return {
                 **shared,

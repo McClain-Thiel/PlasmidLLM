@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+import torch
+
 
 class Scorer(ABC):
     """Base class for scoring generated sequences against expected annotations.
@@ -12,7 +14,7 @@ class Scorer(ABC):
     All scorers follow the same interface:
       1. __init__: load any reference data (motif registries, etc.)
       2. score_sequence: score a single (prompt, sequence) pair → float reward
-      3. score_batch: vectorized scoring for RL training loops
+      3. score / score_batch: vectorized scoring for RL training loops
 
     This makes scorers swappable for curriculum learning, ablations, etc.
     """
@@ -56,6 +58,18 @@ class Scorer(ABC):
             self.score_sequence(p, s, **kwargs)
             for p, s in zip(prompts, sequences)
         ]
+
+    def score(
+        self,
+        prompts: list[str],
+        completions: list[str],
+        **kwargs,
+    ) -> torch.Tensor:
+        """Score interface expected by Algorithm.step().
+
+        Wraps score_batch and returns a (B,) tensor.
+        """
+        return torch.tensor(self.score_batch(prompts, completions, **kwargs))
 
     def score_sequence_detailed(
         self,
