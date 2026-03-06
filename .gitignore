@@ -1,5 +1,6 @@
 # Data & outputs
 data/
+!eval/data/
 *.csv
 
 # Python

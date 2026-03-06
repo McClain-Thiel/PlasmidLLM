@@ -7,6 +7,7 @@ Usage:
     python -m post_training.runners.run_grpo
     python -m post_training.runners.run_grpo --model gpt2 --steps 10
     python -m post_training.runners.run_grpo --model McClain/PlasmidLM-kmer6-MoE --steps 100
+    python -m post_training.runners.run_grpo --wandb --wandb-project plasmid-rl
 """
 
 from __future__ import annotations
@@ -69,7 +70,38 @@ def main():
     parser.add_argument("--max-new-tokens", type=int, default=64)
     parser.add_argument("--checkpoint-every", type=int, default=10)
     parser.add_argument("--checkpoint-dir", default="checkpoints/grpo")
+
+    # wandb args
+    parser.add_argument("--wandb", action="store_true", help="Enable wandb logging")
+    parser.add_argument("--wandb-project", default="post-training", help="wandb project name")
+    parser.add_argument("--wandb-run-name", default=None, help="wandb run name (auto-generated if omitted)")
+    parser.add_argument("--wandb-entity", default=None, help="wandb team/entity")
     args = parser.parse_args()
+
+    # ── wandb init ────────────────────────────────────────────────────────
+    if args.wandb:
+        try:
+            import wandb
+            wandb.init(
+                project=args.wandb_project,
+                name=args.wandb_run_name,
+                entity=args.wandb_entity,
+                config={
+                    "algorithm": "grpo",
+                    "model": args.model,
+                    "num_actors": args.num_actors,
+                    "steps": args.steps,
+                    "lr": args.lr,
+                    "kl_coef": args.kl_coef,
+                    "cliprange": args.cliprange,
+                    "num_generations": args.num_generations,
+                    "micro_batch_size": args.micro_batch_size,
+                    "max_new_tokens": args.max_new_tokens,
+                },
+            )
+            log.info("wandb run: %s/%s", wandb.run.project, wandb.run.name)
+        except ImportError:
+            log.warning("--wandb flag set but wandb is not installed; continuing without it")
 
     ray.init(ignore_reinit_error=True)
 
@@ -116,13 +148,20 @@ def main():
 
         log.info(
             "step=%d  loss=%.4f  reward=%.3f  reward_best=%.3f  "
-            "kl=%.4f  adv_std=%.3f",
+            "kl=%.4f  adv_std=%.3f  grad_norm=%.4f  lr=%.2e  "
+            "[gen=%.1fs score=%.1fs train=%.1fs total=%.1fs]",
             step,
             metrics["loss"],
             metrics["mean_reward"],
             metrics.get("reward_best", 0),
             metrics["kl"],
             metrics.get("adv_std", 0),
+            metrics.get("grad_norm", 0),
+            metrics.get("lr", 0),
+            metrics.get("time_generation", 0),
+            metrics.get("time_scoring", 0),
+            metrics.get("time_train", 0),
+            metrics.get("time_total", 0),
         )
 
         if args.checkpoint_every and step % args.checkpoint_every == 0:
@@ -134,6 +173,14 @@ def main():
     final = f"{args.checkpoint_dir}/final"
     ray.get(actors[0].save_checkpoint.remote(final))
     log.info("Training complete. Final model → %s", final)
+
+    # ── Cleanup ───────────────────────────────────────────────────────────
+    try:
+        import wandb
+        if wandb.run is not None:
+            wandb.finish()
+    except ImportError:
+        pass
 
     ray.shutdown()
 

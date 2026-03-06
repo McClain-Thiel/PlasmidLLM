@@ -183,6 +183,7 @@ class ModelActor:
 
     def generate(self, prompts: list[str], **gen_kwargs) -> GenerationResult:
         """Sample completions.  No log-probs, no gradients."""
+        log.debug("generate: %d prompt(s), gen_kwargs=%s", len(prompts), gen_kwargs)
         self.model.eval()
         encoded = self.tokenizer(
             prompts, return_tensors="pt", padding=True, truncation=True,
@@ -201,6 +202,11 @@ class ModelActor:
 
         self.model.train()
         comp_ids = output_ids[:, prompt_len:]
+        comp_lens = (comp_ids != self._pad_id).sum(-1).float()
+        log.debug(
+            "generate: done — %d seqs, prompt_len=%d, mean_comp_tokens=%.1f",
+            comp_ids.shape[0], prompt_len, comp_lens.mean().item(),
+        )
         return GenerationResult(
             prompts=prompts,
             completion_texts=self.tokenizer.batch_decode(
@@ -356,6 +362,11 @@ class ModelActor:
                 f"Available: {list(LOSS_REGISTRY.keys())}"
             )
 
+        log.debug(
+            "forward_backward: B=%d, prompt_len=%d, loss_fn=%s, accum_scale=%.1f",
+            full_ids.shape[0], prompt_len, loss_fn_name, accumulation_scale,
+        )
+
         self.model.train()
         full_ids = full_ids.to(self.device)
         advantages = advantages.to(self.device)
@@ -375,6 +386,7 @@ class ModelActor:
         )
 
         (loss / accumulation_scale).backward()
+        log.debug("forward_backward: loss=%.6f", loss.item())
         return {"loss": loss.item()}
 
     def clip_and_step(self) -> BackwardResult:
@@ -386,15 +398,11 @@ class ModelActor:
         self.scheduler.step()
         self._step += 1
 
-        return BackwardResult(
-            grad_norm=(
-                grad_norm.item()
-                if isinstance(grad_norm, torch.Tensor)
-                else grad_norm
-            ),
-            lr=self.scheduler.get_last_lr()[0],
-            step=self._step,
-        )
+        gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+        lr = self.scheduler.get_last_lr()[0]
+        log.debug("clip_and_step: step=%d grad_norm=%.4f lr=%.2e", self._step, gn, lr)
+
+        return BackwardResult(grad_norm=gn, lr=lr, step=self._step)
 
     # ══════════════════════════════════════════════════════════════════════
     # PERSISTENCE

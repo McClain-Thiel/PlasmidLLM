@@ -82,6 +82,7 @@ class Algorithm(ABC):
         After this call all actors have identical weights.
         Returns list of BackwardResult from each actor.
         """
+        log.debug("Averaging gradients across %d actors", len(actors))
         all_grads = ray.get([a.get_gradients.remote() for a in actors])
 
         avg = {}
@@ -90,15 +91,22 @@ class Algorithm(ABC):
             avg[key] = stacked.mean(dim=0)
 
         ray.get([a.set_gradients.remote(avg) for a in actors])
-        return ray.get([a.clip_and_step.remote() for a in actors])
+        results = ray.get([a.clip_and_step.remote() for a in actors])
+        log.debug(
+            "Gradient sync done — grad_norm=%.4f lr=%.2e step=%d",
+            results[0].grad_norm, results[0].lr, results[0].step,
+        )
+        return results
 
     @staticmethod
     def sync_actors(actors: list) -> None:
         """Broadcast weights from actors[0] to all others."""
         if len(actors) <= 1:
             return
+        log.info("Syncing weights from actor[0] → %d other actor(s)", len(actors) - 1)
         weights = ray.get(actors[0].get_weights.remote())
         ray.get([a.load_weights.remote(weights) for a in actors[1:]])
+        log.info("Weight sync complete")
 
     @staticmethod
     def micro_batch_forward_backward(
@@ -121,6 +129,10 @@ class Algorithm(ABC):
         """
         B = full_ids.shape[0]
         n_mb = max(1, (B + micro_batch_size - 1) // micro_batch_size)
+        log.debug(
+            "Micro-batch forward-backward: B=%d, %d micro-batch(es) of %d, loss=%s",
+            B, n_mb, micro_batch_size, loss_fn_name,
+        )
 
         ray.get(actor.zero_grad.remote())
         total_loss = 0.0
@@ -140,7 +152,9 @@ class Algorithm(ABC):
                 loss_fn_kwargs=loss_fn_kwargs,
                 accumulation_scale=n_mb,
             ))
-            total_loss += result["loss"] / n_mb
+            mb_loss = result["loss"] / n_mb
+            total_loss += mb_loss
+            log.debug("  micro-batch %d/%d loss=%.4f", i + 1, n_mb, result["loss"])
 
         return total_loss
 
