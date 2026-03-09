@@ -20,15 +20,24 @@ import contextlib
 import copy
 import logging
 import math
+import time
 from pathlib import Path
 from typing import Any
 
 import ray
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 
 from post_training.common.losses import LOSS_REGISTRY
+
+# Register local model classes so from_pretrained uses our fixed code
+# instead of downloading (potentially stale) remote code from HuggingFace.
+from plasmid_llm.models.hf_plasmid_lm.configuration_plasmid_lm import PlasmidLMConfig
+from plasmid_llm.models.hf_plasmid_lm.modeling_plasmid_lm import PlasmidLMForCausalLM
+
+AutoConfig.register("plasmid_lm", PlasmidLMConfig)
+AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 from post_training.common.objects import (
     BackwardResult,
     EntropyResult,
@@ -72,13 +81,37 @@ class ModelActor:
         self.bf16 = bf16
         self.max_grad_norm = max_grad_norm
 
-        log.info("Loading %s", model_id)
+        # Check bf16 hardware support; fall back to fp16 if unavailable
+        if bf16 and self.device.type == "cuda":
+            if not torch.cuda.is_bf16_supported():
+                log.warning("bf16 not supported on %s, falling back to fp16",
+                            torch.cuda.get_device_name(self.device))
+                self.bf16 = False
+                self._use_fp16 = True
+            else:
+                self._use_fp16 = False
+        else:
+            self._use_fp16 = False
+
+        # If model_id is an S3 path, download it locally first
+        if model_id.startswith("s3://"):
+            import subprocess
+            local_path = Path("/tmp/model_checkpoint")
+            if not local_path.exists():
+                log.info("Downloading model from %s", model_id)
+                subprocess.check_call(["aws", "s3", "sync", model_id, str(local_path)])
+            model_id = str(local_path)
+
+        log.info("Loading %s on %s (bf16=%s, fp16=%s)", model_id, self.device,
+                 self.bf16, self._use_fp16)
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, trust_remote_code=True,
-        ).to(self.device)
+            model_id,
+            torch_dtype=torch.float32,
+            device_map={"": self.device},
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id, trust_remote_code=True,
+            model_id, trust_remote_code=True,  # tokenizer still needs remote code
         )
         self.tokenizer.padding_side = "left"
         if self.tokenizer.pad_token is None:
@@ -144,6 +177,53 @@ class ModelActor:
                 grads[name] = param.grad.detach().cpu()
         return grads
 
+    def get_gpu_stats(self) -> dict[str, float]:
+        """Snapshot of GPU memory, utilization, power, and temperature."""
+        if not torch.cuda.is_available():
+            return {}
+
+        dev = self.device
+        stats: dict[str, float] = {
+            "memory_allocated_gb": torch.cuda.memory_allocated(dev) / 1e9,
+            "memory_reserved_gb": torch.cuda.memory_reserved(dev) / 1e9,
+            "memory_peak_gb": torch.cuda.max_memory_allocated(dev) / 1e9,
+        }
+
+        props = torch.cuda.get_device_properties(dev)
+        total = props.total_memory
+        stats["memory_total_gb"] = total / 1e9
+        stats["memory_utilization"] = torch.cuda.memory_allocated(dev) / total
+
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            idx = dev.index if dev.index is not None else 0
+            handle = pynvml.nvmlDeviceGetHandleByIndex(idx)
+
+            util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            stats["compute_utilization"] = util.gpu / 100.0
+            stats["mem_controller_utilization"] = util.memory / 100.0
+
+            try:
+                stats["power_w"] = pynvml.nvmlDeviceGetPowerUsage(handle) / 1000.0
+            except pynvml.NVMLError:
+                pass
+            try:
+                stats["temp_c"] = float(
+                    pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                )
+            except pynvml.NVMLError:
+                pass
+        except (ImportError, Exception):
+            pass
+
+        return stats
+
+    def reset_peak_memory(self) -> None:
+        """Reset CUDA peak-memory tracker so next phase starts fresh."""
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device)
+
     # ══════════════════════════════════════════════════════════════════════
     # SETTERS — mutate state
     # ══════════════════════════════════════════════════════════════════════
@@ -183,6 +263,7 @@ class ModelActor:
 
     def generate(self, prompts: list[str], **gen_kwargs) -> GenerationResult:
         """Sample completions.  No log-probs, no gradients."""
+        t0 = time.monotonic()
         log.debug("generate: %d prompt(s), gen_kwargs=%s", len(prompts), gen_kwargs)
         self.model.eval()
         encoded = self.tokenizer(
@@ -191,21 +272,22 @@ class ModelActor:
         prompt_len = encoded["input_ids"].shape[1]
 
         defaults = dict(
-            max_new_tokens=1024, temperature=1.0, do_sample=True,
+            max_new_tokens=2500, temperature=0.3, do_sample=True,
             top_p=0.95, pad_token_id=self._pad_id,
             eos_token_id=self.tokenizer.eos_token_id,
         )
         defaults.update(gen_kwargs)
 
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast():
             output_ids = self.model.generate(**encoded, **defaults)
 
         self.model.train()
         comp_ids = output_ids[:, prompt_len:]
         comp_lens = (comp_ids != self._pad_id).sum(-1).float()
+        elapsed = time.monotonic() - t0
         log.debug(
-            "generate: done — %d seqs, prompt_len=%d, mean_comp_tokens=%.1f",
-            comp_ids.shape[0], prompt_len, comp_lens.mean().item(),
+            "generate: done in %.2fs — %d seqs, prompt_len=%d, mean_comp_tokens=%.1f",
+            elapsed, comp_ids.shape[0], prompt_len, comp_lens.mean().item(),
         )
         return GenerationResult(
             prompts=prompts,
@@ -215,6 +297,7 @@ class ModelActor:
             completion_ids=comp_ids.cpu(),
             full_ids=output_ids.cpu(),
             prompt_len=prompt_len,
+            elapsed_s=elapsed,
         )
 
     def tokenize(self, texts: list[str], **kwargs) -> dict:
@@ -424,7 +507,7 @@ class ModelActor:
     # PERSISTENCE
     # ══════════════════════════════════════════════════════════════════════
 
-    def save_checkpoint(self, path: str) -> None:
+    def save_checkpoint(self, path: str, s3_dest: str | None = None) -> None:
         out = Path(path)
         out.mkdir(parents=True, exist_ok=True)
         self.model.save_pretrained(str(out))
@@ -433,12 +516,20 @@ class ModelActor:
         torch.save(self.scheduler.state_dict(), out / "scheduler.pt")
         torch.save({"step": self._step}, out / "training_state.pt")
         log.info("Checkpoint → %s (step %d)", out, self._step)
+        if s3_dest:
+            self._sync_to_s3(str(out), s3_dest)
+
+    def _sync_to_s3(self, local_dir: str, s3_dest: str) -> None:
+        """Sync a local directory to S3 (runs on worker node)."""
+        import subprocess
+        log.info("Syncing %s → %s", local_dir, s3_dest)
+        subprocess.call(["aws", "s3", "sync", local_dir, s3_dest, "--quiet"])
 
     def load_checkpoint(self, path: str) -> None:
         """Resume from a checkpoint saved by save_checkpoint()."""
         p = Path(path)
         loaded = AutoModelForCausalLM.from_pretrained(
-            p, trust_remote_code=True,
+            p, torch_dtype=torch.float32, device_map={"": self.device},
         )
         self.model.load_state_dict(loaded.state_dict())
         del loaded
@@ -491,4 +582,6 @@ class ModelActor:
     def _autocast(self):
         if self.bf16:
             return torch.amp.autocast("cuda", dtype=torch.bfloat16)
+        if getattr(self, "_use_fp16", False):
+            return torch.amp.autocast("cuda", dtype=torch.float16)
         return contextlib.nullcontext()

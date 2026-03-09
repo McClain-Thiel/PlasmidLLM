@@ -64,8 +64,8 @@ class PostTrainingConfig:
     scorer_kwargs: dict[str, Any] = field(default_factory=dict)
 
     # ── Generation ────────────────────────────────────────────────────────
-    max_new_tokens: int = 64
-    temperature: float = 1.0
+    max_new_tokens: int = 2500
+    temperature: float = 0.3
     top_p: float = 0.95
 
     # ── Prompts ───────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ class PostTrainingConfig:
     steps: int = 100
     checkpoint_every: int = 50
     checkpoint_dir: str = "checkpoints/post_training"
+    s3_checkpoint_prefix: Optional[str] = None  # e.g. s3://bucket/checkpoints/run_name
 
     # ── Logging ───────────────────────────────────────────────────────────
     wandb_project: Optional[str] = None

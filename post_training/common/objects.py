@@ -10,6 +10,7 @@ class GenerationResult:
     completion_ids: torch.Tensor   # (B, T_comp) CPU
     full_ids: torch.Tensor         # (B, T_full) CPU
     prompt_len: int
+    elapsed_s: float = 0.0        # wall-clock seconds for this generate() call
 
 
 @dataclass
