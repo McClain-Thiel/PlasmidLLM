@@ -168,17 +168,19 @@ def run(cfg: PostTrainingConfig) -> None:
             metrics["kl"],
             metrics.get("grad_norm", 0),
             metrics.get("lr", 0),
-            metrics.get("time_total", 0),
+            metrics.get("time/total", metrics.get("time_total", 0)),
         )
 
         if cfg.checkpoint_every and step % cfg.checkpoint_every == 0:
             ckpt = f"{cfg.checkpoint_dir}/step_{step}"
-            ray.get(actors[0].save_checkpoint.remote(ckpt))
+            s3 = f"{cfg.s3_checkpoint_prefix}/step_{step}" if cfg.s3_checkpoint_prefix else None
+            ray.get(actors[0].save_checkpoint.remote(ckpt, s3_dest=s3))
             log.info("Checkpoint → %s", ckpt)
 
     # ── Final checkpoint ───────────────────────────────────────────────────
     final = f"{cfg.checkpoint_dir}/final"
-    ray.get(actors[0].save_checkpoint.remote(final))
+    s3_final = f"{cfg.s3_checkpoint_prefix}/final" if cfg.s3_checkpoint_prefix else None
+    ray.get(actors[0].save_checkpoint.remote(final, s3_dest=s3_final))
     log.info("Training complete. Final model → %s", final)
 
     # ── Cleanup ────────────────────────────────────────────────────────────
