@@ -30,8 +30,8 @@ config = PostTrainingConfig(
         "motif_db_path": str(DATA_DIR / "motif_registry.parquet"),
     },
 
-    max_new_tokens=512,
-    temperature=1.0,
+    max_new_tokens=2500,
+    temperature=0.3,
     top_p=0.95,
 
     prompts_list=[
