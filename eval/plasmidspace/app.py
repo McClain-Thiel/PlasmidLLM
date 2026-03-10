@@ -7,6 +7,14 @@ PlasmidLM, then annotates with pLannotate for visualization.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
+# numpy compat — bokeh 2.4.3 uses numpy.bool8, removed in numpy 2.x.
+# Patch before anything imports bokeh.
+# ---------------------------------------------------------------------------
+import numpy as np
+if not hasattr(np, "bool8"):
+    np.bool8 = np.bool_
+
+# ---------------------------------------------------------------------------
 # Streamlit shim — plannotate imports streamlit at the top level but we only
 # use the annotation/plot modules, not the streamlit UI.
 # ---------------------------------------------------------------------------
