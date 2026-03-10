@@ -70,13 +70,10 @@ FUNCTIONAL_PREFIXES = frozenset(
 # Model & tokenizer (loaded once at startup)
 # ---------------------------------------------------------------------------
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-dtype = torch.bfloat16 if device == "cuda" else torch.float32
-
-print(f"Loading {MODEL_ID} on {device} ({dtype}) …")
+print(f"Loading {MODEL_ID} …")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, trust_remote_code=True, dtype=dtype, device_map=device,
+    MODEL_ID, trust_remote_code=True, torch_dtype=torch.float32,
 )
 model.eval()
 
@@ -266,7 +263,8 @@ def generate_dna(
         return "", "Please provide a token prompt first."
 
     prompt_text = _ensure_prompt_format(prompt_text)
-    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+    dev = next(model.parameters()).device
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(dev)
 
     t0 = time.time()
     with torch.no_grad():
