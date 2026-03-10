@@ -3,6 +3,7 @@ torch
 transformers>=4.38
 accelerate>=0.26
 anthropic
+numpy<2
 biopython>=1.78
 click
 tabulate>=0.8.9
