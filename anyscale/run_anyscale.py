@@ -39,7 +39,27 @@ def s3_download(s3_path: str, local_path: Path) -> None:
     subprocess.check_call(["aws", "s3", "cp", s3_path, str(local_path)])
 
 
+def install_blast():
+    """Install NCBI BLAST+ if not already available."""
+    try:
+        subprocess.run(["blastn", "-version"], capture_output=True, check=True)
+        log.info("BLAST+ already installed")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        log.info("Installing BLAST+ via apt...")
+        subprocess.check_call(["sudo", "apt-get", "update", "-qq"])
+        subprocess.check_call(
+            ["sudo", "apt-get", "install", "-y", "-qq", "ncbi-blast+"]
+        )
+        log.info("BLAST+ installed")
+
+
 def main():
+    config_name = os.environ.get("CONFIG", "grpo_dense_anyscale")
+
+    # ── Install BLAST+ if plannotate scorer ────────────────────────────────
+    if "plannotate" in config_name:
+        install_blast()
+
     # ── Download data ─────────────────────────────────────────────────────
     log.info("Downloading data from S3...")
     s3_download(
@@ -49,6 +69,10 @@ def main():
     s3_download(
         f"{S3_PREFIX}/data/training_pairs_v4.parquet",
         DATA_DIR / "training_pairs_v4.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/plannotate_db.parquet",
+        DATA_DIR / "plannotate_db.parquet",
     )
     log.info("Data download complete.")
 
@@ -68,7 +92,7 @@ def main():
         cfg.model = resume_from
 
     # ── Set S3 checkpoint sync (runs on worker via ModelActor) ───────────
-    run_name = config_name.replace("grpo_dense_anyscale", "grpo_dense_motif")
+    run_name = config_name.replace("_anyscale", "")
     cfg.s3_checkpoint_prefix = f"{S3_CHECKPOINT_PREFIX}/{run_name}"
 
     # ── Run post-training ─────────────────────────────────────────────────
