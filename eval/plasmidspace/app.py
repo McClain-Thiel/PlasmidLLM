@@ -76,6 +76,13 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID, trust_remote_code=True, dtype=torch.float32,
 )
 model.eval()
+# ZeroGPU requires .to('cuda') at module level so it can track model tensors.
+# On Spaces, the `spaces` package intercepts this call; locally it's a no-op
+# if no GPU is available (we catch the error).
+try:
+    model.to("cuda")
+except RuntimeError:
+    pass  # no GPU locally — stays on CPU
 
 vocab = tokenizer.get_vocab()
 
@@ -263,8 +270,8 @@ def generate_dna(
         return "", "Please provide a token prompt first."
 
     prompt_text = _ensure_prompt_format(prompt_text)
-    dev = next(model.parameters()).device
-    inputs = tokenizer(prompt_text, return_tensors="pt").to(dev)
+    device = next(model.parameters()).device
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
 
     t0 = time.time()
     with torch.no_grad():
