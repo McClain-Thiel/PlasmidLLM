@@ -37,7 +37,6 @@ import os
 import re
 import time
 from pathlib import Path
-from threading import Thread
 
 import anthropic
 import gradio as gr
@@ -47,7 +46,7 @@ from bokeh.embed import file_html
 from bokeh.resources import CDN as BOKEH_CDN
 from plannotate.annotate import annotate as _plannotate_annotate
 from plannotate.bokeh_plot import get_bokeh as _plannotate_bokeh
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 try:
     import spaces
@@ -262,48 +261,33 @@ def generate_dna(
     top_k: int,
     max_tokens: int,
 ):
-    """Generate DNA via streaming.  Yields ``(dna, status)`` tuples."""
+    """Generate DNA. Returns ``(dna, status)`` tuple."""
     if not prompt_text.strip():
-        yield "", "Please provide a token prompt first."
-        return
+        return "", "Please provide a token prompt first."
 
     prompt_text = _ensure_prompt_format(prompt_text)
     inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
 
-    streamer = TextIteratorStreamer(
-        tokenizer, skip_prompt=True, skip_special_tokens=False,
-    )
-
-    gen_kwargs = dict(
-        input_ids=inputs["input_ids"],
-        attention_mask=inputs["attention_mask"],
-        max_new_tokens=int(max_tokens),
-        temperature=float(temperature),
-        do_sample=True,
-        top_k=int(top_k),
-        streamer=streamer,
-        pad_token_id=tokenizer.pad_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-    )
-
     t0 = time.time()
-    thread = Thread(target=model.generate, kwargs=gen_kwargs)
-    thread.start()
-
-    raw_output = ""
-    for chunk in streamer:
-        raw_output += chunk
-        dna = _clean_dna(raw_output)
-        elapsed = time.time() - t0
-        yield dna, f"Generating… {len(dna)} bp ({elapsed:.1f} s)"
-
-    thread.join()
-
-    dna = _clean_dna(raw_output)
+    with torch.no_grad():
+        output = model.generate(
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs["attention_mask"],
+            max_new_tokens=int(max_tokens),
+            temperature=float(temperature),
+            do_sample=True,
+            top_k=int(top_k),
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+        )
     elapsed = time.time() - t0
+
+    raw_output = tokenizer.decode(output[0], skip_special_tokens=False)
+    dna_part = raw_output.split("<SEQ>")[-1] if "<SEQ>" in raw_output else raw_output
+    dna = _clean_dna(dna_part)
     has_eos = "<EOS>" in raw_output
     tag = "complete" if has_eos else "max-length reached"
-    yield dna, f"Done: {len(dna)} bp, {tag} ({elapsed:.1f} s)"
+    return dna, f"Done: {len(dna)} bp, {tag} ({elapsed:.1f} s)"
 
 
 # ---------------------------------------------------------------------------
