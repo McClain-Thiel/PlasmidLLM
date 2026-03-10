@@ -76,9 +76,8 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID, trust_remote_code=True, dtype=torch.float32,
 )
 model.eval()
-# ZeroGPU requires .to('cuda') at module level so it can track model tensors.
-# On Spaces, the `spaces` package intercepts this call; locally it's a no-op
-# if no GPU is available (we catch the error).
+# ZeroGPU: register model for GPU transfer. The spaces package intercepts
+# .to('cuda') at module level to track tensors.
 try:
     model.to("cuda")
 except RuntimeError:
@@ -240,7 +239,7 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# DNA generation (streaming, GPU-accelerated)
+# DNA generation (GPU-accelerated)
 # ---------------------------------------------------------------------------
 
 
@@ -258,6 +257,21 @@ def _clean_dna(raw: str) -> str:
     return re.sub(r"[^ATGCN]", "", seq)
 
 
+def _reinit_rope(mdl: torch.nn.Module, device: torch.device) -> None:
+    """Force re-initialization of non-persistent RoPE buffers on *device*.
+
+    ZeroGPU only transfers persistent parameters/buffers. Our model's RoPE
+    cos/sin are non-persistent (``persistent=False``) and lazily initialized,
+    so after ZeroGPU moves the model to GPU the RoPE buffers may be stale
+    or on the wrong device. This forces a fresh computation.
+    """
+    backbone = getattr(mdl, "model", mdl)  # CausalLM wraps backbone as .model
+    if hasattr(backbone, "_init_rope"):
+        backbone.rope_cos = None  # reset so lazy init triggers
+        backbone.rope_sin = None
+        backbone._init_rope(device)
+
+
 @gpu
 def generate_dna(
     prompt_text: str,
@@ -271,10 +285,15 @@ def generate_dna(
 
     prompt_text = _ensure_prompt_format(prompt_text)
     device = next(model.parameters()).device
+
+    # Force float32 and re-init RoPE on the correct device (ZeroGPU fix)
+    model.float()
+    _reinit_rope(model, device)
+
     inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
 
     t0 = time.time()
-    with torch.no_grad():
+    with torch.no_grad(), torch.amp.autocast("cuda", enabled=False):
         output = model.generate(
             input_ids=inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
