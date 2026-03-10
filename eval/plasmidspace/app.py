@@ -73,7 +73,7 @@ FUNCTIONAL_PREFIXES = frozenset(
 print(f"Loading {MODEL_ID} …")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, trust_remote_code=True, torch_dtype=torch.float32,
+    MODEL_ID, trust_remote_code=True, dtype=torch.float32,
 )
 model.eval()
 
