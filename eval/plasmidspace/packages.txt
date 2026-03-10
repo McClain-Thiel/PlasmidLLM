@@ -1,0 +1,5 @@
+ncbi-blast+
+diamond-aligner
+infernal
+ripgrep
+curl
