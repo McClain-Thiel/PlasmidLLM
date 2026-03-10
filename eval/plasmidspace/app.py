@@ -8,17 +8,14 @@ from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # numpy compat — bokeh 2.4.3 uses numpy.bool8, removed in numpy 2.x.
-# Patch before anything imports bokeh.
 # ---------------------------------------------------------------------------
 import numpy as np
 if not hasattr(np, "bool8"):
     np.bool8 = np.bool_
 
 # ---------------------------------------------------------------------------
-# Streamlit shim — plannotate imports streamlit at the top level but we only
-# use the annotation/plot modules, not the streamlit UI.
+# Streamlit shim — plannotate imports streamlit at the top level.
 # ---------------------------------------------------------------------------
-import importlib
 import sys
 import types
 
@@ -35,14 +32,13 @@ if "streamlit" not in sys.modules:
     _st.progress = lambda n: _Noop()
     _st.error = lambda msg: None
     sys.modules["streamlit"] = _st
-    # plannotate.pLannotate imports streamlit.cli
-    _st_cli = types.ModuleType("streamlit.cli")
-    sys.modules["streamlit.cli"] = _st_cli
+    sys.modules["streamlit.cli"] = types.ModuleType("streamlit.cli")
 
 # ---------------------------------------------------------------------------
 
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -54,20 +50,15 @@ from bokeh.embed import file_html
 from bokeh.resources import CDN as BOKEH_CDN
 from plannotate.annotate import annotate as _plannotate_annotate
 from plannotate.bokeh_plot import get_bokeh as _plannotate_bokeh
+from plannotate import resources as _plannotate_rsc
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-try:
-    import spaces
-    gpu = spaces.GPU
-except ImportError:
-    def gpu(fn=None, **kwargs):
-        return fn if fn is not None else lambda f: f
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 MODEL_ID = "McClain/PlasmidLM-kmer6-GRPO-plannotate"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 FUNCTIONAL_PREFIXES = frozenset(
     {"AMR_", "ORI_", "PROM_", "REPORTER_", "TAG_", "ELEM_",
@@ -75,23 +66,22 @@ FUNCTIONAL_PREFIXES = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# Model & tokenizer (loaded once at startup)
+# Model & tokenizer
 # ---------------------------------------------------------------------------
 
-print(f"Loading {MODEL_ID} …")
+print(f"Loading {MODEL_ID} on {DEVICE} …")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID, trust_remote_code=True, dtype=torch.float32,
-)
-model.eval()
-# ZeroGPU: register model for GPU transfer. The spaces package intercepts
-# .to('cuda') at module level to track tensors.
-try:
-    model.to("cuda")
-except RuntimeError:
-    pass  # no GPU locally — stays on CPU
+    MODEL_ID, trust_remote_code=True, torch_dtype=torch.float32,
+).to(DEVICE).eval()
 
 vocab = tokenizer.get_vocab()
+
+# Fix token IDs if the tokenizer didn't set them
+if tokenizer.eos_token_id is None and "<EOS>" in vocab:
+    tokenizer.eos_token_id = vocab["<EOS>"]
+if tokenizer.pad_token_id is None and "<PAD>" in vocab:
+    tokenizer.pad_token_id = vocab["<PAD>"]
 
 SPECIAL_TOKENS = sorted(
     tok for tok in vocab
@@ -104,17 +94,12 @@ for _tok in SPECIAL_TOKENS:
     _cat = _tok.strip("<>").split("_", 1)[0]
     TOKEN_BY_CATEGORY.setdefault(_cat, []).append(_tok)
 
-print(
-    f"Ready: {len(SPECIAL_TOKENS)} functional tokens, "
-    f"{len(TOKEN_BY_CATEGORY)} categories"
-)
+print(f"Ready: {len(SPECIAL_TOKENS)} functional tokens, "
+      f"{len(TOKEN_BY_CATEGORY)} categories, device={DEVICE}")
 
 # ---------------------------------------------------------------------------
-# pLannotate database setup (background, non-blocking)
+# pLannotate database setup (background)
 # ---------------------------------------------------------------------------
-
-import threading
-from plannotate import resources as _plannotate_rsc
 
 _plannotate_ready = threading.Event()
 
@@ -220,7 +205,6 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
     if not valid:
         return "", f"No valid tokens in LLM output: {raw}"
 
-    # De-duplicate and sort by category order (matching training data convention)
     _CAT_ORDER = {
         "VEC": 0, "SP": 1, "COPY": 2, "BB": 3, "AMR": 4,
         "ORI": 5, "PROM": 6, "ELEM": 7, "TAG": 8, "REPORTER": 9,
@@ -247,7 +231,7 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# DNA generation (GPU-accelerated)
+# DNA generation
 # ---------------------------------------------------------------------------
 
 
@@ -265,22 +249,6 @@ def _clean_dna(raw: str) -> str:
     return re.sub(r"[^ATGCN]", "", seq)
 
 
-def _reinit_rope(mdl: torch.nn.Module, device: torch.device) -> None:
-    """Force re-initialization of non-persistent RoPE buffers on *device*.
-
-    ZeroGPU only transfers persistent parameters/buffers. Our model's RoPE
-    cos/sin are non-persistent (``persistent=False``) and lazily initialized,
-    so after ZeroGPU moves the model to GPU the RoPE buffers may be stale
-    or on the wrong device. This forces a fresh computation.
-    """
-    backbone = getattr(mdl, "model", mdl)  # CausalLM wraps backbone as .model
-    if hasattr(backbone, "_init_rope"):
-        backbone.rope_cos = None  # reset so lazy init triggers
-        backbone.rope_sin = None
-        backbone._init_rope(device)
-
-
-@gpu
 def generate_dna(
     prompt_text: str,
     temperature: float,
@@ -292,16 +260,10 @@ def generate_dna(
         return "", "Please provide a token prompt first."
 
     prompt_text = _ensure_prompt_format(prompt_text)
-    device = next(model.parameters()).device
-
-    # Force float32 and re-init RoPE on the correct device (ZeroGPU fix)
-    model.float()
-    _reinit_rope(model, device)
-
-    inputs = tokenizer(prompt_text, return_tensors="pt").to(device)
+    inputs = tokenizer(prompt_text, return_tensors="pt").to(DEVICE)
 
     t0 = time.time()
-    with torch.no_grad(), torch.amp.autocast("cuda", enabled=False):
+    with torch.no_grad():
         output = model.generate(
             input_ids=inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
@@ -345,7 +307,6 @@ def annotate_sequence(
     if hits is None or (hasattr(hits, "empty") and hits.empty):
         return None, None, "No annotations found."
 
-    # Bokeh plasmid map → standalone HTML
     html_map = None
     try:
         fig = _plannotate_bokeh(hits, linear=False)
@@ -381,17 +342,6 @@ def _token_reference_md() -> str:
     return "\n".join(lines)
 
 
-EXAMPLE_DESCRIPTIONS = [
-    ["Bacterial expression vector with kanamycin resistance, "
-     "ColE1 origin, and T7 promoter"],
-    ["Lentiviral vector with GFP reporter and puromycin selection"],
-    ["CRISPR guide RNA vector with ampicillin resistance "
-     "and U6 promoter"],
-    ["Mammalian expression plasmid with CMV promoter, EGFP, "
-     "and neomycin selection"],
-]
-
-# Pre-mapped examples from training data — bypass Claude, fill tokens directly.
 QUICK_START_EXAMPLES: list[tuple[str, str]] = [
     (
         "Bacterial cloning vector (kanamycin, ColE1)",
@@ -432,7 +382,7 @@ def _use_quick_example(choice: str) -> tuple[str, str]:
     return "", "Example not found."
 
 # ---------------------------------------------------------------------------
-# Gradio Blocks UI
+# Gradio UI
 # ---------------------------------------------------------------------------
 
 with gr.Blocks(title="PlasmidSpace") as demo:
@@ -444,7 +394,6 @@ with gr.Blocks(title="PlasmidSpace") as demo:
     )
 
     with gr.Row(equal_height=False):
-        # ── Left column: inputs ───────────────────────────────────
         with gr.Column(scale=1, min_width=340):
             gr.Markdown("### Quick Start")
             quick_start = gr.Radio(
@@ -466,8 +415,7 @@ with gr.Blocks(title="PlasmidSpace") as demo:
 
             with gr.Row():
                 temperature = gr.Slider(
-                    0.1, 1.0, value=0.3, step=0.05,
-                    label="Temperature",
+                    0.1, 1.0, value=0.3, step=0.05, label="Temperature",
                 )
                 top_k = gr.Slider(
                     1, 100, value=50, step=1, label="Top K",
@@ -479,9 +427,7 @@ with gr.Blocks(title="PlasmidSpace") as demo:
 
             token_prompt = gr.Textbox(
                 label="Token Prompt (editable)",
-                placeholder=(
-                    "<BOS> <AMR_KANAMYCIN> <ORI_COLE1> <PROM_T7> <SEQ>"
-                ),
+                placeholder="<BOS> <AMR_KANAMYCIN> <ORI_COLE1> <PROM_T7> <SEQ>",
                 lines=2,
                 info="Edit freely, or type tokens manually and skip mapping.",
             )
@@ -493,19 +439,14 @@ with gr.Blocks(title="PlasmidSpace") as demo:
             with gr.Accordion("Available Tokens", open=False):
                 gr.Markdown(_token_reference_md())
 
-        # ── Right column: outputs ─────────────────────────────────
         with gr.Column(scale=2):
             status_box = gr.Textbox(
                 label="Status", interactive=False, max_lines=2,
             )
-
             dna_output = gr.Textbox(
                 label="Generated DNA Sequence",
-                lines=10,
-                max_lines=20,
-                interactive=False,
+                lines=10, max_lines=20, interactive=False,
             )
-
             with gr.Tabs():
                 with gr.Tab("Plasmid Map"):
                     plasmid_html = gr.HTML(label="Plasmid Map")
@@ -514,7 +455,6 @@ with gr.Blocks(title="PlasmidSpace") as demo:
 
     # ── Event wiring ──────────────────────────────────────────────
 
-    # Quick start: fill tokens → generate → annotate
     quick_start.change(
         fn=_use_quick_example,
         inputs=[quick_start],
@@ -529,7 +469,6 @@ with gr.Blocks(title="PlasmidSpace") as demo:
         outputs=[plasmid_html, ann_table, status_box],
     )
 
-    # Manual: describe → map → edit → generate → annotate
     map_btn.click(
         fn=map_text_to_tokens,
         inputs=[description],
@@ -546,10 +485,6 @@ with gr.Blocks(title="PlasmidSpace") as demo:
         outputs=[plasmid_html, ann_table, status_box],
     )
 
-
-# ---------------------------------------------------------------------------
-# Launch
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     demo.launch(ssr_mode=False)
