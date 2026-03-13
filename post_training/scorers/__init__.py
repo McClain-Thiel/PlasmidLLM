@@ -2,12 +2,14 @@
 
 from post_training.scorers.base import Scorer
 from post_training.scorers.alignment import AlignmentScorer
+from post_training.scorers.binary_motif import BinaryMotifScorer
 from post_training.scorers.motif import MotifScorer
 from post_training.scorers.plannotate import PlannotateScorer
 from post_training.scorers.valid import ValidPlasmidScorer
 
 SCORER_REGISTRY = {
     "alignment": AlignmentScorer,
+    "binary_motif": BinaryMotifScorer,
     "motif": MotifScorer,
     "plannotate": PlannotateScorer,
     "valid": ValidPlasmidScorer,
