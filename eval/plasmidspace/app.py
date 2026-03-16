@@ -53,7 +53,15 @@ from bokeh.resources import CDN as BOKEH_CDN
 from plannotate.annotate import annotate as _plannotate_annotate
 from plannotate.bokeh_plot import get_bokeh as _plannotate_bokeh
 from plannotate import resources as _plannotate_rsc
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
+
+# Register local model classes so we get the updated generate_simple()
+# instead of the (potentially stale) remote code from HuggingFace.
+from plasmid_llm.models.hf_plasmid_lm.configuration_plasmid_lm import PlasmidLMConfig
+from plasmid_llm.models.hf_plasmid_lm.modeling_plasmid_lm import PlasmidLMForCausalLM
+
+AutoConfig.register("plasmid_lm", PlasmidLMConfig)
+AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -232,7 +240,7 @@ if DEVICE == "cuda":
     print(f"  GPU: {torch.cuda.get_device_name(0)}, "
           f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(MODEL_ID, trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
 if DEVICE == "cuda":
     model = model.half().to("cuda")
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -527,31 +535,6 @@ def _score_annotation(
     return composite
 
 
-class _TokenCounter:
-    """Counts generation steps so the UI can show progress.
-
-    Implements the streamer interface (put/end) expected by
-    transformers model.generate().
-    """
-
-    def __init__(self):
-        self.step = 0
-        self.done = False
-
-    def put(self, value):
-        self.step += 1
-
-    def end(self):
-        self.done = True
-
-
-def _progress_bar(step: int, total: int, width: int = 20) -> str:
-    frac = min(step / max(total, 1), 1.0)
-    filled = int(width * frac)
-    bar = "█" * filled + "░" * (width - filled)
-    return f"[{bar}] {step}/{total} tokens ({frac:.0%})"
-
-
 def generate_and_select(
     prompt_text: str,
     temperature: float,
@@ -576,21 +559,23 @@ def generate_and_select(
         padding=True,
     ).to(DEVICE)
 
-    # Run generation in background thread with token counter
-    counter = _TokenCounter()
+    n_label = f"{num_samples} sample(s)" if num_samples > 1 else "1 sample"
+    yield "", f"Generating {n_label}…", None, None, ""
+
+    # Use fast generate_simple() — bypasses HF GenerationMixin overhead
     result_holder: list = [None, None]  # [outputs, error]
 
     def _run_generate():
         try:
             with torch.no_grad():
-                result_holder[0] = model.generate(
-                    **inputs,
+                result_holder[0] = model.generate_simple(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs.get("attention_mask"),
                     max_new_tokens=max_tokens,
                     temperature=float(temperature),
-                    do_sample=True,
                     top_k=50,
-                    use_cache=True,
-                    streamer=counter,
+                    eos_token_id=tokenizer.eos_token_id,
+                    pad_token_id=tokenizer.pad_token_id,
                 )
         except Exception as exc:
             result_holder[1] = exc
@@ -599,13 +584,11 @@ def generate_and_select(
     gen_thread = threading.Thread(target=_run_generate)
     gen_thread.start()
 
-    # Poll progress and yield status updates
-    n_label = f"{num_samples} sample(s)" if num_samples > 1 else "1 sample"
+    # Poll and yield elapsed-time updates
     while gen_thread.is_alive():
         elapsed = time.time() - t0
-        bar = _progress_bar(counter.step, max_tokens)
-        yield "", f"Generating {n_label}… {bar}  ({elapsed:.1f}s)", None, None, ""
-        gen_thread.join(timeout=0.4)
+        yield "", f"Generating {n_label}… ({elapsed:.1f}s)", None, None, ""
+        gen_thread.join(timeout=0.5)
 
     gen_time = time.time() - t0
 
@@ -627,7 +610,9 @@ def generate_and_select(
         print(f"[generate] sample {i}: {len(dna)} bp, "
               f"{'complete' if has_eos else 'truncated'}")
 
-    yield "", (f"Generated {n_label} ({counter.step} tokens) in {gen_time:.1f}s. "
+    prompt_len = inputs["input_ids"].shape[1]
+    total_new_tokens = (outputs.shape[1] - prompt_len) * outputs.shape[0]
+    yield "", (f"Generated {n_label} ({total_new_tokens} tokens) in {gen_time:.1f}s. "
                "Annotating…"), None, None, ""
 
     # If only 1 sample, skip scoring
