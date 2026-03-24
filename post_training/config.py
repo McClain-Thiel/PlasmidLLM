@@ -63,6 +63,11 @@ class PostTrainingConfig:
     scorer: str = "substring"
     scorer_kwargs: dict[str, Any] = field(default_factory=dict)
 
+    # ── Length penalty (applied post-scoring in GRPO) ─────────────────────
+    length_penalty_per_kb: float = 0.0   # 0 = disabled
+    length_soft_max: float = 8000.0      # chars beyond this are penalised
+    length_penalty_cap: float = 0.15     # max total penalty
+
     # ── Generation ────────────────────────────────────────────────────────
     max_new_tokens: int = 2500
     temperature: float = 0.3
@@ -73,6 +78,11 @@ class PostTrainingConfig:
     prompts_list: Optional[list[str]] = None
     prompt_batch_size: int = 4
     filter_hard_tokens: bool = True
+
+    # ── Evaluation ────────────────────────────────────────────────────────
+    eval_parquet: Optional[str] = None       # holdout prompts for periodic eval
+    eval_every: int = 100                    # evaluate every N steps
+    eval_batch_size: int = 8                 # prompts per eval (× G completions)
 
     # ── Training loop ─────────────────────────────────────────────────────
     steps: int = 100
@@ -114,6 +124,11 @@ class PostTrainingConfig:
                 "kl_coef": self.kl_coef,
                 "cliprange": self.cliprange,
                 "num_generations": self.num_generations,
+                "scorer_name": self.scorer,
+                "scorer_kwargs": self.scorer_kwargs,
+                "length_penalty_per_kb": self.length_penalty_per_kb,
+                "length_soft_max": self.length_soft_max,
+                "length_penalty_cap": self.length_penalty_cap,
             }
         elif self.algorithm == "ppo":
             return {

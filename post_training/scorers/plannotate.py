@@ -429,7 +429,7 @@ class PlannotateScorer(Scorer):
             "-outfmt", f"6 {cols}",
             "-evalue", str(effective_evalue),
             "-max_target_seqs", "500",
-            "-num_threads", "4",
+            "-num_threads", str(min(os.cpu_count() or 4, 16)),
         ]
         if extra_args:
             cmd.extend(extra_args)

@@ -15,11 +15,14 @@ import logging
 import sys
 from pathlib import Path
 
+import random
+
 import ray
 import torch
 
 from post_training.algorithms import build_algorithm
 from post_training.common.model import ModelActor
+from post_training.common.utils import wandb_log
 from post_training.config import PostTrainingConfig
 from post_training.scorers import build_scorer
 
@@ -107,6 +110,49 @@ def _load_prompts(cfg: PostTrainingConfig) -> list[str]:
 # ══════════════════════════════════════════════════════════════════════════
 
 
+def _run_eval(
+    actors,
+    eval_prompts: list[str],
+    scorer,
+    gen_kwargs: dict,
+    num_generations: int,
+    step: int,
+) -> dict[str, float]:
+    """Generate + score on holdout prompts (no training). Returns metrics."""
+    G = num_generations
+    expanded = [p for p in eval_prompts for _ in range(G)]
+
+    # Generate using first actor only (eval doesn't need multi-actor)
+    gen = ray.get(actors[0].generate.remote(expanded, **gen_kwargs))
+    prompts_out = gen.prompts
+    completions = gen.completion_texts
+
+    # Score
+    rewards = scorer.score(prompts_out, completions)
+    comp_lengths = [len(t) for t in completions]
+
+    reward_groups = rewards.view(-1, G)
+    metrics = {
+        "mean_reward": rewards.mean().item(),
+        "reward_std": rewards.std().item(),
+        "reward_min": rewards.min().item(),
+        "reward_max": rewards.max().item(),
+        "reward_best": reward_groups.max(dim=1).values.mean().item(),
+        "reward_worst": reward_groups.min(dim=1).values.mean().item(),
+        "mean_completion_len": sum(comp_lengths) / max(len(comp_lengths), 1),
+        "n_prompts": len(eval_prompts),
+    }
+    wandb_log(metrics, step=step, prefix="eval/")
+
+    log.info(
+        "EVAL step=%d  reward=%.3f±%.3f  best=%.3f  len=%.0f  (%d prompts)",
+        step, metrics["mean_reward"], metrics["reward_std"],
+        metrics["reward_best"], metrics["mean_completion_len"],
+        len(eval_prompts),
+    )
+    return metrics
+
+
 def run(cfg: PostTrainingConfig) -> None:
     """Execute a full post-training run from a config."""
 
@@ -139,6 +185,17 @@ def run(cfg: PostTrainingConfig) -> None:
     algo = build_algorithm(cfg.algorithm, **cfg.algorithm_kwargs())
     scorer = _build_scorer(cfg)
     all_prompts = _load_prompts(cfg)
+
+    # ── Load eval prompts (if configured) ──────────────────────────────────
+    eval_prompts: list[str] | None = None
+    if cfg.eval_parquet:
+        from plasmid_llm.utils import load_prompts_from_parquet
+        all_eval = load_prompts_from_parquet(
+            cfg.eval_parquet, filter_hard_tokens=cfg.filter_hard_tokens,
+        )
+        log.info("Loaded %d eval prompts from %s", len(all_eval), cfg.eval_parquet)
+        eval_rng = random.Random(cfg.seed)
+        eval_prompts = all_eval
 
     log.info(
         "Starting %s: model=%s, actors=%d, steps=%d, scorer=%s",
@@ -176,6 +233,11 @@ def run(cfg: PostTrainingConfig) -> None:
             s3 = f"{cfg.s3_checkpoint_prefix}/step_{step}" if cfg.s3_checkpoint_prefix else None
             ray.get(actors[0].save_checkpoint.remote(ckpt, s3_dest=s3))
             log.info("Checkpoint → %s", ckpt)
+
+        if eval_prompts and cfg.eval_every and step % cfg.eval_every == 0:
+            batch = eval_rng.sample(eval_prompts, min(cfg.eval_batch_size, len(eval_prompts)))
+            _run_eval(actors, batch, scorer, cfg.generation_kwargs(),
+                      algo.num_generations, step)
 
     # ── Final checkpoint ───────────────────────────────────────────────────
     final = f"{cfg.checkpoint_dir}/final"

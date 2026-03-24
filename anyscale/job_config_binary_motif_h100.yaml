@@ -1,0 +1,41 @@
+name: grpo-binary-motif-1tok-h100
+cloud: helix-anyscale-cloud
+compute_config:
+  cloud: helix-anyscale-cloud
+  enable_cross_zone_scaling: true
+  head_node:
+    instance_type: m5.large
+  worker_nodes:
+    - instance_type: p5.4xlarge
+      min_nodes: 1
+      max_nodes: 1
+      market_type: SPOT
+image_uri: anyscale/ray:2.54.0-py312-cu128
+requirements:
+  - torch>=2.1,<2.10
+  - transformers>=4.38
+  - tokenizers>=0.15
+  - pyarrow>=14.0
+  - pandas>=2.0
+  - parasail>=1.3.0
+  - biopython>=1.80
+  - wandb>=0.16
+  - boto3>=1.28
+  - safetensors>=0.4
+  - accelerate>=0.26
+working_dir: /Users/mcclainthiel/Projects/PhD/PlasmidLLM
+excludes:
+  - ".venv"
+  - ".git"
+  - "data"
+  - "notebooks"
+  - "__pycache__"
+  - "*.egg-info"
+  - ".mypy_cache"
+entrypoint: python anyscale/run_anyscale.py
+max_retries: 0
+env_vars:
+  CONFIG: grpo_binary_motif_anyscale
+  WANDB_API_KEY: "4735d4f04c0bbfc6addc08ceec8e2a04a77b3d07"
+  HF_TOKEN: "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"
+  PYTHONPATH: "."

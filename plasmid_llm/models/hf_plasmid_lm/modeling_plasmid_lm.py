@@ -360,27 +360,85 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         input_ids: torch.Tensor,
         max_new_tokens: int = 512,
         temperature: float = 0.8,
-        top_k: int = 50,
+        top_k: int = 0,
+        top_p: float = 0.0,
+        attention_mask: Optional[torch.Tensor] = None,
+        eos_token_id: Optional[int] = None,
+        pad_token_id: Optional[int] = None,
     ) -> torch.Tensor:
-        """Simple autoregressive generation with KV cache."""
-        # Prefill (aux_loss ignored during generation)
-        hidden_states, kv_caches, _ = self.model(input_ids)
-        logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)
+        """Fast autoregressive generation with KV cache, top-p/top-k, and EOS stopping.
+
+        Bypasses HF GenerationMixin overhead for significantly faster decoding
+        on small models where Python/kernel-launch overhead dominates.
+
+        Args:
+            input_ids: (B, S) token IDs, left-padded if batched.
+            max_new_tokens: Maximum tokens to generate per sequence.
+            temperature: Sampling temperature.
+            top_k: If >0, keep only top-k logits before sampling.
+            top_p: If >0, nucleus sampling — keep smallest set with cumulative prob >= top_p.
+            attention_mask: (B, S) mask with 1=real, 0=pad. Required for left-padded inputs.
+            eos_token_id: If set, stop each sequence when this token is generated.
+            pad_token_id: Token to fill finished sequences with. Defaults to eos_token_id.
+        """
+        B = input_ids.shape[0]
+        device = input_ids.device
+
+        if pad_token_id is None:
+            pad_token_id = eos_token_id if eos_token_id is not None else 0
+
+        # Prefill — pass attention_mask so left-padding is handled correctly
+        hidden_states, kv_caches, _ = self.model(
+            input_ids, attention_mask=attention_mask,
+        )
+        logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)  # (B, V)
         cur_len = input_ids.shape[1]
 
+        # Track which sequences have finished
+        finished = torch.zeros(B, dtype=torch.bool, device=device)
+
+        generated_tokens = []
         for _ in range(max_new_tokens):
-            scaled = logits.float() / temperature
+            scaled = logits.float() / max(temperature, 1e-7)
             scaled = torch.nan_to_num(scaled, nan=0.0, posinf=1e4, neginf=-1e4)
+
+            # Top-k filtering
             if top_k > 0:
                 k = min(top_k, scaled.size(-1))
-                v, _ = torch.topk(scaled, k)
-                scaled[scaled < v[:, [-1]]] = float("-inf")
-            probs = F.softmax(scaled, dim=-1)
-            next_token = torch.multinomial(probs, 1)
-            input_ids = torch.cat([input_ids, next_token], dim=1)
+                topk_vals, _ = torch.topk(scaled, k)
+                scaled[scaled < topk_vals[:, [-1]]] = float("-inf")
 
+            # Top-p (nucleus) filtering
+            if top_p > 0.0:
+                sorted_logits, sorted_indices = torch.sort(scaled, descending=True)
+                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                # Remove tokens with cumulative probability above the threshold
+                # Shift right so the first token above threshold is kept
+                sorted_mask = cumulative_probs - F.softmax(sorted_logits, dim=-1) >= top_p
+                sorted_logits[sorted_mask] = float("-inf")
+                # Scatter back to original ordering
+                scaled = sorted_logits.scatter(1, sorted_indices, sorted_logits)
+
+            probs = F.softmax(scaled, dim=-1)
+            next_token = torch.multinomial(probs, 1)  # (B, 1)
+
+            # Replace tokens for finished sequences with pad
+            next_token = torch.where(
+                finished.unsqueeze(1), pad_token_id, next_token,
+            )
+            generated_tokens.append(next_token)
+
+            # Check for EOS
+            if eos_token_id is not None:
+                finished = finished | (next_token.squeeze(1) == eos_token_id)
+                if finished.all():
+                    break
+
+            # Decode step — single token, no attention mask needed (KV cache has full context)
             hidden_states, kv_caches, _ = self.model(next_token, kv_caches, cur_len)
             logits = self.lm_head(hidden_states).squeeze(1)
             cur_len += 1
 
+        if generated_tokens:
+            return torch.cat([input_ids, torch.cat(generated_tokens, dim=1)], dim=1)
         return input_ids

@@ -122,6 +122,15 @@ class ModelActor:
         for p in self.ref_model.parameters():
             p.requires_grad = False
 
+        # torch.compile with reduce-overhead mode uses CUDA graphs to
+        # eliminate Python/kernel-launch overhead — major win for small models.
+        try:
+            self.model = torch.compile(self.model, mode="reduce-overhead")
+            self.ref_model = torch.compile(self.ref_model, mode="reduce-overhead")
+            log.info("torch.compile(mode='reduce-overhead') applied to policy and ref models")
+        except Exception as e:
+            log.warning("torch.compile failed, falling back to eager mode: %s", e)
+
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(), lr=learning_rate, weight_decay=weight_decay,
         )
@@ -262,7 +271,7 @@ class ModelActor:
     # ══════════════════════════════════════════════════════════════════════
 
     def generate(self, prompts: list[str], **gen_kwargs) -> GenerationResult:
-        """Sample completions.  No log-probs, no gradients."""
+        """Sample completions using fast generate_simple().  No log-probs, no gradients."""
         t0 = time.monotonic()
         log.debug("generate: %d prompt(s), gen_kwargs=%s", len(prompts), gen_kwargs)
         self.model.eval()
@@ -271,23 +280,41 @@ class ModelActor:
         ).to(self.device)
         prompt_len = encoded["input_ids"].shape[1]
 
-        defaults = dict(
-            max_new_tokens=2500, temperature=0.3, do_sample=True,
-            top_p=0.95, pad_token_id=self._pad_id,
-            eos_token_id=self.tokenizer.eos_token_id,
-        )
-        defaults.update(gen_kwargs)
+        # Map gen_kwargs to generate_simple() parameters
+        max_new_tokens = gen_kwargs.pop("max_new_tokens", 2500)
+        temperature = gen_kwargs.pop("temperature", 0.3)
+        top_p = gen_kwargs.pop("top_p", 0.95)
+        top_k = gen_kwargs.pop("top_k", 0)
+        eos_token_id = gen_kwargs.pop("eos_token_id", self.tokenizer.eos_token_id)
+        # Pop HF-specific kwargs that don't apply to generate_simple
+        gen_kwargs.pop("do_sample", None)
+        gen_kwargs.pop("pad_token_id", None)
+
+        # Access the underlying model (unwrap torch.compile if needed)
+        model = self.model
+        underlying = getattr(model, "_orig_mod", model)
 
         with torch.no_grad(), self._autocast():
-            output_ids = self.model.generate(**encoded, **defaults)
+            output_ids = underlying.generate_simple(
+                input_ids=encoded["input_ids"],
+                attention_mask=encoded.get("attention_mask"),
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                eos_token_id=eos_token_id,
+                pad_token_id=self._pad_id,
+            )
 
         self.model.train()
         comp_ids = output_ids[:, prompt_len:]
         comp_lens = (comp_ids != self._pad_id).sum(-1).float()
         elapsed = time.monotonic() - t0
-        log.debug(
-            "generate: done in %.2fs — %d seqs, prompt_len=%d, mean_comp_tokens=%.1f",
-            elapsed, comp_ids.shape[0], prompt_len, comp_lens.mean().item(),
+        total_tokens = comp_lens.sum().item()
+        tok_per_sec = total_tokens / max(elapsed, 1e-6)
+        log.info(
+            "generate: %.2fs — %d seqs, prompt_len=%d, mean_comp=%.1f, %.0f tok/s",
+            elapsed, comp_ids.shape[0], prompt_len, comp_lens.mean().item(), tok_per_sec,
         )
         return GenerationResult(
             prompts=prompts,
