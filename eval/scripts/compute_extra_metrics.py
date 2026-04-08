@@ -190,12 +190,16 @@ def compute_prompt_fidelity(run_dir: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 def compute_mfe_density(run_dir: Path) -> dict:
-    """Compute MFE density for generated sequences using ViennaRNA."""
+    """Compute DNA MFE density using ViennaRNA with Mathews2004 DNA parameters."""
     try:
         import RNA
     except ImportError:
         print("MFE: ViennaRNA not installed, skipping")
         return {}
+
+    # Load DNA energy parameters (not RNA — these are DNA plasmids!)
+    RNA.params_load_DNA_Mathews2004()
+    print("  Using DNA parameters (Mathews et al. 2004)")
 
     gen_df = pd.read_parquet(run_dir / "generations.parquet")
 
@@ -205,9 +209,8 @@ def compute_mfe_density(run_dir: Path) -> dict:
         if len(seq) < 50 or len(seq) > 15000:
             mfe_densities.append(None)
             continue
-        # For long sequences, compute MFE on a sliding window and average
+        # For long sequences, compute MFE on sliding windows and average
         if len(seq) > 5000:
-            # Sample 5 windows of 2000bp
             rng = np.random.RandomState(idx)
             window_mfes = []
             for _ in range(5):
@@ -229,8 +232,9 @@ def compute_mfe_density(run_dir: Path) -> dict:
         "median_mfe_density": float(np.median(valid)),
         "std_mfe_density": float(np.std(valid)),
         "n_computed": len(valid),
+        "parameter_set": "DNA_Mathews2004",
     }
-    print(f"MFE density: mean={np.mean(valid):.4f} kcal/mol/nt (n={len(valid)})")
+    print(f"MFE density (DNA): mean={np.mean(valid):.4f} kcal/mol/nt (n={len(valid)})")
     return result
 
 
