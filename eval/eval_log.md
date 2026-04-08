@@ -27,3 +27,13 @@
 **14:50** — First-light sweep complete. 12 cells × 50 seqs = 600 generations in 29.6 min. pLannotate annotation initially failed due to `--no-banner` flag — ran retroactively on all cells (~3 min total).
 
 **14:55** — **Winner: t0.7_p0.95_r1.0** (temp=0.7, top_p=0.95, rep_pen=1.0). 70.8% median pLannotate coverage, 22.1 mean features, 7.6kb mean length. Clear winner — temp=0.7 dominates, higher temps drop coverage significantly. Repetition penalty doesn't help.
+
+**15:05** — Extended sweep to test temp=0.3 and 0.5. Coverage plateaus at ~70% across 0.3-0.7, but temp=0.7 has longest sequences (7.6kb, closest to Addgene ref 7.5kb) and fewest <1kb failures. Keeping temp=0.7.
+
+**15:15** — Uploaded all Phase 0+1 data to HF bucket `McClain/PlasmidLMEval` (81 files, 17.2 MB). Used `hf buckets sync` CLI — the Python `batch_bucket_files()` API silently fails for non-README files.
+
+**15:20** — Phase 2 started: generating 1000 plasmids with winning config (temp=0.7, top_p=0.95, top_k=50, no rep penalty). Model: `McClain/PlasmidLM-kmer6-GRPO-plannotate`.
+
+**16:06** — Phase 2 complete. 1000 sequences in 46.3 min (21.6 seq/min). Mean length 7.2kb, median 9.0kb, 50.6% GC, 48.7% EOS rate, 5.6% <1kb. Baselines also annotated: random 5.2% hit rate, shuffled 7.6%, real 100%.
+
+**16:07** — Phase 3 started: running pLannotate (8 workers) + Prodigal + dustmasker on all 1000 generated sequences.
