@@ -75,3 +75,15 @@
 - SHAP summary plot saved
 
 **16:45** — Baseline metrics computed: random plausibility 0%, shuffled 0%, real Addgene 95%. Generated model at 59.6% is well above floor and approaching ceiling.
+
+**17:30** — Diversity metrics computed. Model produces comparable diversity to real Addgene plasmids — no mode collapse.
+
+| Metric | Generated | Addgene-500 |
+|---|---|---|
+| 6-mer JSD (mean pairwise) | 0.352 | 0.334 |
+| 6-mer cosine distance | 0.288 | 0.267 |
+| 6-mer Jaccard similarity | 0.778 | 0.793 |
+| Near-identical pairs (JSD<0.01) | 0.0% | 0.0% |
+| Pairs with Jaccard >0.9 | 25.3% | 28.3% |
+
+High Jaccard is expected — real plasmids share extensive backbone sequences (amp resistance, ColE1 ori, etc.). Generated plasmids are slightly more diverse than real ones on all k-mer metrics.
