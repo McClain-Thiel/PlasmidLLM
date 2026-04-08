@@ -1,0 +1,32 @@
+name: plasmid_eval
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+# All tools pinned from plannotate conda env on 2026-04-08
+# Conda env: /home/ubuntu/miniconda3/envs/plannotate
+# Activate: conda activate plannotate
+
+dependencies:
+  # -- Annotation tools --
+  # plannotate 1.2.2 (pip, DB: snapgene 2021-11-23, swissprot/fpbase 2021-07-22, Rfam 2021-07-22)
+  - blast=2.17.0
+  - prodigal=2.6.3
+
+  # -- Memorization --
+  - sourmash=4.3.0
+  - minimap2=2.30
+
+  # -- Python core --
+  - python=3.10
+  - pandas=1.5.3
+  - pyarrow=14.0.2
+  - biopython=1.86
+
+  - pip:
+    - plannotate==1.2.2
+    - lightgbm==4.6.0
+    - shap==0.49.1
+    - scikit-learn==1.7.2
+    - setuptools<70  # required for sourmash 4.3 (uses pkg_resources)
