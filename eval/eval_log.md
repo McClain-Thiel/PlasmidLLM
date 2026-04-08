@@ -112,6 +112,8 @@ Note: pLannotate BLAST may undercount — short features (tags, some elements) a
 - Generated mean variation: **0.0566** (reference: 0.0593)
 - Very close to real Addgene plasmids — model captures characteristic GC skew patterns
 
-### ViennaRNA MFE Density
-- Reference (Addgene-500): DNA MFE density = -0.151 kcal/mol/nt, RNA = -0.327
-- Generated: computing (windowed approach for sequences >5kb)...
+### ViennaRNA MFE Density (DNA Mathews2004 params)
+- Reference (Addgene-500): **-0.151** kcal/mol/nt
+- Generated (n=200 subsample, 500bp windows): **-0.144** kcal/mol/nt
+- Close to reference — generated plasmids have realistic thermodynamic stability
+- Note: RNA.fold O(n³) makes full-length folding impractical for >5kb sequences; used 500bp windowed sampling

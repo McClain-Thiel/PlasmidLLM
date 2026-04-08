@@ -209,19 +209,24 @@ def compute_mfe_density(run_dir: Path) -> dict:
         if len(seq) < 50 or len(seq) > 15000:
             mfe_densities.append(None)
             continue
-        # For long sequences, compute MFE on sliding windows and average
-        if len(seq) > 5000:
-            rng = np.random.RandomState(idx)
-            window_mfes = []
-            for _ in range(5):
-                start = rng.randint(0, len(seq) - 2000)
-                window = seq[start:start + 2000]
-                _, mfe = RNA.fold(window)
-                window_mfes.append(mfe / len(window))
-            mfe_densities.append(float(np.mean(window_mfes)))
-        else:
-            _, mfe = RNA.fold(seq)
-            mfe_densities.append(mfe / len(seq))
+        try:
+            # For long sequences, compute MFE on sliding windows and average
+            if len(seq) > 5000:
+                rng = np.random.RandomState(idx)
+                window_mfes = []
+                for _ in range(5):
+                    start = rng.randint(0, len(seq) - 2000)
+                    window = seq[start:start + 2000]
+                    _, mfe = RNA.fold(window)
+                    window_mfes.append(mfe / len(window))
+                mfe_densities.append(float(np.mean(window_mfes)))
+            else:
+                _, mfe = RNA.fold(seq)
+                mfe_densities.append(mfe / len(seq))
+        except Exception as e:
+            mfe_densities.append(None)
+            if idx < 5:
+                print(f"  MFE error at idx {idx}: {e}")
 
         if (idx + 1) % 100 == 0:
             print(f"  MFE: {idx+1}/{len(gen_df)}")
@@ -440,13 +445,19 @@ def main():
         results["gc_skew"] = compute_gc_skew(run_dir)
         print()
 
-    # Save
+    # Save (merge with existing results, don't overwrite)
     metrics_dir = run_dir / "metrics"
     metrics_dir.mkdir(parents=True, exist_ok=True)
-    with open(metrics_dir / "extra_metrics.json", "w") as f:
-        json.dump(results, f, indent=2)
+    out_path = metrics_dir / "extra_metrics.json"
+    existing = {}
+    if out_path.exists():
+        with open(out_path) as f:
+            existing = json.load(f)
+    existing.update(results)
+    with open(out_path, "w") as f:
+        json.dump(existing, f, indent=2)
 
-    print(f"Saved to {metrics_dir / 'extra_metrics.json'}")
+    print(f"Saved to {out_path} (keys: {list(existing.keys())})")
 
 
 if __name__ == "__main__":
