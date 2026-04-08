@@ -81,6 +81,67 @@ PROMOTER_CDS_AFFINITY: dict[str, set[str] | None] = {
 }
 
 CDS_CATEGORIES = {"AMR", "REPORTER", "TAG"}
+ORI_LOCUS_MIN_OVERLAP = 0.5
+
+
+def _hit_bounds(hit: dict[str, Any]) -> tuple[int, int]:
+    """Return ordered query coordinates for a BLAST hit."""
+    return min(hit["qstart"], hit["qend"]), max(hit["qstart"], hit["qend"])
+
+
+def _overlap_fraction(a: tuple[int, int], b: tuple[int, int]) -> float:
+    """Overlap relative to the smaller interval."""
+    overlap = max(0, min(a[1], b[1]) - max(a[0], b[0]))
+    span_a = max(1, a[1] - a[0])
+    span_b = max(1, b[1] - b[0])
+    return overlap / min(span_a, span_b)
+
+
+def _collapse_ori_loci(
+    broad_hits: dict[str, dict[str, Any]],
+    min_overlap: float = ORI_LOCUS_MIN_OVERLAP,
+) -> list[dict[str, Any]]:
+    """Merge overlapping ORI token hits into physical origin loci."""
+    ori_hits = [
+        (token, hit) for token, hit in broad_hits.items()
+        if _extract_category(token) == "ORI"
+    ]
+    if not ori_hits:
+        return []
+
+    clusters: list[dict[str, Any]] = []
+    for token, hit in sorted(ori_hits, key=lambda item: _hit_bounds(item[1])[0]):
+        bounds = _hit_bounds(hit)
+        target_cluster: dict[str, Any] | None = None
+        for cluster in clusters:
+            if any(
+                _overlap_fraction(bounds, member["bounds"]) >= min_overlap
+                for member in cluster["members"]
+            ):
+                target_cluster = cluster
+                break
+
+        member = {"token": token, "hit": hit, "bounds": bounds}
+        if target_cluster is None:
+            clusters.append({"members": [member]})
+        else:
+            target_cluster["members"].append(member)
+
+    loci: list[dict[str, Any]] = []
+    for cluster in clusters:
+        members = cluster["members"]
+        best = max(members, key=lambda member: member["hit"]["bit_score"])
+        loci.append(
+            {
+                "rep_token": best["token"],
+                "tokens": {member["token"] for member in members},
+                "bounds": (
+                    min(member["bounds"][0] for member in members),
+                    max(member["bounds"][1] for member in members),
+                ),
+            }
+        )
+    return loci
 
 
 # ── BLAST output parser with query positions ──────────────────────────────────
@@ -90,6 +151,7 @@ def _parse_broad_hits(
     sseqid_to_token: dict[str, str],
     fasta_id_to_sseqid: dict[str, str],
     min_coverage: float = 30.0,
+    min_identity: float = 0.0,
 ) -> dict[str, dict[str, dict]]:
     """Parse BLAST tabular output keeping *all* significant token hits with positions.
 
@@ -127,6 +189,8 @@ def _parse_broad_hits(
 
             coverage = min((aln_len / max(slen, 1)) * 100, 100.0)
             if coverage < min_coverage:
+                continue
+            if pident < min_identity:
                 continue
 
             norm_score = bitscore / max(slen, 1)
@@ -193,6 +257,8 @@ class ValidPlasmidScorer(Scorer):
         Maximum gap (bp) for a promoter–CDS pair to count as adjacent.
     broad_min_coverage : float
         Minimum coverage (%) for a broad-scan hit to count.
+    broad_min_identity : float
+        Minimum percent identity for a broad-scan hit to count.
     """
 
     def __init__(
@@ -215,6 +281,7 @@ class ValidPlasmidScorer(Scorer):
         adjacency_bonus: float = 0.05,
         adjacency_max_gap: int = 500,
         broad_min_coverage: float = 30.0,
+        broad_min_identity: float = 0.0,
     ):
         self._base = PlannotateScorer(
             plannotate_db_path=plannotate_db_path,
@@ -235,6 +302,7 @@ class ValidPlasmidScorer(Scorer):
         self.adjacency_bonus_weight = adjacency_bonus
         self.adjacency_max_gap = adjacency_max_gap
         self.broad_min_coverage = broad_min_coverage
+        self.broad_min_identity = broad_min_identity
 
         self._all_sseqid_to_token = self._build_full_token_map()
 
@@ -275,6 +343,7 @@ class ValidPlasmidScorer(Scorer):
                 out_tsv, self._all_sseqid_to_token,
                 self._base._fasta_id_to_sseqid,
                 min_coverage=self.broad_min_coverage,
+                min_identity=self.broad_min_identity,
             )
             for qid, per_token in hits.items():
                 dest = merged.setdefault(qid, {})
@@ -292,6 +361,7 @@ class ValidPlasmidScorer(Scorer):
                 out_tsv, self._all_sseqid_to_token,
                 self._base._fasta_id_to_sseqid,
                 min_coverage=self.broad_min_coverage,
+                min_identity=self.broad_min_identity,
             )
             for qid, per_token in hits.items():
                 dest = merged.setdefault(qid, {})
@@ -315,10 +385,12 @@ class ValidPlasmidScorer(Scorer):
         """
         expected_set = set(expected_tokens)
         found_tokens = set(broad_hits.keys())
+        ori_loci = _collapse_ori_loci(broad_hits)
+        expected_ori_tokens = {t for t in expected_set if _extract_category(t) == "ORI"}
 
         # ── Excess ORIs ───────────────────────────────────────────────
-        ori_found = {t for t in found_tokens if _extract_category(t) == "ORI"}
-        n_ori = len(ori_found)
+        ori_found = {t for locus in ori_loci for t in locus["tokens"]}
+        n_ori = len(ori_loci)
         ori_pen = max(0, n_ori - 1) * self.excess_ori_penalty
 
         # ── Excess AMRs ──────────────────────────────────────────────
@@ -330,8 +402,14 @@ class ValidPlasmidScorer(Scorer):
         unrequested = []
         for tok in found_tokens - expected_set:
             cat = _extract_category(tok)
+            if cat == "ORI":
+                continue
             if cat in PENALISED_UNREQUESTED_CATEGORIES:
                 unrequested.append(tok)
+        for locus in ori_loci:
+            if locus["tokens"] & expected_ori_tokens:
+                continue
+            unrequested.append(locus["rep_token"])
         unreq_pen = len(unrequested) * self.unrequested_penalty
 
         # ── Length penalty ────────────────────────────────────────────
@@ -349,6 +427,8 @@ class ValidPlasmidScorer(Scorer):
             "structural_multiplier": round(multiplier, 4),
             "ori_count": n_ori,
             "ori_penalty": round(ori_pen, 4),
+            "ori_tokens": sorted(ori_found),
+            "ori_loci": [sorted(locus["tokens"]) for locus in ori_loci],
             "amr_count": n_amr,
             "amr_penalty": round(amr_pen, 4),
             "unrequested_tokens": unrequested,
