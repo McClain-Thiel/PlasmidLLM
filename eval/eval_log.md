@@ -37,3 +37,41 @@
 **16:06** — Phase 2 complete. 1000 sequences in 46.3 min (21.6 seq/min). Mean length 7.2kb, median 9.0kb, 50.6% GC, 48.7% EOS rate, 5.6% <1kb. Baselines also annotated: random 5.2% hit rate, shuffled 7.6%, real 100%.
 
 **16:07** — Phase 3 started: running pLannotate (8 workers) + Prodigal + dustmasker on all 1000 generated sequences.
+
+**16:40** — Phase 3 complete. pLannotate: ~2s/seq with 8 workers on 1000 seqs. Prodigal and dustmasker fast (<30s total).
+
+**16:41** — Phase 4 metrics computed on all 1000 generated sequences:
+
+### Tier 1: Distributional
+- Length KS stat: 0.256 (p < 1e-19) — significant difference from reference (generated skews longer)
+- GC KS stat: 0.121 (p = 0.0001) — slight difference, generated slightly lower GC
+- Wasserstein distances: length=1338bp, GC=0.020
+
+### Tier 3: Essentials
+| Metric | Generated (n=1000) | Real Addgene (n=500) | Random (n=500) | Shuffled (n=500) |
+|---|---|---|---|---|
+| has_ori | 63.8% | — | — | — |
+| has_selection_marker | 65.2% | — | — | — |
+| has_promoter | 83.0% | — | — | — |
+| has_terminator | 60.1% | — | — | — |
+| has_cds | 85.0% | — | — | — |
+| **plausibility_pass** | **59.6%** | **95.0%** | **0.0%** | **0.0%** |
+| mean n_features | 19.2 | — | — | — |
+| mean coverage_frac | 50.1% | — | — | — |
+
+### Tier 5: Architecture
+- CDS with promoter context (within 500bp): 43.0%
+- CDS with terminator context: 8.6%
+- Mean origins per plasmid: 1.6
+- Mean selection markers: 1.8
+- Mean overlapping features: 5.3
+
+### Memorization
+- **Zero hits** at containment threshold 0.3 — no evidence of training set memorization
+
+### Discriminator
+- LightGBM AUC: **0.937** (real vs generated)
+- Top features by importance: length (5627), ORF density (3533), 6-mer diversity (1735), GC (1419)
+- SHAP summary plot saved
+
+**16:45** — Baseline metrics computed: random plausibility 0%, shuffled 0%, real Addgene 95%. Generated model at 59.6% is well above floor and approaching ceiling.
