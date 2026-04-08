@@ -87,3 +87,31 @@
 | Pairs with Jaccard >0.9 | 25.3% | 28.3% |
 
 High Jaccard is expected — real plasmids share extensive backbone sequences (amp resistance, ColE1 ori, etc.). Generated plasmids are slightly more diverse than real ones on all k-mer metrics.
+
+**17:45** — Extra metrics computed: prompt fidelity, codon usage, GC skew, ViennaRNA MFE (running).
+
+### Prompt Fidelity (Conditional Accuracy)
+Overall: **23.5%** of requested features detected by pLannotate in generated sequences.
+
+| Category | Hit Rate | Found/Requested |
+|---|---|---|
+| AMR | 39.2% | 538/1373 |
+| PROM | 38.5% | 1090/2828 |
+| REPORTER | 27.1% | 95/350 |
+| ORI | 19.9% | 339/1701 |
+| ELEM | 15.9% | 634/3991 |
+| TAG | 1.1% | 2/179 |
+
+Note: pLannotate BLAST may undercount — short features (tags, some elements) and protein-coding features detected better by Smith-Waterman (see earlier alignment eval). The 23.5% is a conservative lower bound.
+
+### Codon Usage
+- 3,376 predicted ORFs, 579,368 total codons
+- JSD vs E. coli codon frequencies: **0.131** (low divergence = realistic codon usage)
+
+### GC Skew
+- Generated mean variation: **0.0566** (reference: 0.0593)
+- Very close to real Addgene plasmids — model captures characteristic GC skew patterns
+
+### ViennaRNA MFE Density
+- Reference (Addgene-500): DNA MFE density = -0.151 kcal/mol/nt, RNA = -0.327
+- Generated: computing (windowed approach for sequences >5kb)...
