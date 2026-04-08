@@ -75,8 +75,8 @@ def quick_plannotate(fasta_path: str, output_dir: str, workers: int = 4) -> list
     """Run pLannotate via conda subprocess, return results or None."""
     ann_script = Path(__file__).parent / "annotate.py"
     cmd = [
-        "conda", "run", "-n", "plannotate", "--no-banner",
-        sys.executable, str(ann_script),
+        "conda", "run", "-n", "plannotate",
+        "python", str(ann_script),
         "--input", fasta_path,
         "--output-dir", output_dir,
         "--workers", str(workers),
