@@ -46,7 +46,7 @@ aws s3 cp data/training_pairs_v4.parquet \
 ### Quick start
 
 ```bash
-bash anyscale/submit.sh
+bash infra/anyscale/submit.sh
 ```
 
 This sources `.env`, uploads the working directory (excluding large data files, .git, .venv, etc.), and submits the job with `--wait` to stream logs.
@@ -61,7 +61,7 @@ anyscale job submit \
     --name grpo-dense-motif \
     --cloud helix-anyscale-cloud \
     --image-uri "anyscale/ray:2.54.0-py312-cu128" \
-    --requirements anyscale/requirements.txt \
+    --requirements infra/anyscale/requirements.txt \
     --working-dir . \
     --exclude "*.pyc" --exclude "__pycache__" --exclude ".venv" \
     --exclude ".git" --exclude "notebooks" --exclude "docs" \
@@ -69,7 +69,7 @@ anyscale job submit \
     --env "WANDB_API_KEY=$WANDB_API_KEY" \
     --env "HF_TOKEN=$HF_TOKEN" \
     --env "PYTHONPATH=." \
-    -- python anyscale/run_anyscale.py
+    -- python infra/anyscale/run_anyscale.py
 ```
 
 Add `--wait` to block and stream logs in real time.

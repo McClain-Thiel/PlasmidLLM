@@ -35,4 +35,4 @@ anyscale job submit \
     --env "HF_TOKEN=$HF_TOKEN" \
     --env "PYTHONPATH=." \
     --wait \
-    -- python anyscale/run_anyscale.py
+    -- python infra/anyscale/run_anyscale.py

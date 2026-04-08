@@ -2,6 +2,8 @@
 data/
 !eval/data/
 *.csv
+*.log
+eval/scorers/cache/
 
 # Python
 __pycache__/

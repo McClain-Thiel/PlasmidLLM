@@ -7,7 +7,7 @@ Changes:
 - kl_coef 0.3
 - steps 200 (signal check)
 
-    CONFIG=grpo_plannotate_anyscale_v2 python anyscale/run_anyscale.py
+    CONFIG=grpo_plannotate_anyscale_v2 python infra/anyscale/run_anyscale.py
 """
 
 import os

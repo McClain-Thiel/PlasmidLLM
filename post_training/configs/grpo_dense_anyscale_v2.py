@@ -5,7 +5,7 @@ Tuned from v1 results:
 - kl_coef 0.3→0.5 to prevent KL drift
 - Resume from v1 checkpoint (downloaded from S3 by entrypoint)
 
-    anyscale job submit -f anyscale/job_config.yaml
+    anyscale job submit -f infra/anyscale/job_config.yaml
 """
 
 import os

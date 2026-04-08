@@ -3,7 +3,7 @@
 Uses BLAST-based plannotate scoring instead of motif alignment.
 Requires NCBI BLAST+ tools (installed via apt in entrypoint).
 
-    CONFIG=grpo_plannotate_anyscale python anyscale/run_anyscale.py
+    CONFIG=grpo_plannotate_anyscale python infra/anyscale/run_anyscale.py
 """
 
 import os

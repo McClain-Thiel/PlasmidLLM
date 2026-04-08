@@ -1,7 +1,7 @@
 """GRPO + MotifScorer on dense PlasmidLM-kmer6 — Anyscale job.
 
 Run via Anyscale:
-    anyscale job submit -f anyscale/job_config.yaml
+    anyscale job submit -f infra/anyscale/job_config.yaml
 
 Or locally:
     python -m post_training.runners.run post_training/configs/grpo_dense_anyscale.py

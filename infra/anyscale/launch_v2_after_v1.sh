@@ -50,6 +50,6 @@ PYENV_VERSION=3.9.8 anyscale job submit \
     --env "PYTHONPATH=." \
     --env "CONFIG=grpo_dense_anyscale_v2" \
     --env "RESUME_FROM_S3=$V1_S3_CKPT" \
-    -- python anyscale/run_anyscale.py
+    -- python infra/anyscale/run_anyscale.py
 
 echo "v2 submitted!"

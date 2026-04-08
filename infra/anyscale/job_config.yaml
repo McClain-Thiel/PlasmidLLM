@@ -17,7 +17,7 @@ requirements:
   - wandb>=0.16
   - boto3>=1.28
   - safetensors>=0.4
-entrypoint: python anyscale/run_anyscale.py
+entrypoint: python infra/anyscale/run_anyscale.py
 max_retries: 0
 env_vars:
   WANDB_API_KEY: "${WANDB_API_KEY}"
