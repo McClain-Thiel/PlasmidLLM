@@ -467,8 +467,8 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
 
         generated_tokens = []
         for _ in range(max_new_tokens):
-            # Skip .float() cast — stay in model dtype to reduce overhead
             scaled = logits / max(temperature, 1e-7)
+            scaled = torch.nan_to_num(scaled, nan=0.0, posinf=1e4, neginf=-1e4)
 
             # Top-k filtering
             if top_k > 0:

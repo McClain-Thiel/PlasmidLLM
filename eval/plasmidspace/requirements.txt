@@ -1,0 +1,10 @@
+torch
+transformers>=4.38,<5
+accelerate>=0.26
+anthropic
+numpy<2
+biopython>=1.78
+click
+tabulate>=0.8.9
+bokeh==2.4.3
+plannotate @ git+https://github.com/mmcguffi/pLannotate.git
