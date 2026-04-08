@@ -23,3 +23,7 @@
 **14:15** — Launched Phase 1 first-light sweep: 12 cells (temp×top_p×rep_pen), 50 seqs/cell = 600 total. Model loaded once, reused across cells. ETA ~45-60 min.
 
 **14:16** — huggingface-hub version conflict flagged: upgraded to 1.9.2 for bucket API, but transformers needs <1.0. Downgraded to 0.36.2. Bucket uploads will need separate handling.
+
+**14:50** — First-light sweep complete. 12 cells × 50 seqs = 600 generations in 29.6 min. pLannotate annotation initially failed due to `--no-banner` flag — ran retroactively on all cells (~3 min total).
+
+**14:55** — **Winner: t0.7_p0.95_r1.0** (temp=0.7, top_p=0.95, rep_pen=1.0). 70.8% median pLannotate coverage, 22.1 mean features, 7.6kb mean length. Clear winner — temp=0.7 dominates, higher temps drop coverage significantly. Repetition penalty doesn't help.
