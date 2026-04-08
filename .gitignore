@@ -7,6 +7,7 @@ data/
 *.log
 eval/scorers/cache/
 eval/runs/
+# eval/baselines FASTA files are generated locally, not tracked in git
 eval/baselines/
 
 # Python
