@@ -66,8 +66,15 @@ def main():
 
     print(f"Loading {args.model}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    # Custom PlasmidKmerTokenizer doesn't expose special tokens properly
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = "<PAD>"
+    if tokenizer.eos_token is None:
+        tokenizer.eos_token = "<EOS>"
+    if tokenizer.bos_token is None:
+        tokenizer.bos_token = "<BOS>"
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, trust_remote_code=True, torch_dtype=torch.bfloat16,
+        args.model, trust_remote_code=True, dtype=torch.bfloat16,
     ).to(args.device).eval()
     n_params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"Loaded: {n_params:.1f}M params on {args.device}")
@@ -130,8 +137,7 @@ def main():
 
     with open(out / "generations.fasta", "w") as f:
         for i, row in df.iterrows():
-            f.write(f">gen_{i}|len={row['length']}|gc={row['gc']:.3f}|eos={row['has_eos']}\n")
-            f.write(f"{row['sequence']}\n")
+            f.write(f">gen_{i}\n{row['sequence']}\n")
 
     summary = {
         "n_generated": len(df),
