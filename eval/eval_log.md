@@ -115,6 +115,8 @@ Overall: **23.5%** of requested features detected by pLannotate in generated seq
 
 Tags remain very low — these are tiny peptide sequences (6-18 bp coding) that BLAST/DIAMOND struggle to detect even in real plasmids.
 
+**Detection ceiling:** pLannotate on real training plasmids only detects 71.8% of their own tokens — this is the maximum achievable fidelity with this detection method. Generated model achieves **57.9% of ceiling** (41.6/71.8%). Per-category ceiling ratios: ORI 73.7%, ELEM 72.9%, PROM 56.0%, AMR 40.9%, REPORTER 31.3%, TAG 4.2%.
+
 ### Codon Usage
 - 3,376 predicted ORFs, 579,368 total codons
 - JSD vs E. coli codon frequencies: **0.131** (low divergence = realistic codon usage)
