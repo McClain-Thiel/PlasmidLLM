@@ -102,7 +102,18 @@ Overall: **23.5%** of requested features detected by pLannotate in generated seq
 | ELEM | 15.9% | 634/3991 |
 | TAG | 1.1% | 2/179 |
 
-Note: pLannotate BLAST may undercount — short features (tags, some elements) and protein-coding features detected better by Smith-Waterman (see earlier alignment eval). The 23.5% is a conservative lower bound.
+**Updated (sseqid-based via motif registry):** 41.6% overall — properly matching against the 660 sseqids in the motif registry that map tokens to pLannotate feature IDs. Previous keyword-based approach (23.5%) was undercounting due to brittle string matching.
+
+| Category | Hit Rate | Found/Requested |
+|---|---|---|
+| ORI | 51.9% | 882/1701 |
+| ELEM | 51.1% | 2040/3991 |
+| PROM | 39.5% | 1118/2828 |
+| AMR | 29.1% | 399/1373 |
+| REPORTER | 21.1% | 74/350 |
+| TAG | 2.8% | 5/179 |
+
+Tags remain very low — these are tiny peptide sequences (6-18 bp coding) that BLAST/DIAMOND struggle to detect even in real plasmids.
 
 ### Codon Usage
 - 3,376 predicted ORFs, 579,368 total codons
