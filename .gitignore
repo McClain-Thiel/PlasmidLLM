@@ -48,6 +48,10 @@ wheels/
 
 .databricks
 
+# Anyscale / infra job configs (may contain tokens)
+infra/anyscale/job_config*.yaml
+!infra/anyscale/job_config.yaml
+
 # Hydra outputs
 outputs/
 multirun/
