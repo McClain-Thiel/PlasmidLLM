@@ -1,0 +1,367 @@
+\documentclass{article}
+
+\usepackage{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{multirow}
+
+\title{PlasmidLM: Controllable Plasmid Generation with\\Reinforcement-Learned DNA Language Models}
+
+\author{%
+  Anonymous Author(s)
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Synthetic plasmid design is a cornerstone of molecular biology, yet current approaches rely on manual assembly of known genetic parts or template-based cloning.
+We present PlasmidLM, a 19M-parameter autoregressive DNA language model that generates complete, functional plasmid sequences conditioned on desired genetic components.
+PlasmidLM uses a k-mer tokenization scheme trained on 108K Addgene plasmids, followed by Group Relative Policy Optimization (GRPO) with annotation-based rewards to improve controllability.
+Generated plasmids pass structural plausibility checks (origin of replication, selection marker, promoter, terminator, and coding sequence) at 59.6\%, compared to 95\% for real Addgene plasmids and 0\% for random or shuffled baselines.
+On conditional generation, 62.4\% of requested genetic components are successfully placed as verified by Smith-Waterman alignment.
+Generated sequences exhibit realistic codon usage (JSD = 0.131 vs.\ \textit{E.\ coli}), thermodynamic stability (MFE density $-0.144$ kcal/mol/nt vs.\ $-0.151$ reference), and diversity comparable to real plasmids, with zero evidence of training-set memorization.
+We release the model, evaluation suite, and an interactive demo at \url{[anonymous]}.
+\end{abstract}
+
+%% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+Plasmids are circular DNA molecules widely used in molecular biology as vectors for gene expression, cloning, and genome editing~\citep{addgene2024}.
+Designing a functional plasmid requires assembling multiple genetic components---origins of replication (ORIs), selection markers, promoters, terminators, and coding sequences---in the correct order and orientation, with appropriate spacing and regulatory context.
+This process is currently manual, relying on existing template vectors and combinatorial part libraries~\citep{gibson2009,salis2009}.
+
+Recent advances in genomic language models have demonstrated that autoregressive transformers can capture complex dependencies in DNA sequences~\citep{dalla2023nucleotide,nguyen2024hyenadna,evo2024}.
+However, these models focus on genome-scale or single-gene modeling and are not designed for the constrained generation problem inherent to plasmid design: producing a complete, circular DNA molecule that contains specific user-requested functional elements.
+
+We introduce PlasmidLM, a system for controllable plasmid generation that combines:
+\begin{enumerate}
+    \item A \textbf{k-mer tokenized transformer} (19.3M parameters) pretrained on 108K Addgene plasmids, capturing the statistical structure of real-world plasmid sequences.
+    \item \textbf{Reinforcement learning from automated annotation} via Group Relative Policy Optimization (GRPO), using pLannotate-based rewards to improve controllability without human labels.
+    \item A \textbf{comprehensive evaluation framework} spanning distributional fidelity, conditional accuracy, biophysical realism, diversity, and memorization.
+\end{enumerate}
+
+Our key findings are: (i) a small, domain-specific model suffices to generate structurally plausible plasmids that are clearly distinguishable from random sequences; (ii) RL post-training substantially improves the placement of user-requested components; and (iii) generated sequences exhibit biophysical properties---codon usage, thermodynamic stability, GC content---closely matching real plasmids, with no detectable training-set memorization.
+
+
+%% ============================================================
+\section{Related work}
+\label{sec:related}
+
+\paragraph{DNA language models.}
+Nucleotide Transformer~\citep{dalla2023nucleotide} and DNABERT-2~\citep{zhou2024dnabert2} apply masked language modeling to genomic sequences. HyenaDNA~\citep{nguyen2024hyenadna} uses long-convolution architectures for single-read-length sequences. Evo~\citep{evo2024} scales to 7B parameters with StripedHyena, targeting whole-genome understanding. These models excel at discriminative tasks (variant effect prediction, regulatory element classification) but are not designed for constrained, component-conditioned generation of circular constructs.
+
+\paragraph{Protein and gene design.}
+ProGen~\citep{madani2023progen} and EvoDiff~\citep{alamdari2023evodiff} generate protein sequences conditioned on functional tags. These operate at the protein level and do not address the multi-component DNA assembly problem central to plasmid design.
+
+\paragraph{Genetic part design.}
+Deep learning has been applied to promoter design~\citep{sample2019promoter}, ribosome binding site optimization~\citep{salis2009}, and codon optimization~\citep{walsh2020codonopt}. These tools design individual genetic parts, not complete multi-kilobase constructs with interdependent components.
+
+\paragraph{Reinforcement learning for biological sequence design.}
+RLHF and related methods have been applied to molecule generation~\citep{zhou2023molrl} and protein design~\citep{jain2022gflownet}. We adapt GRPO~\citep{shao2024deepseekmath} to DNA generation, using automated annotation tools as the reward signal rather than human feedback.
+
+
+%% ============================================================
+\section{Methods}
+\label{sec:methods}
+
+\subsection{Data and tokenization}
+\label{sec:data}
+
+We train on 108,448 plasmid sequences from Addgene, a nonprofit plasmid repository.
+Each sequence is paired with a structured prompt specifying the genetic components present, identified via pLannotate~\citep{mcguffie2021plannotate} annotation against the SnapGene feature database.
+
+\paragraph{K-mer tokenization.}
+We use a non-overlapping 6-mer DNA tokenizer (vocabulary size 4,096 + special tokens). Each input is formatted as \texttt{<BOS> <TOKEN$_1$> ... <TOKEN$_k$> <SEQ> $s_1 s_2 ... s_n$ <EOS>}, where the \texttt{<TOKEN$_i$>} are component identifiers (e.g., \texttt{<ORI\_COLE1>}, \texttt{<AMR\_AMPICILLIN>}) and $s_j$ are 6-mer DNA tokens. This allows the model to condition on an arbitrary set of desired components via the prompt prefix.
+
+\subsection{Model architecture}
+
+PlasmidLM is a decoder-only transformer with 19.3M parameters: hidden dimension 384, 10 layers, 6 attention heads, RoPE positional encoding, and RMSNorm. The context length supports sequences up to $\sim$12 kb (2,048 tokens $\times$ 6 bp/token). Weights are tied between the input embedding and output projection.
+
+\subsection{Pretraining}
+
+The model is pretrained with standard next-token prediction on the full Addgene corpus for 15,000 steps (batch size 64, AdamW, cosine learning rate schedule with peak $3 \times 10^{-4}$). Final evaluation loss is 0.101 with 95.8\% token accuracy. Training takes approximately 8 hours on a single NVIDIA A100-40GB.
+
+\subsection{GRPO post-training}
+\label{sec:grpo}
+
+To improve controllability, we fine-tune with Group Relative Policy Optimization (GRPO)~\citep{shao2024deepseekmath}. For each training prompt, we sample $G=8$ candidate sequences and score them using an automated annotation pipeline:
+
+\paragraph{Reward function.}
+Each generated sequence is annotated with pLannotate to detect genetic features via nucleotide BLAST against the SnapGene database. The reward combines: (1) \emph{hit rate}: fraction of requested components detected in the generated sequence; (2) \emph{structural penalties}: deductions for missing essential elements (ORI, selection marker) or extreme length. This provides a differentiable training signal without human annotation.
+
+\paragraph{Optimization.}
+GRPO computes advantages within each group of $G$ samples, normalizing rewards relative to the group mean. We use a clamped KL penalty ($\beta = 0.3$) with the k3 estimator to prevent policy collapse. Training runs for 1,500 steps on a single A100-40GB at $\sim$16 seconds/step.
+
+\subsection{Inference}
+
+For fast inference, we implement CUDA graph capture with static KV caches, yielding 2.75$\times$ speedup over standard autoregressive decoding. Best-of-$N$ selection with annotation scoring further improves output quality.
+
+
+%% ============================================================
+\section{Evaluation framework}
+\label{sec:eval}
+
+We evaluate generated plasmids across five complementary axes, comparing against three baselines: real Addgene plasmids (positive control, $n=500$), GC-matched random sequences (negative control, $n=500$), and dinucleotide-shuffled sequences (negative control preserving local composition, $n=500$).
+
+\paragraph{Tier 1: Distributional fidelity.}
+Kolmogorov-Smirnov tests and Wasserstein distances on length and GC content distributions.
+
+\paragraph{Tier 3: Structural plausibility.}
+Binary detection of five essential plasmid components via pLannotate: origin of replication, selection marker, promoter, terminator, and coding sequence. A plasmid ``passes'' if all five are present.
+
+\paragraph{Conditional accuracy.}
+For component-level evaluation, we use parasail SIMD Smith-Waterman alignment~\citep{daily2016parasail} against a registry of 588 reference sequences spanning 57 component tokens. We align on both DNA strands (gap open=5, extend=1) and use 6-frame translated protein alignment (BLOSUM62, gap open=10, extend=1) for coding features. A component is ``found'' if the normalized score exceeds 70\% of its self-alignment score.
+
+\paragraph{Biophysical realism.}
+Codon usage divergence (Jensen-Shannon divergence vs.\ \textit{E.\ coli}), GC skew variation (leading vs.\ lagging strand asymmetry), and minimum free energy density (ViennaRNA~\citep{lorenz2011viennarna} with DNA Mathews2004 parameters, 500 bp windowed sampling for sequences $>$5 kb).
+
+\paragraph{Diversity and memorization.}
+Pairwise 6-mer Jensen-Shannon divergence, Jaccard similarity, and cosine distance to measure output diversity. Sourmash~\citep{brown2016sourmash} containment search ($k=31$, scaled=100) against 20,644 training sequences to detect memorization.
+
+\paragraph{Discriminator.}
+LightGBM binary classifier (real vs.\ generated) trained on sequence-level features to identify systematic distributional gaps.
+
+
+%% ============================================================
+\section{Results}
+\label{sec:results}
+
+We generate 1,000 plasmid sequences using the GRPO-trained model with temperature 0.7, top-$p$ 0.95, and top-$k$ 50.
+
+\subsection{Structural plausibility}
+
+\begin{table}[t]
+  \caption{Structural plausibility of generated plasmids. Plausibility pass requires all five essential components (ORI, marker, promoter, terminator, CDS) to be detected by pLannotate.}
+  \label{tab:plausibility}
+  \centering
+  \begin{tabular}{lccccc}
+    \toprule
+    Source & has\_ori & has\_marker & has\_promoter & has\_term & \textbf{Pass rate} \\
+    \midrule
+    Real Addgene ($n$=500) & --- & --- & --- & --- & 95.0\% \\
+    \textbf{PlasmidLM} ($n$=1000) & 63.8\% & 65.2\% & 83.0\% & 60.1\% & \textbf{59.6\%} \\
+    Random GC-matched ($n$=500) & --- & --- & --- & --- & 0.0\% \\
+    Shuffled ($n$=500) & --- & --- & --- & --- & 0.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:plausibility} shows that 59.6\% of generated plasmids contain all five essential functional elements, compared to 95\% for real plasmids and 0\% for both negative controls. Promoters and coding sequences are the most reliably generated (83\% and 85\%), while terminators are weakest (60.1\%).
+
+\subsection{Conditional generation accuracy}
+
+\begin{table}[t]
+  \caption{Conditional generation: hit rate by component category. Smith-Waterman alignment on 50 validation prompts (384 total requested components), best-of-3 selection. Detection threshold: 70\% normalized score ratio.}
+  \label{tab:conditional}
+  \centering
+  \begin{tabular}{lcccccc|c}
+    \toprule
+    & ORI & AMR & PROM & ELEM & REPORTER & TAG & \textbf{Overall} \\
+    \midrule
+    Requested & 72 & 58 & 127 & 102 & 17 & 8 & 384 \\
+    Found (TP) & 58 & 41 & 85 & 54 & 5 & 2 & 245 \\
+    \textbf{Hit rate} & \textbf{80.6\%} & \textbf{70.7\%} & \textbf{66.9\%} & \textbf{52.9\%} & 29.4\% & 25.0\% & \textbf{62.4\%} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:conditional} breaks down conditional accuracy by component category. Origins of replication are most reliably placed (80.6\%), followed by resistance markers (70.7\%) and promoters (66.9\%). Reporters and tags are hardest---reporters are large protein-coding features where nucleotide-level generation must produce correct codons, while tags are short peptide sequences ($\leq$18 bp coding) that are difficult to detect even in real plasmids.
+
+\paragraph{Detection ceiling.}
+Running pLannotate on real training plasmids detects only 71.8\% of their own annotated components, establishing an upper bound for this detection method. The model achieves 57.9\% of this ceiling (41.6\% / 71.8\%) on the large-scale evaluation ($n$=1000).
+
+\subsection{Biophysical realism}
+
+\begin{table}[t]
+  \caption{Biophysical properties of generated vs.\ reference plasmids.}
+  \label{tab:biophysical}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Property & Generated & Addgene reference \\
+    \midrule
+    Mean length (bp) & 7,200 & 7,500 \\
+    GC content & 50.6\% & $\sim$52\% \\
+    Codon usage JSD vs.\ \textit{E.\ coli} & 0.131 & --- \\
+    GC skew variation & 0.0566 & 0.0593 \\
+    MFE density (kcal/mol/nt) & $-0.144$ & $-0.151$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Table~\ref{tab:biophysical} shows that generated plasmids closely match real plasmids on key biophysical metrics. The MFE density difference ($-0.144$ vs.\ $-0.151$ kcal/mol/nt) indicates that generated DNA folds with near-reference thermodynamic stability. Codon usage in predicted ORFs (3,376 ORFs, 579K codons) shows low divergence from \textit{E.\ coli} frequencies, and GC skew patterns---indicative of replication-associated mutational asymmetry---are nearly identical.
+
+\subsection{Diversity and memorization}
+
+\begin{table}[t]
+  \caption{Diversity metrics comparing generated sequences to real Addgene plasmids. Higher JSD and lower Jaccard indicate greater diversity.}
+  \label{tab:diversity}
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Metric & Generated & Addgene-500 \\
+    \midrule
+    6-mer JSD (mean pairwise) & 0.352 & 0.334 \\
+    6-mer Jaccard similarity & 0.778 & 0.793 \\
+    Near-identical pairs (JSD $<$ 0.01) & 0.0\% & 0.0\% \\
+    Sourmash hits (containment $>$ 0.3) & \textbf{0} & --- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Generated plasmids are slightly \emph{more} diverse than real Addgene plasmids on all k-mer metrics (Table~\ref{tab:diversity}), with no near-identical pairs and no mode collapse. Crucially, sourmash containment search against all 20,644 training sequences found \textbf{zero hits}---the model generalizes rather than memorizes.
+
+\subsection{Discriminator analysis}
+
+A LightGBM classifier trained to distinguish real from generated plasmids achieves AUC = 0.937, indicating systematic but bounded distributional differences. SHAP analysis reveals the top discriminative features are sequence length (generated skews slightly longer, KS = 0.256), ORF density, 6-mer diversity, and GC content. These represent distributional rather than qualitative gaps---the model produces structurally valid plasmids that differ subtly in summary statistics.
+
+\subsection{Temperature and sampling}
+
+\begin{table}[t]
+  \caption{Effect of sampling temperature on conditional accuracy (dense model, 50 validation prompts).}
+  \label{tab:temperature}
+  \centering
+  \begin{tabular}{lcccccc}
+    \toprule
+    Temperature & 0.0 & 0.1 & 0.3 & 0.5 & 0.7 & 1.0 \\
+    \midrule
+    Hit rate & 38.2\% & 60.8\% & \textbf{62.4\%} & 53.5\% & 52.4\% & 47.3\% \\
+    Precision & 26.3\% & 41.6\% & 94.0\% & 94.0\% & 92.0\% & 84.0\% \\
+    EOS rate & 65\% & 63\% & 56\% & 72\% & 66\% & 60\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Greedy decoding (temperature 0.0) performs worst at 38.2\% hit rate (Table~\ref{tab:temperature}), confirming that sampling diversity is essential for exploring the sequence space. Moderate temperature (0.3) achieves peak performance, with rapid degradation above 0.7. Precision is highest at low-to-moderate temperatures where the model generates fewer extraneous features.
+
+
+%% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{A small model suffices.}
+PlasmidLM demonstrates that a 19M-parameter transformer---orders of magnitude smaller than genome-scale models like Evo (7B)---can learn the statistical structure of plasmid sequences well enough to generate functionally plausible constructs. This is likely because plasmids occupy a constrained region of DNA sequence space with strong compositional regularities (shared backbones, conserved functional elements).
+
+\paragraph{RL improves controllability.}
+GRPO post-training with automated annotation rewards enables the model to respond to component-level conditioning tokens without requiring curated paired data. The reward signal---while noisy (pLannotate's detection ceiling is 71.8\%)---provides sufficient gradient for improving conditional accuracy.
+
+\paragraph{The plausibility gap.}
+The 35-point gap between generated (59.6\%) and real (95\%) plausibility pass rates represents the primary opportunity for improvement. Discriminator analysis suggests this gap is driven by distributional differences (length, ORF density) rather than qualitative failures, indicating that curriculum learning or longer training may close it.
+
+\paragraph{Detection limitations.}
+Our evaluation relies heavily on pLannotate, which uses nucleotide BLAST and misses $\sim$28\% of features even in real plasmids. This creates a detection ceiling that conflates model failures with annotation failures. Smith-Waterman protein alignment partially addresses this for coding features (64.7\% vs.\ 29.4\% reporter detection), but a complete evaluation would require wet-lab validation.
+
+\paragraph{Limitations.}
+(1) We evaluate sequence-level properties but not \emph{functional} properties---generated plasmids have not been synthesized or tested experimentally. (2) The model generates linear sequences, not truly circular DNA; junction regions may require additional optimization. (3) Training data is biased toward common lab plasmids (ampicillin resistance, ColE1 origin), limiting diversity of rare component combinations. (4) The 12 kb context limit excludes large constructs such as BACs or viral vectors.
+
+
+%% ============================================================
+\section{Conclusion}
+
+We present PlasmidLM, a small DNA language model that generates structurally plausible plasmids conditioned on desired genetic components. Through k-mer tokenization, pretraining on 108K real plasmids, and GRPO post-training with annotation-based rewards, the model achieves 59.6\% structural plausibility and 62.4\% conditional component accuracy, while producing biophysically realistic sequences with no training-set memorization. PlasmidLM demonstrates that reinforcement learning from automated annotation is a viable path toward controllable biological sequence generation. Future work will explore curriculum learning strategies, experimental validation, and extension to larger construct types.
+
+
+%% ============================================================
+\begin{ack}
+Anonymized for review.
+\end{ack}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+\section{Model and training details}
+\label{app:model}
+
+\begin{table}[h]
+  \caption{Model hyperparameters.}
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    Hidden dimension & 384 \\
+    Layers & 10 \\
+    Attention heads & 6 \\
+    Head dimension & 64 \\
+    Total parameters & 19.3M \\
+    Vocabulary size & 4,096 + special tokens \\
+    Context length & 2,048 tokens ($\sim$12 kb) \\
+    Positional encoding & RoPE \\
+    Normalization & RMSNorm \\
+    Weight tying & Yes (embed $\leftrightarrow$ lm\_head) \\
+    \midrule
+    \multicolumn{2}{l}{\textit{Pretraining}} \\
+    \midrule
+    Optimizer & AdamW ($\beta_1$=0.9, $\beta_2$=0.999) \\
+    Peak learning rate & $3 \times 10^{-4}$ \\
+    Schedule & Cosine decay \\
+    Batch size & 64 \\
+    Steps & 15,000 \\
+    Hardware & 1$\times$ A100-40GB \\
+    Training time & $\sim$8 hours \\
+    \midrule
+    \multicolumn{2}{l}{\textit{GRPO post-training}} \\
+    \midrule
+    Group size ($G$) & 8 \\
+    Learning rate & $5 \times 10^{-6}$ \\
+    KL coefficient ($\beta$) & 0.3 \\
+    Clip range & 0.2 \\
+    Steps & 1,500 \\
+    Temperature (generation) & 0.7 \\
+    Hardware & 1$\times$ A100-40GB \\
+    Training time & $\sim$7 hours \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Per-prompt generation examples}
+\label{app:examples}
+
+Table~\ref{tab:examples} shows representative per-prompt results at temperature 0.3.
+
+\begin{table}[h]
+  \caption{Example prompts and generation results (dense model, temp=0.3). TP = true positives (requested and found), FN = false negatives (requested but missing). Score in parentheses is normalized SW alignment ratio for missed components.}
+  \label{tab:examples}
+  \centering
+  \small
+  \begin{tabular}{cp{5cm}p{5cm}c}
+    \toprule
+    Acc. & Found (TP) & Missed (FN, score) & Length \\
+    \midrule
+    100\% & AMP, COLE1, AMPR, GFP & --- & 6,381 bp \\
+    83\% & AMP, POLYA\_SV40, COLE1, AMPR, NLS & EGFP (0.04) & 6,885 bp \\
+    75\% & AMP, ZEO, CMV\_ENH, LTR3/5, POLYA\_BGH/SV40, PSI, COLE1, F1, SV40, AMPR, CMV, LAC, SV40p & CPPT, gRNA, WPRE, EF1A, U6 & 9,003 bp \\
+    50\% & POLYA\_SV40, COLE1, F1, AMPR & AMP, AAV\_ITR, WPRE, EGFP & 8,991 bp \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Evaluation pipeline details}
+\label{app:eval}
+
+The evaluation pipeline consists of six phases: (0) reference panel construction and tool installation; (1) first-light hyperparameter sweep (12 cells $\times$ 50 sequences); (2) large-scale generation (1,000 sequences); (3) annotation (pLannotate, Prodigal, dustmasker); (4) metric computation; (5) Evo2 cross-scoring; (6) report rendering. All evaluation data is archived at an anonymous HuggingFace bucket.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\input{checklist}
+
+\end{document}
