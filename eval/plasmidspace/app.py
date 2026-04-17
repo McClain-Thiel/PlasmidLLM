@@ -388,9 +388,9 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
     unique.sort(key=_sort_key)
 
     prompt = f"<BOS> {' '.join(unique)} <SEQ>"
-    status = "Tokens mapped successfully."
+    status = "✅ **Tokens mapped successfully.**"
     if invalid:
-        status += f"  Removed invalid: {', '.join(invalid)}"
+        status += f"<br>⚠️ Removed invalid: {', '.join(invalid)}"
     return prompt, status
 
 
@@ -549,7 +549,7 @@ def _progress_bar(step: int, total: int, width: int = 20) -> str:
     frac = min(step / max(total, 1), 1.0)
     filled = int(width * frac)
     bar = "█" * filled + "░" * (width - filled)
-    return f"[{bar}] {step}/{total} tokens ({frac:.0%})"
+    return f"<span style='font-family: monospace; color: #FF4D00;'>[{bar}] {step}/{total} tokens ({frac:.0%})</span>"
 
 
 def generate_and_select(
@@ -560,7 +560,7 @@ def generate_and_select(
 ):
     """Generate N samples in a batch, annotate each, return the best."""
     if not prompt_text.strip():
-        yield "", "Please provide a token prompt first.", None, None, ""
+        yield "", "⚠️ **Please provide a token prompt first.**", None, None, ""
         return
 
     prompt_text = _ensure_prompt_format(prompt_text)
@@ -576,22 +576,32 @@ def generate_and_select(
         padding=True,
     ).to(DEVICE)
 
-    # Run generation in background thread with token counter
-    counter = _TokenCounter()
+    # Run generation in background thread
     result_holder: list = [None, None]  # [outputs, error]
+    use_cuda_graph = DEVICE == "cuda" and hasattr(model, "generate_compiled")
 
     def _run_generate():
         try:
-            with torch.no_grad():
-                result_holder[0] = model.generate(
-                    **inputs,
-                    max_new_tokens=max_tokens,
-                    temperature=float(temperature),
-                    do_sample=True,
-                    top_k=50,
-                    use_cache=True,
-                    streamer=counter,
-                )
+            with torch.inference_mode():
+                if use_cuda_graph:
+                    result_holder[0] = model.generate_compiled(
+                        inputs["input_ids"],
+                        max_new_tokens=max_tokens,
+                        temperature=float(temperature),
+                        top_k=50,
+                        attention_mask=inputs.get("attention_mask"),
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.pad_token_id,
+                    )
+                else:
+                    result_holder[0] = model.generate(
+                        **inputs,
+                        max_new_tokens=max_tokens,
+                        temperature=float(temperature),
+                        do_sample=True,
+                        top_k=50,
+                        use_cache=True,
+                    )
         except Exception as exc:
             result_holder[1] = exc
 
@@ -601,17 +611,17 @@ def generate_and_select(
 
     # Poll progress and yield status updates
     n_label = f"{num_samples} sample(s)" if num_samples > 1 else "1 sample"
+    gen_method = "CUDA graph" if use_cuda_graph else "standard"
     while gen_thread.is_alive():
         elapsed = time.time() - t0
-        bar = _progress_bar(counter.step, max_tokens)
-        yield "", f"Generating {n_label}… {bar}  ({elapsed:.1f}s)", None, None, ""
+        yield "", f"⏳ **Generating {n_label}** ({gen_method})…<br>_<small>elapsed: {elapsed:.1f}s</small>_", None, None, ""
         gen_thread.join(timeout=0.4)
 
     gen_time = time.time() - t0
 
     if result_holder[1] is not None:
         print(f"[generate] ERROR: {result_holder[1]}")
-        yield "", f"Generation failed: {result_holder[1]}", None, None, ""
+        yield "", f"❌ **Generation failed:** {result_holder[1]}", None, None, ""
         return
 
     outputs = result_holder[0]
@@ -627,21 +637,21 @@ def generate_and_select(
         print(f"[generate] sample {i}: {len(dna)} bp, "
               f"{'complete' if has_eos else 'truncated'}")
 
-    yield "", (f"Generated {n_label} ({counter.step} tokens) in {gen_time:.1f}s. "
-               "Annotating…"), None, None, ""
+    gen_tokens = outputs.shape[1] - inputs["input_ids"].shape[1]
+    yield "", f"✅ **Generated {n_label}** ({gen_tokens} tokens) in {gen_time:.1f}s.<br>⏳ _Annotating…_", None, None, ""
 
     # If only 1 sample, skip scoring
     if num_samples == 1:
         dna, has_eos = samples[0]
         tag = "complete" if has_eos else "max-length"
         html_map, table, ann_status = _annotate(dna)
-        status = f"{len(dna)} bp ({tag}, {gen_time:.1f}s). {ann_status}"
+        status = f"✅ **Complete!**<br>🧬 **{len(dna)} bp** ({tag}, {gen_time:.1f}s). <br>{ann_status}"
         yield dna, status, html_map, table, ""
         return
 
     # Annotate all samples in parallel
     _plannotate_ready.wait(timeout=30)
-    yield "", f"Annotating {num_samples} samples in parallel…", None, None, ""
+    yield "", f"⏳ _Annotating {num_samples} samples in parallel…_", None, None, ""
 
     def _annotate_and_score(idx: int) -> tuple[int, float]:
         dna_i = samples[idx][0]
@@ -667,9 +677,8 @@ def generate_and_select(
     dna, has_eos = samples[best_idx]
     tag = "complete" if has_eos else "max-length"
     html_map, table, ann_status = _annotate(dna)
-    status = (f"Best of {num_samples}: sample {best_idx+1}, "
-              f"score={best_score:.2f}, "
-              f"{len(dna)} bp ({tag}, {gen_time:.1f}s). {ann_status}")
+    status = (f"✅ **Complete!** (Best of {num_samples}: sample {best_idx+1}, score={best_score:.2f})<br>"
+              f"🧬 **{len(dna)} bp** ({tag}, {gen_time:.1f}s). <br>{ann_status}")
     yield dna, status, html_map, table, ""
 
 
@@ -804,9 +813,51 @@ _CUSTOM_CSS = """
     word-wrap: break-word !important;
     max-width: 300px;
 }
+.dna-output textarea {
+    font-family: 'Space Mono', monospace !important;
+    font-size: 14px !important;
+    letter-spacing: 0.5px !important;
+}
 """
 
-with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
+encode_theme = gr.themes.Default(
+    primary_hue=gr.themes.colors.orange,
+    secondary_hue=gr.themes.colors.blue,
+    neutral_hue=gr.themes.colors.slate,
+    font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    font_mono=[gr.themes.GoogleFont("Space Mono"), "ui-monospace", "Consolas", "monospace"],
+).set(
+    body_background_fill="#F5F0E6",
+    body_background_fill_dark="#0A192F",
+    body_text_color="#0A192F",
+    body_text_color_dark="#F5F0E6",
+    background_fill_primary="#FFFFFF",
+    background_fill_primary_dark="#112240",
+    background_fill_secondary="#FAF8F3",
+    background_fill_secondary_dark="#0A192F",
+    border_color_primary="#E5E0D8",
+    border_color_primary_dark="#233554",
+    block_background_fill="#FFFFFF",
+    block_background_fill_dark="#112240",
+    block_border_width="1px",
+    block_border_color="#E5E0D8",
+    block_border_color_dark="#233554",
+    block_title_text_color="#0A192F",
+    block_title_text_color_dark="#F5F0E6",
+    block_label_text_color="#0A192F",
+    block_label_text_color_dark="#F5F0E6",
+    block_radius="12px",
+    button_primary_background_fill="#FF4D00",
+    button_primary_background_fill_hover="#E64500",
+    button_primary_text_color="#FFFFFF",
+    button_secondary_background_fill="#E5E0D8",
+    button_secondary_background_fill_hover="#D5D0C8",
+    button_secondary_text_color="#0A192F",
+    button_secondary_background_fill_dark="#233554",
+    button_secondary_text_color_dark="#F5F0E6",
+)
+
+with gr.Blocks(title="PlasmidSpace", theme=encode_theme, css=_CUSTOM_CSS) as demo:
     gr.Markdown(
         "# \U0001F9EC PlasmidSpace\n"
         "*Design synthetic plasmids from natural language using "
@@ -863,8 +914,8 @@ with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
                 gr.Markdown(_token_reference_md())
 
         with gr.Column(scale=2):
-            status_box = gr.Textbox(
-                label="Status", interactive=False, max_lines=2,
+            status_box = gr.Markdown(
+                label="Status", value="Ready to sequence.",
             )
             with gr.Tabs():
                 with gr.Tab("Plasmid Map"):
@@ -879,6 +930,7 @@ with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
                     dna_output = gr.Textbox(
                         label="Generated DNA",
                         lines=12, max_lines=25, interactive=False,
+                        elem_classes=["dna-output"],
                     )
 
     # Hidden dummy for 5th output of generator
