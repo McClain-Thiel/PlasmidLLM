@@ -53,15 +53,7 @@ from bokeh.resources import CDN as BOKEH_CDN
 from plannotate.annotate import annotate as _plannotate_annotate
 from plannotate.bokeh_plot import get_bokeh as _plannotate_bokeh
 from plannotate import resources as _plannotate_rsc
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
-
-# Register local model classes so we get the updated generate_simple()
-# instead of the (potentially stale) remote code from HuggingFace.
-from plasmid_llm.models.hf_plasmid_lm.configuration_plasmid_lm import PlasmidLMConfig
-from plasmid_llm.models.hf_plasmid_lm.modeling_plasmid_lm import PlasmidLMForCausalLM
-
-AutoConfig.register("plasmid_lm", PlasmidLMConfig)
-AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -240,7 +232,7 @@ if DEVICE == "cuda":
     print(f"  GPU: {torch.cuda.get_device_name(0)}, "
           f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
-model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, trust_remote_code=True)
 if DEVICE == "cuda":
     model = model.half().to("cuda")
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -360,7 +352,7 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
-            model="claude-3-5-haiku-latest",
+            model="claude-haiku-4-5-20251001",
             max_tokens=256,
             system=_load_system_prompt(),
             messages=[{"role": "user", "content": description}],
@@ -396,9 +388,9 @@ def map_text_to_tokens(description: str) -> tuple[str, str]:
     unique.sort(key=_sort_key)
 
     prompt = f"<BOS> {' '.join(unique)} <SEQ>"
-    status = "Tokens mapped successfully."
+    status = "✅ **Tokens mapped successfully.**"
     if invalid:
-        status += f"  Removed invalid: {', '.join(invalid)}"
+        status += f"<br>⚠️ Removed invalid: {', '.join(invalid)}"
     return prompt, status
 
 
@@ -535,6 +527,31 @@ def _score_annotation(
     return composite
 
 
+class _TokenCounter:
+    """Counts generation steps so the UI can show progress.
+
+    Implements the streamer interface (put/end) expected by
+    transformers model.generate().
+    """
+
+    def __init__(self):
+        self.step = 0
+        self.done = False
+
+    def put(self, value):
+        self.step += 1
+
+    def end(self):
+        self.done = True
+
+
+def _progress_bar(step: int, total: int, width: int = 20) -> str:
+    frac = min(step / max(total, 1), 1.0)
+    filled = int(width * frac)
+    bar = "█" * filled + "░" * (width - filled)
+    return f"<span style='font-family: monospace; color: #FF4D00;'>[{bar}] {step}/{total} tokens ({frac:.0%})</span>"
+
+
 def generate_and_select(
     prompt_text: str,
     temperature: float,
@@ -543,7 +560,7 @@ def generate_and_select(
 ):
     """Generate N samples in a batch, annotate each, return the best."""
     if not prompt_text.strip():
-        yield "", "Please provide a token prompt first.", None, None, ""
+        yield "", "⚠️ **Please provide a token prompt first.**", None, None, ""
         return
 
     prompt_text = _ensure_prompt_format(prompt_text)
@@ -559,24 +576,32 @@ def generate_and_select(
         padding=True,
     ).to(DEVICE)
 
-    n_label = f"{num_samples} sample(s)" if num_samples > 1 else "1 sample"
-    yield "", f"Generating {n_label}…", None, None, ""
-
-    # Use fast generate_simple() — bypasses HF GenerationMixin overhead
+    # Run generation in background thread
     result_holder: list = [None, None]  # [outputs, error]
+    use_cuda_graph = DEVICE == "cuda" and hasattr(model, "generate_compiled")
 
     def _run_generate():
         try:
-            with torch.no_grad():
-                result_holder[0] = model.generate_simple(
-                    input_ids=inputs["input_ids"],
-                    attention_mask=inputs.get("attention_mask"),
-                    max_new_tokens=max_tokens,
-                    temperature=float(temperature),
-                    top_k=50,
-                    eos_token_id=tokenizer.eos_token_id,
-                    pad_token_id=tokenizer.pad_token_id,
-                )
+            with torch.inference_mode():
+                if use_cuda_graph:
+                    result_holder[0] = model.generate_compiled(
+                        inputs["input_ids"],
+                        max_new_tokens=max_tokens,
+                        temperature=float(temperature),
+                        top_k=50,
+                        attention_mask=inputs.get("attention_mask"),
+                        eos_token_id=tokenizer.eos_token_id,
+                        pad_token_id=tokenizer.pad_token_id,
+                    )
+                else:
+                    result_holder[0] = model.generate(
+                        **inputs,
+                        max_new_tokens=max_tokens,
+                        temperature=float(temperature),
+                        do_sample=True,
+                        top_k=50,
+                        use_cache=True,
+                    )
         except Exception as exc:
             result_holder[1] = exc
 
@@ -584,17 +609,19 @@ def generate_and_select(
     gen_thread = threading.Thread(target=_run_generate)
     gen_thread.start()
 
-    # Poll and yield elapsed-time updates
+    # Poll progress and yield status updates
+    n_label = f"{num_samples} sample(s)" if num_samples > 1 else "1 sample"
+    gen_method = "CUDA graph" if use_cuda_graph else "standard"
     while gen_thread.is_alive():
         elapsed = time.time() - t0
-        yield "", f"Generating {n_label}… ({elapsed:.1f}s)", None, None, ""
-        gen_thread.join(timeout=0.5)
+        yield "", f"⏳ **Generating {n_label}** ({gen_method})…<br>_<small>elapsed: {elapsed:.1f}s</small>_", None, None, ""
+        gen_thread.join(timeout=0.4)
 
     gen_time = time.time() - t0
 
     if result_holder[1] is not None:
         print(f"[generate] ERROR: {result_holder[1]}")
-        yield "", f"Generation failed: {result_holder[1]}", None, None, ""
+        yield "", f"❌ **Generation failed:** {result_holder[1]}", None, None, ""
         return
 
     outputs = result_holder[0]
@@ -610,23 +637,21 @@ def generate_and_select(
         print(f"[generate] sample {i}: {len(dna)} bp, "
               f"{'complete' if has_eos else 'truncated'}")
 
-    prompt_len = inputs["input_ids"].shape[1]
-    total_new_tokens = (outputs.shape[1] - prompt_len) * outputs.shape[0]
-    yield "", (f"Generated {n_label} ({total_new_tokens} tokens) in {gen_time:.1f}s. "
-               "Annotating…"), None, None, ""
+    gen_tokens = outputs.shape[1] - inputs["input_ids"].shape[1]
+    yield "", f"✅ **Generated {n_label}** ({gen_tokens} tokens) in {gen_time:.1f}s.<br>⏳ _Annotating…_", None, None, ""
 
     # If only 1 sample, skip scoring
     if num_samples == 1:
         dna, has_eos = samples[0]
         tag = "complete" if has_eos else "max-length"
         html_map, table, ann_status = _annotate(dna)
-        status = f"{len(dna)} bp ({tag}, {gen_time:.1f}s). {ann_status}"
+        status = f"✅ **Complete!**<br>🧬 **{len(dna)} bp** ({tag}, {gen_time:.1f}s). <br>{ann_status}"
         yield dna, status, html_map, table, ""
         return
 
     # Annotate all samples in parallel
     _plannotate_ready.wait(timeout=30)
-    yield "", f"Annotating {num_samples} samples in parallel…", None, None, ""
+    yield "", f"⏳ _Annotating {num_samples} samples in parallel…_", None, None, ""
 
     def _annotate_and_score(idx: int) -> tuple[int, float]:
         dna_i = samples[idx][0]
@@ -652,9 +677,8 @@ def generate_and_select(
     dna, has_eos = samples[best_idx]
     tag = "complete" if has_eos else "max-length"
     html_map, table, ann_status = _annotate(dna)
-    status = (f"Best of {num_samples}: sample {best_idx+1}, "
-              f"score={best_score:.2f}, "
-              f"{len(dna)} bp ({tag}, {gen_time:.1f}s). {ann_status}")
+    status = (f"✅ **Complete!** (Best of {num_samples}: sample {best_idx+1}, score={best_score:.2f})<br>"
+              f"🧬 **{len(dna)} bp** ({tag}, {gen_time:.1f}s). <br>{ann_status}")
     yield dna, status, html_map, table, ""
 
 
@@ -789,9 +813,51 @@ _CUSTOM_CSS = """
     word-wrap: break-word !important;
     max-width: 300px;
 }
+.dna-output textarea {
+    font-family: 'Space Mono', monospace !important;
+    font-size: 14px !important;
+    letter-spacing: 0.5px !important;
+}
 """
 
-with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
+encode_theme = gr.themes.Default(
+    primary_hue=gr.themes.colors.orange,
+    secondary_hue=gr.themes.colors.blue,
+    neutral_hue=gr.themes.colors.slate,
+    font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    font_mono=[gr.themes.GoogleFont("Space Mono"), "ui-monospace", "Consolas", "monospace"],
+).set(
+    body_background_fill="#F5F0E6",
+    body_background_fill_dark="#0A192F",
+    body_text_color="#0A192F",
+    body_text_color_dark="#F5F0E6",
+    background_fill_primary="#FFFFFF",
+    background_fill_primary_dark="#112240",
+    background_fill_secondary="#FAF8F3",
+    background_fill_secondary_dark="#0A192F",
+    border_color_primary="#E5E0D8",
+    border_color_primary_dark="#233554",
+    block_background_fill="#FFFFFF",
+    block_background_fill_dark="#112240",
+    block_border_width="1px",
+    block_border_color="#E5E0D8",
+    block_border_color_dark="#233554",
+    block_title_text_color="#0A192F",
+    block_title_text_color_dark="#F5F0E6",
+    block_label_text_color="#0A192F",
+    block_label_text_color_dark="#F5F0E6",
+    block_radius="12px",
+    button_primary_background_fill="#FF4D00",
+    button_primary_background_fill_hover="#E64500",
+    button_primary_text_color="#FFFFFF",
+    button_secondary_background_fill="#E5E0D8",
+    button_secondary_background_fill_hover="#D5D0C8",
+    button_secondary_text_color="#0A192F",
+    button_secondary_background_fill_dark="#233554",
+    button_secondary_text_color_dark="#F5F0E6",
+)
+
+with gr.Blocks(title="PlasmidSpace", theme=encode_theme, css=_CUSTOM_CSS) as demo:
     gr.Markdown(
         "# \U0001F9EC PlasmidSpace\n"
         "*Design synthetic plasmids from natural language using "
@@ -848,8 +914,8 @@ with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
                 gr.Markdown(_token_reference_md())
 
         with gr.Column(scale=2):
-            status_box = gr.Textbox(
-                label="Status", interactive=False, max_lines=2,
+            status_box = gr.Markdown(
+                label="Status", value="Ready to sequence.",
             )
             with gr.Tabs():
                 with gr.Tab("Plasmid Map"):
@@ -864,6 +930,7 @@ with gr.Blocks(title="PlasmidSpace", css=_CUSTOM_CSS) as demo:
                     dna_output = gr.Textbox(
                         label="Generated DNA",
                         lines=12, max_lines=25, interactive=False,
+                        elem_classes=["dna-output"],
                     )
 
     # Hidden dummy for 5th output of generator

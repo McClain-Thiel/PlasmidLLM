@@ -17,6 +17,7 @@ from post_training.common.utils import timer, wandb_log
 log = logging.getLogger(__name__)
 
 
+
 class GRPOAlgorithm(Algorithm):
     """GRPO with multi-actor parallel generation and gradient averaging.
 
@@ -33,12 +34,22 @@ class GRPOAlgorithm(Algorithm):
         num_generations: int = 4,
         micro_batch_size: int = 64,
         gen_kwargs: dict | None = None,
+        scorer_name: str | None = None,
+        scorer_kwargs: dict | None = None,
+        length_penalty_per_kb: float = 0.0,
+        length_soft_max: float = 8000.0,
+        length_penalty_cap: float = 0.15,
     ):
         self.kl_coef = kl_coef
         self.cliprange = cliprange
         self.num_generations = num_generations
         self.micro_batch_size = micro_batch_size
         self.gen_kwargs = gen_kwargs or {}
+        self._scorer_name = scorer_name
+        self._scorer_kwargs = scorer_kwargs or {}
+        self.length_penalty_per_kb = length_penalty_per_kb
+        self.length_soft_max = length_soft_max
+        self.length_penalty_cap = length_penalty_cap
         self._global_step = 0
 
     def compute_advantages(
@@ -107,6 +118,16 @@ class GRPOAlgorithm(Algorithm):
         # ── Score all completions ─────────────────────────────────────────
         with timer("scoring") as t_score:
             rewards = scorer.score(all_prompts, all_completions)
+
+        # ── Apply length penalty (if enabled) ─────────────────────────────
+        if self.length_penalty_per_kb > 0:
+            penalties = torch.tensor([
+                min(max(0.0, (cl - self.length_soft_max) / 1000.0) * self.length_penalty_per_kb,
+                    self.length_penalty_cap)
+                for cl in comp_lengths
+            ], dtype=rewards.dtype, device=rewards.device)
+            rewards = (rewards - penalties).clamp(min=0.0)
+
         advantages = self.compute_advantages(rewards, group_size=G)
         log.info(
             "Scoring done in %.1fs — mean_reward=%.3f std=%.3f min=%.3f max=%.3f",
@@ -123,20 +144,26 @@ class GRPOAlgorithm(Algorithm):
         t_fwd_bwd_total = 0.0
 
         with timer("train") as t_train:
-            for actor, gen in zip(actors, generations):
+            # Submit all log-prob tasks in parallel across actors
+            with timer() as t_lp:
+                old_lp_futures = [
+                    actor.get_log_probs.remote(gen.full_ids, gen.prompt_len)
+                    for actor, gen in zip(actors, generations)
+                ]
+                ref_lp_futures = [
+                    actor.get_log_probs.remote(
+                        gen.full_ids, gen.prompt_len, use_ref=True,
+                    )
+                    for actor, gen in zip(actors, generations)
+                ]
+                old_lps = ray.get(old_lp_futures)
+                ref_lps = ray.get(ref_lp_futures)
+            t_log_probs_total = t_lp()
+
+            # Forward-backward per actor (still sequential — each needs its own GPU)
+            for actor, gen, old_lp, ref_lp in zip(actors, generations, old_lps, ref_lps):
                 n = len(gen.prompts)
                 adv_slice = advantages[idx : idx + n]
-
-                with timer() as t_lp:
-                    old_lp = ray.get(
-                        actor.get_log_probs.remote(gen.full_ids, gen.prompt_len),
-                    )
-                    ref_lp = ray.get(
-                        actor.get_log_probs.remote(
-                            gen.full_ids, gen.prompt_len, use_ref=True,
-                        ),
-                    )
-                t_log_probs_total += t_lp()
 
                 with timer() as t_fb:
                     loss = self.micro_batch_forward_backward(
@@ -192,6 +219,7 @@ class GRPOAlgorithm(Algorithm):
             "grad_norm": backward_result.grad_norm,
             "lr": backward_result.lr,
             "mean_completion_len": sum(comp_lengths) / max(len(comp_lengths), 1),
+            "mean_length_penalty": penalties.mean().item() if self.length_penalty_per_kb > 0 else 0.0,
             # ── Wall-clock timing breakdown ───────────────────────────
             "time/generation": t_gen(),
             "time/scoring": t_score(),

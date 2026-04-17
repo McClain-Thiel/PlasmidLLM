@@ -56,8 +56,8 @@ def install_blast():
 def main():
     config_name = os.environ.get("CONFIG", "grpo_dense_anyscale")
 
-    # ── Install BLAST+ if plannotate scorer ────────────────────────────────
-    if "plannotate" in config_name:
+    # ── Install BLAST+ if BLAST-based scorer ──────────────────────────────
+    if "plannotate" in config_name or "motif" in config_name or "fractional" in config_name:
         install_blast()
 
     # ── Download data ─────────────────────────────────────────────────────
@@ -73,6 +73,34 @@ def main():
     s3_download(
         f"{S3_PREFIX}/data/plannotate_db.parquet",
         DATA_DIR / "plannotate_db.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_binary_motif_1tok.parquet",
+        DATA_DIR / "training_pairs_binary_motif_1tok.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_binary_motif_2tok.parquet",
+        DATA_DIR / "training_pairs_binary_motif_2tok.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_binary_motif_3tok.parquet",
+        DATA_DIR / "training_pairs_binary_motif_3tok.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_binary_motif_5tok.parquet",
+        DATA_DIR / "training_pairs_binary_motif_5tok.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_binary_motif_8tok.parquet",
+        DATA_DIR / "training_pairs_binary_motif_8tok.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/training_pairs_mixed_curriculum.parquet",
+        DATA_DIR / "training_pairs_mixed_curriculum.parquet",
+    )
+    s3_download(
+        f"{S3_PREFIX}/data/holdout_full_prompts.parquet",
+        DATA_DIR / "holdout_full_prompts.parquet",
     )
     log.info("Data download complete.")
 
