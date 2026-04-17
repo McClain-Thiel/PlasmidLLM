@@ -35,5 +35,5 @@ max_retries: 0
 env_vars:
   CONFIG: grpo_plannotate_anyscale_v2
   WANDB_API_KEY: "4735d4f04c0bbfc6addc08ceec8e2a04a77b3d07"
-  HF_TOKEN: "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"
+  HF_TOKEN: "${HF_TOKEN}"
   PYTHONPATH: "."

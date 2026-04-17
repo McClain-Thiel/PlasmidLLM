@@ -36,7 +36,7 @@ env_vars:
   CONFIG: grpo_binary_motif_2tok_anyscale
   RESUME_FROM_S3: "s3://anyscale-production-data-vm-us-east-1-f7164253/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm/checkpoints/grpo_binary_motif_v2/final"
   WANDB_API_KEY: "4735d4f04c0bbfc6addc08ceec8e2a04a77b3d07"
-  HF_TOKEN: "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"
+  HF_TOKEN: "${HF_TOKEN}"
   PYTHONPATH: "."
   TORCH_CUDAGRAPHS: "0"
   TORCHDYNAMO_DISABLE: "1"
