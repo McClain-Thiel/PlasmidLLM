@@ -2,8 +2,13 @@
 data/
 !eval/data/
 *.csv
+!eval/reference/*.csv
+!eval/config/*.csv
 *.log
 eval/scorers/cache/
+eval/runs/
+# eval/baselines FASTA files are generated locally, not tracked in git
+eval/baselines/
 
 # Python
 __pycache__/

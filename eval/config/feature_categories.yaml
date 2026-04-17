@@ -1,0 +1,132 @@
+# Feature category mapping for Tier 3 essentials scoring
+# Maps pLannotate feature annotations to boolean categories
+# Version: 1.0 (2026-04-08)
+#
+# pLannotate outputs features with a "Type" field (from snapgene DB)
+# and a "Feature" name. We classify into functional categories using
+# both type-level rules and keyword matching on feature names.
+
+# Origins of replication
+origin:
+  plannotate_types:
+    - rep_origin
+    - oriT
+  keywords:
+    - "ori"
+    - "origin"
+    - "replicator"
+    - "ColE1"
+    - "pBR322"
+    - "pUC"
+    - "p15A"
+    - "pSC101"
+    - "R6K"
+    - "RK2"
+    - "2 micron"
+    - "2mu"
+    - "CEN/ARS"
+    - "f1 ori"
+    - "SV40 ori"
+
+# Selection markers (antibiotic resistance, auxotrophic)
+selection_marker:
+  plannotate_types: []
+  keywords:
+    # Antibiotic resistance genes
+    - "resistance"
+    - "AmpR"
+    - "KanR"
+    - "CmR"
+    - "GentR"
+    - "SpecR"
+    - "TetR"
+    - "ZeoR"
+    - "BleoR"
+    - "HygR"
+    - "PuroR"
+    - "NeoR"
+    - "NatR"
+    - "bla"    # beta-lactamase
+    - "aph"    # aminoglycoside phosphotransferase
+    - "cat"    # chloramphenicol acetyltransferase
+    - "ampicillin"
+    - "kanamycin"
+    - "chloramphenicol"
+    - "spectinomycin"
+    - "gentamicin"
+    - "tetracycline"
+    - "hygromycin"
+    - "puromycin"
+    - "neomycin"
+    - "zeocin"
+    - "blasticidin"
+    - "nourseothricin"
+    # Auxotrophic markers
+    - "URA3"
+    - "LEU2"
+    - "TRP1"
+    - "HIS3"
+    - "LYS2"
+
+# Promoters
+promoter:
+  plannotate_types:
+    - promoter
+    - enhancer
+  keywords:
+    - "promoter"
+    - "CMV"
+    - "EF1"
+    - "EF-1"
+    - "SV40"
+    - "CAG"
+    - "T7"
+    - "T3"
+    - "SP6"
+    - "U6"
+    - "H1"
+    - "PGK"
+    - "UBC"
+    - "MSCV"
+    - "lac "
+    - "tac "
+    - "trc "
+    - "ara"
+    - "tet "
+
+# Terminators / polyA signals
+terminator:
+  plannotate_types:
+    - terminator
+    - polyA_signal
+  keywords:
+    - "terminator"
+    - "polyA"
+    - "poly(A)"
+    - "pA signal"
+    - "BGH"
+    - "SV40 late"
+    - "rrnB"
+    - "T1 terminator"
+
+# Coding sequences (including reporters, tags, functional genes)
+cds:
+  plannotate_types:
+    - CDS
+    - gene
+  keywords:
+    - "GFP"
+    - "EGFP"
+    - "mCherry"
+    - "RFP"
+    - "YFP"
+    - "BFP"
+    - "luciferase"
+    - "lacZ"
+    - "Cas9"
+    - "Cas12"
+    - "Cre"
+    - "Flp"
+    - "transposase"
+    - "integrase"
+    - "recombinase"
