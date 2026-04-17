@@ -70,9 +70,12 @@ def load_run_data(run_dir: Path) -> dict:
 # Figure 1: Component hit rate by category (bar chart)
 # ============================================================
 def fig_hit_rate_by_category():
-    """Bar chart of conditional generation hit rate by component category."""
+    """Bar chart of conditional generation hit rate by component category.
+    Updated from eval/alignment_results/eval_alignment_summary.md (dense model,
+    temperature 0.3, SW alignment). Uses latest per-category rates."""
     categories = ["ORI", "AMR", "PROM", "ELEM", "REPORTER", "TAG"]
-    hit_rates = [80.6, 70.7, 66.9, 52.9, 29.4, 25.0]
+    # From latest alignment summary (dense @ 0.3)
+    hit_rates = [80.6, 67.2, 66.9, 55.9, 29.4, 12.5]
     requested = [72, 58, 127, 102, 17, 8]
 
     fig, ax = plt.subplots(figsize=(5.5, 2.8))
@@ -86,9 +89,9 @@ def fig_hit_rate_by_category():
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
-    ax.set_ylabel("Hit rate (%)")
+    ax.set_ylabel("Hit rate (\%)")
     ax.set_ylim(0, 100)
-    ax.axhline(62.4, color="#333", linestyle="--", linewidth=0.8, label="Overall (62.4%)")
+    ax.axhline(63.8, color="#333", linestyle="--", linewidth=0.8, label="Overall (63.8\%)")
     ax.legend(loc="upper right", framealpha=0.9)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -102,21 +105,24 @@ def fig_hit_rate_by_category():
 # Figure 2: Temperature sweep
 # ============================================================
 def fig_temperature_sweep():
-    """Line plot of hit rate and precision vs temperature."""
+    """Line plot of hit rate and precision vs temperature.
+    Values from eval/alignment_results/eval_alignment_summary.md (dense model,
+    full FP-inclusive precision ~40\% at peak)."""
     temps = [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
     hit_rate = [38.2, 60.8, 62.4, 53.5, 52.4, 45.8, 47.3]
-    precision = [26.3, 41.6, 94.0, 94.0, 92.0, 82.0, 84.0]
+    # Realistic precision with FPs included (from full report)
+    precision = [26.3, 41.6, 40.1, 37.8, 37.2, 39.3, 41.3]
 
     fig, ax1 = plt.subplots(figsize=(4.5, 2.8))
     ax1.plot(temps, hit_rate, "o-", color=COLORS["generated"], label="Hit rate", markersize=5)
     ax1.set_xlabel("Temperature")
-    ax1.set_ylabel("Hit rate (%)", color=COLORS["generated"])
+    ax1.set_ylabel("Hit rate (\%)", color=COLORS["generated"])
     ax1.set_ylim(20, 100)
     ax1.tick_params(axis="y", labelcolor=COLORS["generated"])
 
     ax2 = ax1.twinx()
     ax2.plot(temps, precision, "s--", color=COLORS["reference"], label="Precision", markersize=4)
-    ax2.set_ylabel("Precision (%)", color=COLORS["reference"])
+    ax2.set_ylabel("Precision (\%)", color=COLORS["reference"])
     ax2.set_ylim(20, 100)
     ax2.tick_params(axis="y", labelcolor=COLORS["reference"])
 
