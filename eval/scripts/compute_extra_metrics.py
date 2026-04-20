@@ -23,132 +23,118 @@ import pandas as pd
 
 # ---------------------------------------------------------------------------
 # Prompt fidelity: does the generated sequence contain requested features?
+#
+# A "hit" is sseqid set intersection against the motif registry: for each
+# conditioning token (e.g. <AMR_KANAMYCIN>) the registry lists every pLannotate
+# sseqid that counts as a valid detection. A generated sequence is a hit on
+# that token iff pLannotate emits at least one feature whose sseqid is in the
+# registry set for that token. No substring / keyword matching.
+#
+# Tokens that are not in the registry (e.g. <COPY_HIGH>, <VEC_MAMMALIAN>,
+# <SIZE_LARGE>) are metadata, not pLannotate-verifiable, and are ignored.
 # ---------------------------------------------------------------------------
 
-# Map prompt tokens to pLannotate feature keywords
-TOKEN_TO_PLANNOTATE = {
-    # Origins
-    "ORI_COLE1": ["ColE1", "pBR322", "pUC ori"],
-    "ORI_F1": ["f1 ori", "F1 ori"],
-    "ORI_SV40": ["SV40 ori"],
-    "ORI_RSF": ["RSF"],
-    "ORI_2MU": ["2 micron", "2mu"],
-    "ORI_P15A": ["p15A"],
-    "ORI_PBLUESCRIPT": ["pBluescript"],
-    "ORI_RK2": ["RK2", "oriV"],
-    # AMR
-    "AMR_AMPICILLIN": ["AmpR", "bla", "ampicillin", "beta-lactamase"],
-    "AMR_KANAMYCIN": ["KanR", "aph", "kanamycin", "NeoR", "neomycin"],
-    "AMR_CHLORAMPHENICOL": ["CmR", "cat", "chloramphenicol"],
-    "AMR_SPECTINOMYCIN": ["SpecR", "aadA", "spectinomycin"],
-    "AMR_GENTAMICIN": ["GentR", "aacC", "gentamicin"],
-    "AMR_TETRACYCLINE": ["TetR", "tetracycline"],
-    "AMR_HYGROMYCIN": ["HygR", "hygromycin"],
-    "AMR_PUROMYCIN": ["PuroR", "puromycin"],
-    "AMR_ZEOCIN": ["ZeoR", "ble", "zeocin"],
-    "AMR_NEOMYCIN": ["NeoR", "neo", "neomycin", "G418"],
-    "AMR_BLASTICIDIN": ["BlastR", "blasticidin", "bsd"],
-    "AMR_NOURSEOTHRICIN": ["NatR", "nourseothricin"],
-    # Promoters
-    "PROM_CMV": ["CMV promoter", "CMV enhancer", "hCMV"],
-    "PROM_SV40": ["SV40 promoter", "SV40 early"],
-    "PROM_AMPR": ["AmpR promoter", "bla promoter"],
-    "PROM_T7": ["T7 promoter"],
-    "PROM_T3": ["T3 promoter"],
-    "PROM_SP6": ["SP6 promoter"],
-    "PROM_LAC": ["lac promoter", "lac operator", "lacO"],
-    "PROM_EF1A": ["EF-1", "EF1", "EFS"],
-    "PROM_CAG": ["CAG", "CAGGS"],
-    "PROM_PGK": ["PGK promoter"],
-    "PROM_U6": ["U6 promoter"],
-    "PROM_UBC": ["UBC", "UbC"],
-    # Elements
-    "ELEM_IRES": ["IRES"],
-    "ELEM_POLYA_SV40": ["SV40 poly", "SV40 pA", "SV40 late"],
-    "ELEM_POLYA_BGH": ["BGH poly", "BGH pA"],
-    "ELEM_CMV_ENHANCER": ["CMV enhancer"],
-    "ELEM_CMV_INTRON": ["CMV intron", "chimeric intron"],
-    "ELEM_WPRE": ["WPRE"],
-    "ELEM_KOZAK": ["Kozak"],
-    "ELEM_TRACRRNA": ["tracrRNA", "gRNA scaffold"],
-    # Reporters
-    "REPORTER_EGFP": ["EGFP", "eGFP"],
-    "REPORTER_GFP": ["GFP"],
-    "REPORTER_MCHERRY": ["mCherry"],
-    "REPORTER_MEMERALD": ["mEmerald"],
-    "REPORTER_YFP": ["YFP", "EYFP"],
-    "REPORTER_BFP": ["BFP", "EBFP"],
-    "REPORTER_LUCIFERASE": ["luciferase", "Luc2"],
-    # Tags
-    "TAG_FLAG": ["FLAG"],
-    "TAG_HA": ["HA tag"],
-    "TAG_V5": ["V5 tag"],
-    "TAG_HIS": ["6xHis", "His tag", "polyhistidine"],
-    "TAG_GST": ["GST"],
-    "TAG_MYC": ["Myc", "c-Myc tag"],
-    "TAG_STREP": ["Strep", "StrepII"],
-    "TAG_MBP": ["MBP"],
-}
-
-# Categories we can verify (excludes metadata tokens like VEC_, SP_, COPY_, SIZE_, GC_)
-VERIFIABLE_PREFIXES = {"ORI", "AMR", "PROM", "ELEM", "REPORTER", "TAG"}
+DEFAULT_MOTIF_REGISTRY = (
+    Path(__file__).resolve().parents[2] / "data" / "motif_registry_combined.parquet"
+)
 
 
-def compute_prompt_fidelity(run_dir: Path) -> dict:
-    """Check how often requested features appear in pLannotate output."""
+def load_token_sseqid_map(registry_path: Path) -> dict[str, set[str]]:
+    """Return {token_name_without_brackets: set[sseqid]} from the motif registry."""
+    df = pd.read_parquet(registry_path, columns=["token", "sseqid"])
+    if df.empty:
+        raise ValueError(f"motif registry is empty: {registry_path}")
+    mapping: dict[str, set[str]] = defaultdict(set)
+    for tok, sid in zip(df["token"], df["sseqid"]):
+        if not isinstance(tok, str) or not isinstance(sid, str):
+            continue
+        mapping[tok.strip("<>")].add(sid)
+    return dict(mapping)
+
+
+def compute_prompt_fidelity(run_dir: Path, motif_registry: Path | None = None) -> dict:
+    """sseqid-based prompt fidelity via the motif registry.
+
+    Loads `motif_registry_combined.parquet` (or the path given), builds the
+    per-token sseqid set, and scores each generation by set intersection with
+    the sseqids pLannotate emitted for that sequence.
+    """
     gen_df = pd.read_parquet(run_dir / "generations.parquet")
     pn_path = run_dir / "plannotate_results.json"
     if not pn_path.exists():
-        print("Prompt fidelity: no plannotate results, skipping")
-        return {}
+        raise FileNotFoundError(
+            f"plannotate_results.json missing at {pn_path}; run annotate.py first"
+        )
 
     with open(pn_path) as f:
         pn_results = json.load(f)
 
-    # Build per-sequence feature text for searching
-    seq_features = {}
+    registry_path = Path(motif_registry) if motif_registry else DEFAULT_MOTIF_REGISTRY
+    token_sseqids = load_token_sseqid_map(registry_path)
+    verifiable_tokens = set(token_sseqids.keys())
+    verifiable_categories = {t.split("_", 1)[0] for t in verifiable_tokens}
+
+    # Per-sequence set of pLannotate sseqids.
+    gen_sseqids: dict[str, set[str]] = {}
     for result in pn_results:
         sid = result["seq_id"]
-        feat_text = " ".join(
-            f"{f.get('Feature', '')} {f.get('sseqid', '')} {f.get('Type', '')}"
-            for f in result.get("features", [])
-        ).lower()
-        seq_features[sid] = feat_text
+        gen_sseqids[sid] = {
+            f["sseqid"] for f in result.get("features", [])
+            if isinstance(f.get("sseqid"), str) and f["sseqid"]
+        }
 
-    # For each sequence, check which requested tokens are found
+    # Aggregate counters + per-sequence rows (one row per prompt so downstream
+    # paired analyses can McNemar / bootstrap against the matched base run).
     per_token_hits = defaultdict(lambda: {"requested": 0, "found": 0})
     per_category_hits = defaultdict(lambda: {"requested": 0, "found": 0})
-    per_seq_fidelity = []
+    per_seq_fidelity: list[float] = []
+    per_seq_rows: list[dict] = []
 
     for idx, row in gen_df.iterrows():
         prompt_tokens = re.findall(r"<([^>]+)>", row["prompt"])
         seq_id = f"gen_{idx}"
-        feat_text = seq_features.get(seq_id, "")
+        hit_sseqids = gen_sseqids.get(seq_id, set())
 
-        n_requested = 0
-        n_found = 0
+        requested_toks: list[str] = []
+        found_toks: list[str] = []
+        cat_req: dict[str, int] = defaultdict(int)
+        cat_fnd: dict[str, int] = defaultdict(int)
 
         for tok in prompt_tokens:
-            prefix = tok.split("_", 1)[0]
-            if prefix not in VERIFIABLE_PREFIXES:
+            if tok not in verifiable_tokens:
                 continue
-
-            n_requested += 1
+            category = tok.split("_", 1)[0]
             per_token_hits[tok]["requested"] += 1
-            category = prefix
             per_category_hits[category]["requested"] += 1
+            requested_toks.append(tok)
+            cat_req[category] += 1
 
-            # Check if any keyword matches
-            keywords = TOKEN_TO_PLANNOTATE.get(tok, [])
-            found = any(kw.lower() in feat_text for kw in keywords)
-
-            if found:
-                n_found += 1
+            if token_sseqids[tok] & hit_sseqids:
                 per_token_hits[tok]["found"] += 1
                 per_category_hits[category]["found"] += 1
+                found_toks.append(tok)
+                cat_fnd[category] += 1
 
+        n_requested = len(requested_toks)
+        n_found = len(found_toks)
         if n_requested > 0:
             per_seq_fidelity.append(n_found / n_requested)
+
+        row_record = {
+            "seq_id": seq_id,
+            "prompt_index": int(idx),
+            "prompt": row["prompt"],
+            "n_requested": n_requested,
+            "n_found": n_found,
+            "fidelity": (n_found / n_requested) if n_requested > 0 else float("nan"),
+            "perfect_match": bool(n_requested > 0 and n_found == n_requested),
+            "requested_tokens": requested_toks,
+            "found_tokens": found_toks,
+        }
+        for cat in verifiable_categories:
+            row_record[f"n_requested_{cat}"] = int(cat_req.get(cat, 0))
+            row_record[f"n_found_{cat}"] = int(cat_fnd.get(cat, 0))
+        per_seq_rows.append(row_record)
 
     # Aggregate
     overall_fidelity = np.mean(per_seq_fidelity) if per_seq_fidelity else 0.0
@@ -171,13 +157,23 @@ def compute_prompt_fidelity(run_dir: Path) -> dict:
         }
 
     result = {
+        "method": "sseqid_intersection_via_motif_registry",
+        "motif_registry": str(registry_path),
+        "n_verifiable_tokens": len(verifiable_tokens),
         "overall_fidelity": float(overall_fidelity),
         "n_sequences": len(per_seq_fidelity),
         "per_category": category_rates,
         "per_token": token_rates,
     }
 
-    print(f"Prompt fidelity: {overall_fidelity:.1%} overall")
+    per_seq_df = pd.DataFrame(per_seq_rows)
+    metrics_dir = run_dir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    per_seq_df.to_parquet(metrics_dir / "prompt_fidelity_per_seq.parquet", index=False)
+
+    print(f"Prompt fidelity: {overall_fidelity:.1%} overall "
+          f"(per-seq rows: {len(per_seq_df)}, rows with any hard tokens: "
+          f"{int((per_seq_df['n_requested'] > 0).sum())})")
     print(f"  Per category:")
     for cat, r in sorted(category_rates.items()):
         print(f"    {cat}: {r['hit_rate']:.1%} ({r['n_found']}/{r['n_requested']})")

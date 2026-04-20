@@ -99,14 +99,31 @@ def run_prodigal(fasta_path: str, output_dir: str) -> Path:
 
 
 def run_dustmasker(fasta_path: str, output_dir: str) -> Path:
-    """Run dustmasker for low-complexity regions."""
+    """Run dustmasker for low-complexity regions.
+
+    dustmasker aborts on any record with zero residues, so we first write a
+    filtered FASTA containing only non-empty sequences. The count of dropped
+    records is reported on stdout so empty generations do not fail silently.
+    """
     out = Path(output_dir) / "dustmasker"
     out.mkdir(parents=True, exist_ok=True)
     intervals_path = out / "dustmasker.intervals"
 
+    filtered_path = out / "input_filtered.fasta"
+    n_kept = 0
+    n_dropped = 0
+    with open(filtered_path, "w") as fh:
+        for rec in SeqIO.parse(fasta_path, "fasta"):
+            if len(rec.seq) == 0:
+                n_dropped += 1
+                continue
+            SeqIO.write(rec, fh, "fasta")
+            n_kept += 1
+    print(f"dustmasker input: kept {n_kept}, dropped {n_dropped} empty records")
+
     cmd = [
         "dustmasker",
-        "-in", fasta_path,
+        "-in", str(filtered_path),
         "-outfmt", "interval",
         "-out", str(intervals_path),
     ]

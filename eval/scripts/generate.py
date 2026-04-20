@@ -34,7 +34,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="McClain/PlasmidLM-kmer6-GRPO-plannotate")
     parser.add_argument("--prompts", default="data/training_pairs_v4.parquet",
-                        help="Parquet with 'prompt' column to sample from")
+                        help="Parquet with 'prompt' column. Sampled without replacement "
+                             "unless --prompts-verbatim is set.")
+    parser.add_argument("--prompts-verbatim", action="store_true",
+                        help="Use every row in --prompts in order (no sampling). "
+                             "For paired experiments where two runs must share prompts.")
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--max-new-tokens", type=int, default=3000)
@@ -79,13 +83,16 @@ def main():
     n_params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"Loaded: {n_params:.1f}M params on {args.device}")
 
-    # Sample unique prompts
     prompt_df = pd.read_parquet(args.prompts, columns=["prompt"])
-    unique_prompts = prompt_df["prompt"].unique()
-    sampled = np.random.choice(
-        unique_prompts, size=min(args.n, len(unique_prompts)), replace=False,
-    )
-    print(f"Sampled {len(sampled)} prompts from {len(unique_prompts)} unique")
+    if args.prompts_verbatim:
+        sampled = prompt_df["prompt"].tolist()
+        print(f"Using all {len(sampled)} prompts from {args.prompts} verbatim (no sampling)")
+    else:
+        unique_prompts = prompt_df["prompt"].unique()
+        sampled = np.random.choice(
+            unique_prompts, size=min(args.n, len(unique_prompts)), replace=False,
+        )
+        print(f"Sampled {len(sampled)} prompts from {len(unique_prompts)} unique")
 
     # Generate
     all_results = []
