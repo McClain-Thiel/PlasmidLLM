@@ -11,55 +11,40 @@ Analysis notebooks for PlasmidLLM evaluation and ablations.
   training set.
 - `pretrained_analysis.ipynb` / `rl_MOE_test.ipynb` — older Jupyter notebooks.
 
-## marimo — one-time setup
+## Opening a notebook — the one command you need
 
-[marimo](https://marimo.io) is a reactive Python notebook that is stored as a plain `.py` file, so
-it diffs cleanly in git and can be reviewed in a PR. It is *not* a Jupyter `.ipynb` with JSON cells.
-
-Install once (into the project `.venv`):
-
-```bash
-uv add --dev marimo
-```
-
-or, ad-hoc:
-
-```bash
-uv run --with marimo marimo edit notebooks/base_vs_grpo_analysis.py
-```
-
-## Running a notebook
-
-Each notebook declares its dependencies inline (PEP 723 script metadata at the top). The simplest
-way to open one is marimo's sandbox mode, which asks `uv` to build a throwaway env from those
-declared deps — no need to touch the project env or install anything globally:
+Each notebook declares its dependencies inline (PEP 723 script metadata at the top of the file).
+Marimo's `--sandbox` mode hands those deps to `uv`, which builds a throwaway env and launches
+the notebook in it. No project-env edits, no global installs:
 
 ```bash
 uvx marimo edit --sandbox notebooks/base_vs_grpo_analysis.py
 ```
 
-If you prefer to use the project env (which has `marimo` in the `dev` group), install the
-analysis extras into it and run without `--sandbox`:
+That's it. `uvx` bootstraps marimo, `--sandbox` reads the PEP 723 header, `uv` caches the env.
 
-```bash
-uv sync --group dev
-uv run --with pandas --with pyarrow --with statsmodels --with matplotlib \
-       marimo edit notebooks/base_vs_grpo_analysis.py
-```
+## Other modes
 
-Read-only app mode (for sharing a rendered view, no cell editing):
+Read-only app mode (render a shareable view, no cell editing):
 
 ```bash
 uvx marimo run --sandbox notebooks/base_vs_grpo_analysis.py
 ```
 
-Headless / script mode (re-executes every cell top-to-bottom as a regular Python file):
+Headless / script mode (re-execute every cell top-to-bottom, no browser):
 
 ```bash
 uv run --script notebooks/base_vs_grpo_analysis.py
 ```
 
-(The `--script` flag tells uv to read the inline PEP 723 header and build an isolated env.)
+(The `--script` flag tells `uv` to read the inline PEP 723 header and build an isolated env.)
+
+## About marimo
+
+[marimo](https://marimo.io) is a reactive notebook stored as a plain `.py` file, so it diffs
+cleanly in git and can be reviewed in a PR. It is *not* a Jupyter `.ipynb` with JSON cells.
+Dependencies live at the top of the file as PEP 723 comments; edit them there, not in
+`pyproject.toml`.
 
 ## Conventions
 
