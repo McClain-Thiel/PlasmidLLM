@@ -1,3 +1,15 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "marimo>=0.23",
+#     "pandas>=2.0",
+#     "pyarrow>=14.0",
+#     "numpy>=1.26",
+#     "statsmodels>=0.14",
+#     "matplotlib>=3.7",
+#     "huggingface_hub>=1.0",
+# ]
+# ///
 """Base vs GRPO-plannotate — paired analysis for the NeurIPS submission.
 
 The story in one paragraph
@@ -41,32 +53,31 @@ def _():
     import matplotlib.pyplot as plt
     from statsmodels.stats.proportion import proportion_confint
     from statsmodels.stats.contingency_tables import mcnemar
-    return mo, np, pd, plt, proportion_confint, mcnemar
+
+    return mcnemar, mo, np, pd, plt, proportion_confint
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
-        # Base vs GRPO-plannotate — paired analysis
+    mo.md(rf"""
+    # Base vs GRPO-plannotate — paired analysis
 
-        **Paired design.** Same 1000 prompts for both models, matched sampling config,
-        identical annotation pipeline. Differences in outcomes are attributable to the
-        GRPO post-training step.
+    **Paired design.** Same 1000 prompts for both models, matched sampling config,
+    identical annotation pipeline. Differences in outcomes are attributable to the
+    GRPO post-training step.
 
-        Contents:
+    Contents:
 
-        1. Load matched runs from the HF bucket.
-        2. **Plausibility** — Wilson CIs, paired McNemar, paired bootstrap.
-        3. **Prompt fidelity** (sseqid intersection via motif registry) — same battery.
-        4. **Composite "useful plasmid"** — plausibility AND fidelity ≥ T. This is the
-           paper figure.
-        5. Per-category fidelity deltas.
-        6. Base temperature sweep (context: base at its best vs matched).
-        7. Discriminator AUC — base → GRPO collapses from 1.0 to 0.937.
-        8. Memorization, MFE density, GC skew — distributional comparisons.
-        """
-    )
+    1. Load matched runs from the HF bucket.
+    2. **Plausibility** — Wilson CIs, paired McNemar, paired bootstrap.
+    3. **Prompt fidelity** (sseqid intersection via motif registry) — same battery.
+    4. **Composite "useful plasmid"** — plausibility AND fidelity ≥ T. This is the
+       paper figure.
+    5. Per-category fidelity deltas.
+    6. Base temperature sweep (context: base at its best vs matched).
+    7. Discriminator AUC — base → GRPO collapses from 1.0 to 0.937.
+    8. Memorization, MFE density, GC skew — distributional comparisons.
+    """)
     return
 
 
@@ -139,11 +150,11 @@ def _():
     grpo_dir = _ensure_local(GRPO_RUN, WANTED_MAIN)
     base_dir = _ensure_local(BASE_RUN, WANTED_MAIN)
     sweep_dirs = {k: _ensure_local(v, WANTED_SWEEP) for k, v in SWEEP_CELLS.items()}
-    return BASE_RUN, BUCKET, CACHE, GRPO_RUN, Path, base_dir, grpo_dir, sweep_dirs
+    return base_dir, grpo_dir, sweep_dirs
 
 
 @app.cell
-def _(base_dir, grpo_dir, sweep_dirs, pd):
+def _(base_dir, grpo_dir, pd, sweep_dirs):
     import json
 
     def _load(d):
@@ -180,7 +191,9 @@ def _(base_dir, grpo_dir, sweep_dirs, pd):
 
 @app.cell
 def _(mo):
-    mo.md("## 1. Wilson CIs on the two headline metrics")
+    mo.md("""
+    ## 1. Wilson CIs on the two headline metrics
+    """)
     return
 
 
@@ -215,19 +228,17 @@ def _(base, grpo, np, pd, proportion_confint):
 
     ci_table = pd.DataFrame(_plaus_rows + _fid_rows)
     ci_table[["run", "metric", "rate", "ci_low", "ci_high", "k", "n"]]
-    return (ci_table,)
+    return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        ## 2. Paired McNemar + paired bootstrap on the two deltas
+    mo.md("""
+    ## 2. Paired McNemar + paired bootstrap on the two deltas
 
-        McNemar is the right test for matched-pair binary outcomes. Bootstrap gives us a
-        CI on the delta that respects the pairing (resample prompt indices, recompute Δ).
-        """
-    )
+    McNemar is the right test for matched-pair binary outcomes. Bootstrap gives us a
+    CI on the delta that respects the pairing (resample prompt indices, recompute Δ).
+    """)
     return
 
 
@@ -266,19 +277,17 @@ def _(base, grpo, mcnemar, np, pd):
          "mcnemar_p": None},
     ])
     paired_summary
-    return mc_plaus, paired_summary, tab_plaus
+    return mc_plaus, tab_plaus
 
 
 @app.cell
 def _(mc_plaus, mo, tab_plaus):
-    mo.md(
-        f"""
-        **Plausibility contingency (base × GRPO).** Note the near-symmetric off-diagonal:
-        GRPO saved **{tab_plaus.loc[False, True]}** base failures but *broke*
-        **{tab_plaus.loc[True, False]}** base passes. The net is small and the McNemar
-        p is {mc_plaus.pvalue:.3f} — GRPO shuffles plausibility, it doesn't uniformly lift it.
-        """
-    )
+    mo.md(f"""
+    **Plausibility contingency (base × GRPO).** Note the near-symmetric off-diagonal:
+    GRPO saved **{tab_plaus.loc[False, True]}** base failures but *broke*
+    **{tab_plaus.loc[True, False]}** base passes. The net is small and the McNemar
+    p is {mc_plaus.pvalue:.3f} — GRPO shuffles plausibility, it doesn't uniformly lift it.
+    """)
     return
 
 
@@ -290,15 +299,13 @@ def _(tab_plaus):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
-        ## 3. The paper figure: plausible **and** fidelity ≥ T
+    mo.md(r"""
+    ## 3. The paper figure: plausible **and** fidelity ≥ T
 
-        A structurally plausible plasmid that lacks the requested features is not useful.
-        The right metric is the *intersection*. Sweeping the fidelity threshold shows where
-        GRPO's real gain lives.
-        """
-    )
+    A structurally plausible plasmid that lacks the requested features is not useful.
+    The right metric is the *intersection*. Sweeping the fidelity threshold shows where
+    GRPO's real gain lives.
+    """)
     return
 
 
@@ -347,7 +354,7 @@ def _(base, grpo, mcnemar, np, pd, proportion_confint):
         })
     intersection_tbl = pd.DataFrame(_rows)
     intersection_tbl
-    return intersection_tbl, thresholds
+    return (intersection_tbl,)
 
 
 @app.cell
@@ -383,13 +390,11 @@ def _(intersection_tbl, plt):
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        ## 4. Per-category fidelity deltas
+    mo.md("""
+    ## 4. Per-category fidelity deltas
 
-        Decompose the +6.1 pp overall fidelity gain by feature category.
-        """
-    )
+    Decompose the +6.1 pp overall fidelity gain by feature category.
+    """)
     return
 
 
@@ -440,28 +445,24 @@ def _(categories, category_tbl, np, plt):
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        **TAG regression note.** Base TAG hit rate > GRPO TAG hit rate — the only
-        category where GRPO loses. TAG tokens are tiny peptide sequences (6–18 bp)
-        that BLAST struggles to find, so the training scorer rarely rewards them.
-        RL therefore learns to deprioritise them. Classic Goodhart's law. Worth
-        flagging as a limitation in the paper.
-        """
-    )
+    mo.md("""
+    **TAG regression note.** Base TAG hit rate > GRPO TAG hit rate — the only
+    category where GRPO loses. TAG tokens are tiny peptide sequences (6–18 bp)
+    that BLAST struggles to find, so the training scorer rarely rewards them.
+    RL therefore learns to deprioritise them. Classic Goodhart's law. Worth
+    flagging as a limitation in the paper.
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        ## 5. Base temperature sweep
+    mo.md("""
+    ## 5. Base temperature sweep
 
-        Three additional 100-seq cells on the base model at t∈{0.3, 0.5, 1.0}. Context:
-        is the matched (t=0.7) comparison unfair to the base?
-        """
-    )
+    Three additional 100-seq cells on the base model at t∈{0.3, 0.5, 1.0}. Context:
+    is the matched (t=0.7) comparison unfair to the base?
+    """)
     return
 
 
@@ -491,21 +492,19 @@ def _(base, grpo, pd, sweep):
     ]
     sweep_tbl = pd.DataFrame(_sweep_rows)
     sweep_tbl
-    return (sweep_tbl,)
+    return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        Even at its best temperature (0.3), base fidelity (37.8%) is still below GRPO's
-        41.6%. GRPO's advantage on fidelity is not explained away by sampling temperature.
+    mo.md("""
+    Even at its best temperature (0.3), base fidelity (37.8%) is still below GRPO's
+    41.6%. GRPO's advantage on fidelity is not explained away by sampling temperature.
 
-        ## 6. Discriminator AUC
+    ## 6. Discriminator AUC
 
-        A LightGBM classifier distinguishes real Addgene plasmids from generated ones.
-        """
-    )
+    A LightGBM classifier distinguishes real Addgene plasmids from generated ones.
+    """)
     return
 
 
@@ -526,18 +525,16 @@ def _(base, grpo, pd):
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        Base AUC = 1.000 (trivially separable). GRPO AUC = 0.937. GRPO moves the
-        distribution away from the easiest-to-detect pretrained signature. Next step
-        for the paper: verify the top SHAP features to confirm this isn't a trivial
-        length or GC artifact.
+    mo.md("""
+    Base AUC = 1.000 (trivially separable). GRPO AUC = 0.937. GRPO moves the
+    distribution away from the easiest-to-detect pretrained signature. Next step
+    for the paper: verify the top SHAP features to confirm this isn't a trivial
+    length or GC artifact.
 
-        ## 7. Memorization
+    ## 7. Memorization
 
-        sourmash containment against `eval/reference/training_sigs.zip` at threshold 0.3.
-        """
-    )
+    sourmash containment against `eval/reference/training_sigs.zip` at threshold 0.3.
+    """)
     return
 
 
@@ -556,16 +553,14 @@ def _(base, grpo):
 
 @app.cell
 def _(mo):
-    mo.md(
-        """
-        Zero hits for both models at containment ≥ 0.3. No evidence of training-set
-        memorization in either.
+    mo.md("""
+    Zero hits for both models at containment ≥ 0.3. No evidence of training-set
+    memorization in either.
 
-        ## 8. Distributional checks — length, GC, MFE
+    ## 8. Distributional checks — length, GC, MFE
 
-        Sanity-check that GRPO didn't collapse the distribution.
-        """
-    )
+    Sanity-check that GRPO didn't collapse the distribution.
+    """)
     return
 
 
@@ -606,21 +601,19 @@ def _(base, grpo):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
-        ## Paper summary (the TL;DR cell)
+    mo.md(r"""
+    ## Paper summary (the TL;DR cell)
 
-        | Claim | Value | Evidence |
-        |---|---|---|
-        | Plausibility improvement from GRPO is not significant | +2.8 pp, 95% CI [−1.4, +7.1], McNemar p=0.21 | cells 1–2 |
-        | Prompt-fidelity improvement is significant | +6.1 pp (per-seq mean), paired bootstrap 95% CI [+3.4, +8.8] | cell 2 |
-        | **Composite "useful plasmid" improvement is large and highly significant** | **+9.8 pp at T=0.5 fidelity, McNemar p ≈ 6×10⁻⁶** | cell 3 |
-        | Per-category gains: ORI, ELEM, PROM, AMR, REPORTER; regression on TAG | +7.8, +5.0, +4.2, +3.0, +2.0, −5.6 pp | cell 4 |
-        | Base already performs best at t=0.3, not t=0.7 | fidelity 37.8% at 0.3 vs 35.5% at matched 0.7 | cell 5 |
-        | GRPO reduces trivial separability from real Addgene | AUC 1.000 → 0.937 | cell 6 |
-        | No training-set memorization (base or GRPO) | 0 hits at containment ≥ 0.3 | cell 7 |
-        """
-    )
+    | Claim | Value | Evidence |
+    |---|---|---|
+    | Plausibility improvement from GRPO is not significant | +2.8 pp, 95% CI [−1.4, +7.1], McNemar p=0.21 | cells 1–2 |
+    | Prompt-fidelity improvement is significant | +6.1 pp (per-seq mean), paired bootstrap 95% CI [+3.4, +8.8] | cell 2 |
+    | **Composite "useful plasmid" improvement is large and highly significant** | **+9.8 pp at T=0.5 fidelity, McNemar p ≈ 6×10⁻⁶** | cell 3 |
+    | Per-category gains: ORI, ELEM, PROM, AMR, REPORTER; regression on TAG | +7.8, +5.0, +4.2, +3.0, +2.0, −5.6 pp | cell 4 |
+    | Base already performs best at t=0.3, not t=0.7 | fidelity 37.8% at 0.3 vs 35.5% at matched 0.7 | cell 5 |
+    | GRPO reduces trivial separability from real Addgene | AUC 1.000 → 0.937 | cell 6 |
+    | No training-set memorization (base or GRPO) | 0 hits at containment ≥ 0.3 | cell 7 |
+    """)
     return
 
 

@@ -30,23 +30,36 @@ uv run --with marimo marimo edit notebooks/base_vs_grpo_analysis.py
 
 ## Running a notebook
 
-Interactive edit mode (reads + writes to the `.py` file, supports inline widgets):
+Each notebook declares its dependencies inline (PEP 723 script metadata at the top). The simplest
+way to open one is marimo's sandbox mode, which asks `uv` to build a throwaway env from those
+declared deps — no need to touch the project env or install anything globally:
 
 ```bash
-uv run marimo edit notebooks/base_vs_grpo_analysis.py
+uvx marimo edit --sandbox notebooks/base_vs_grpo_analysis.py
+```
+
+If you prefer to use the project env (which has `marimo` in the `dev` group), install the
+analysis extras into it and run without `--sandbox`:
+
+```bash
+uv sync --group dev
+uv run --with pandas --with pyarrow --with statsmodels --with matplotlib \
+       marimo edit notebooks/base_vs_grpo_analysis.py
 ```
 
 Read-only app mode (for sharing a rendered view, no cell editing):
 
 ```bash
-uv run marimo run notebooks/base_vs_grpo_analysis.py
+uvx marimo run --sandbox notebooks/base_vs_grpo_analysis.py
 ```
 
 Headless / script mode (re-executes every cell top-to-bottom as a regular Python file):
 
 ```bash
-uv run python notebooks/base_vs_grpo_analysis.py
+uv run --script notebooks/base_vs_grpo_analysis.py
 ```
+
+(The `--script` flag tells uv to read the inline PEP 723 header and build an isolated env.)
 
 ## Conventions
 
