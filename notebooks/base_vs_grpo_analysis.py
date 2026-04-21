@@ -2,11 +2,11 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "marimo>=0.23",
-#     "pandas>=2.0",
+#     "pandas==2.3.3",
 #     "pyarrow>=14.0",
-#     "numpy>=1.26",
-#     "statsmodels>=0.14",
-#     "matplotlib>=3.7",
+#     "numpy==2.2.6",
+#     "statsmodels==0.14.6",
+#     "matplotlib==3.10.8",
 #     "huggingface_hub>=1.0",
 # ]
 # ///
@@ -602,18 +602,163 @@ def _(base, grpo):
 @app.cell
 def _(mo):
     mo.md(r"""
+    ## 9. Best-of-K rejection sampling — does inference-time compute close the gap?
+
+    Four independent seeds per model on the same 1000 prompts. For K ∈ {1, 2, 4} pick
+    the best-of-K per prompt by pLannotate `n_found` (oracle ranker; real rejection
+    sampling would use a cheap proxy and do worse). See `eval/scripts/analyze_best_of_k.py`
+    for the stand-alone version.
+    """)
+    return
+
+
+@app.cell
+def _(CACHE, pd):
+    _BON_SEEDS = {
+        "base": {
+            42: "runs__base_kmer6_matched_20260420_1303",
+            43: "runs__bon_base_seed43_20260420_1303",
+            44: "runs__bon_base_seed44_20260420_1303",
+            45: "runs__bon_base_seed45_20260420_1303",
+        },
+        "grpo": {
+            42: "runs__grpo_plannotate_full_20260408",
+            43: "runs__bon_grpo_seed43_20260420_1303",
+            44: "runs__bon_grpo_seed44_20260420_1303",
+            45: "runs__bon_grpo_seed45_20260420_1303",
+        },
+    }
+
+    def _load_seed(model, seed):
+        import numpy as np
+        d = CACHE / _BON_SEEDS[model][seed]
+        t3 = pd.read_parquet(d / "metrics/tier3_essentials.parquet").reset_index(drop=True)
+        fid = pd.read_parquet(d / "metrics/prompt_fidelity_per_seq.parquet").reset_index(drop=True)
+        gen = pd.read_parquet(d / "generations.parquet").reset_index(drop=True)
+        df = pd.DataFrame({
+            "prompt": gen["prompt"].values,
+            "plaus":  t3["plausibility_pass"].astype(bool).values,
+            "n_req":  fid["n_requested"].values,
+            "n_fnd":  fid["n_found"].values,
+            "fid":    np.where(fid["n_requested"] > 0,
+                               fid["n_found"] / np.maximum(fid["n_requested"], 1),
+                               np.nan),
+        })
+        df["useful_T50"] = df["plaus"] & (df["fid"] >= 0.5)
+        return df
+
+    # Raises FileNotFoundError with a clear message if the BoN runs aren't synced yet.
+    bon_seeds = {
+        m: [_load_seed(m, s) for s in (42, 43, 44, 45)]
+        for m in ("base", "grpo")
+    }
+    return (bon_seeds,)
+
+
+@app.cell
+def _(bon_seeds, mcnemar, np, pd, proportion_confint):
+    def _best_of_k(per_seed, K, rank_by="n_fnd"):
+        assert len(per_seed) >= K
+        subset = per_seed[:K]
+        stack = np.stack([s[rank_by].values for s in subset], axis=0)
+        plaus = np.stack([s["plaus"].values.astype(int) for s in subset], axis=0)
+        fid = np.stack([np.nan_to_num(s["fid"].values, nan=-1) for s in subset], axis=0)
+        key = stack * 1e6 + plaus * 1e3 + fid
+        idx = key.argmax(axis=0)
+        picked = np.empty(len(subset[0]), dtype=int)
+        picked[:] = idx
+        # Reassemble chosen rows.
+        by_col = {}
+        for col in ("plaus", "n_req", "n_fnd", "fid", "useful_T50"):
+            vals = np.stack([s[col].values for s in subset], axis=0)
+            by_col[col] = vals[picked, np.arange(vals.shape[1])]
+        return pd.DataFrame(by_col)
+
+    _rng = np.random.default_rng(2026)
+    _B = 10_000
+    _rows = []
+    for _K in (1, 2, 4):
+        _bk = _best_of_k(bon_seeds["base"], _K)
+        _gk = _best_of_k(bon_seeds["grpo"], _K)
+        for _metric in ("plaus", "useful_T50"):
+            _bv = _bk[_metric].to_numpy().astype(bool)
+            _gv = _gk[_metric].to_numpy().astype(bool)
+            _bk_lo, _bk_hi = proportion_confint(int(_bv.sum()), len(_bv),
+                                                alpha=0.05, method="wilson")
+            _gk_lo, _gk_hi = proportion_confint(int(_gv.sum()), len(_gv),
+                                                alpha=0.05, method="wilson")
+            _idx = _rng.integers(0, len(_bv), size=(_B, len(_bv)))
+            _boot = _gv[_idx].mean(axis=1) - _bv[_idx].mean(axis=1)
+            _tab = pd.crosstab(pd.Series(_bv, name="b"), pd.Series(_gv, name="g"))
+            _tab = _tab.reindex(index=[False, True], columns=[False, True], fill_value=0)
+            _mc = mcnemar(_tab.values, exact=(_tab.values.min() < 25), correction=True)
+            _rows.append({
+                "K": _K, "metric": _metric,
+                "base_rate": _bv.mean(), "base_ci_low": _bk_lo, "base_ci_high": _bk_hi,
+                "grpo_rate": _gv.mean(), "grpo_ci_low": _gk_lo, "grpo_ci_high": _gk_hi,
+                "delta": _gv.mean() - _bv.mean(),
+                "boot_ci_low":  float(np.quantile(_boot, 0.025)),
+                "boot_ci_high": float(np.quantile(_boot, 0.975)),
+                "mcnemar_p":    float(_mc.pvalue),
+            })
+    bon_tbl = pd.DataFrame(_rows)
+    bon_tbl
+    return (bon_tbl,)
+
+
+@app.cell
+def _(bon_tbl, plt):
+    _fig, (_ax1, _ax2) = plt.subplots(1, 2, figsize=(11, 4))
+    for _metric, _ax in [("plaus", _ax1), ("useful_T50", _ax2)]:
+        _sub = bon_tbl[bon_tbl["metric"] == _metric]
+        _Ks = _sub["K"].to_numpy()
+        _ax.plot(_Ks, _sub["base_rate"], "o-", color="#6b7280", label="base")
+        _ax.fill_between(_Ks, _sub["base_ci_low"], _sub["base_ci_high"],
+                         color="#6b7280", alpha=0.2)
+        _ax.plot(_Ks, _sub["grpo_rate"], "o-", color="#059669", label="grpo")
+        _ax.fill_between(_Ks, _sub["grpo_ci_low"], _sub["grpo_ci_high"],
+                         color="#059669", alpha=0.2)
+        _ax.set_xlabel("K (best-of-K, oracle ranker)")
+        _ax.set_ylabel(f"fraction {_metric}")
+        _ax.set_title(_metric + " vs K")
+        _ax.set_xticks([1, 2, 4])
+        _ax.legend()
+        _ax.grid(alpha=0.3)
+    _fig.tight_layout()
+    _fig
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    **The paper figure.** At K = 4 the GRPO useful rate (~89.7%) is still ~10.8 pp above
+    base (~78.9%), McNemar p ≈ 2×10⁻¹². Base at K=4 barely matches GRPO at K=2. Rejection
+    sampling *does not* close the GRPO gap even with an oracle ranker — a real sampler
+    (cheap proxy, no ground-truth pLannotate) would do worse.
+
     ## Paper summary (the TL;DR cell)
 
     | Claim | Value | Evidence |
     |---|---|---|
-    | Plausibility improvement from GRPO is not significant | +2.8 pp, 95% CI [−1.4, +7.1], McNemar p=0.21 | cells 1–2 |
-    | Prompt-fidelity improvement is significant | +6.1 pp (per-seq mean), paired bootstrap 95% CI [+3.4, +8.8] | cell 2 |
-    | **Composite "useful plasmid" improvement is large and highly significant** | **+9.8 pp at T=0.5 fidelity, McNemar p ≈ 6×10⁻⁶** | cell 3 |
-    | Per-category gains: ORI, ELEM, PROM, AMR, REPORTER; regression on TAG | +7.8, +5.0, +4.2, +3.0, +2.0, −5.6 pp | cell 4 |
-    | Base already performs best at t=0.3, not t=0.7 | fidelity 37.8% at 0.3 vs 35.5% at matched 0.7 | cell 5 |
-    | GRPO reduces trivial separability from real Addgene | AUC 1.000 → 0.937 | cell 6 |
-    | No training-set memorization (base or GRPO) | 0 hits at containment ≥ 0.3 | cell 7 |
+    | At matched K=1, plausibility Δ is not significant | +2.8 pp, p=0.21 | cells 1–2 |
+    | Prompt-fidelity Δ is significant at every K | +6.1 / +8.0 / +7.6 pp (K=1,2,4) | cells 2, 9 |
+    | **Composite "useful plasmid" Δ is large and significant at every K** | **+9.8 / +13.2 / +10.8 pp (K=1,2,4), McNemar p ≤ 6×10⁻⁶ at each** | cells 3, 9 |
+    | Per-category gains at matched K=1 | +7.8 ORI, +5.0 ELEM, +4.2 PROM, +3.0 AMR, +2.0 REPORTER, −5.6 TAG | cell 4 |
+    | Base peaks at t=0.3, not t=0.7 | 37.8% fidelity at 0.3 vs 35.5% at matched 0.7 | cell 5 |
+    | Single-seed AUC result didn't replicate | Over 4 GRPO seeds: 0.937 / 1.000 / 1.000 / 0.999 — drop from draft | cells 6, 9 |
+    | No training-set memorization | 0 hits at containment ≥ 0.3 | cell 7 |
     """)
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
     return
 
 
