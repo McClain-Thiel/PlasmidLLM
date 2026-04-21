@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from pathlib import Path
 
 from Bio import SeqIO
@@ -27,51 +29,51 @@ from joblib import Parallel, delayed
 
 
 def run_plannotate_single(fasta_path: str, output_dir: str, seq_id: str) -> dict:
-    """Run pLannotate on a single sequence FASTA, return parsed results."""
+    """Run pLannotate on a single sequence FASTA, return parsed results.
+
+    pLannotate warns on harmless pandas patterns; those are filtered here. Empty or
+    truncated generations (< 100 bp) are a normal occurrence when the model emits EOS
+    immediately and are short-circuited with ``n_features=0`` and an explicit
+    ``short_sequence`` marker. Every other failure path raises.
+    """
     import warnings
     warnings.filterwarnings("ignore")
 
-    try:
-        from plannotate.annotate import annotate as plannotate_annotate
-        record = next(SeqIO.parse(fasta_path, "fasta"))
-        seq_str = str(record.seq)
+    from plannotate.annotate import annotate as plannotate_annotate
+    record = next(SeqIO.parse(fasta_path, "fasta"))
+    seq_str = str(record.seq)
 
-        if len(seq_str) < 100:
-            return {"seq_id": seq_id, "n_features": 0, "features": [], "error": "too_short"}
+    if len(seq_str) < 100:
+        return {"seq_id": seq_id, "n_features": 0, "features": [],
+                "coverage_bp": 0, "seq_length": len(seq_str),
+                "reason": "short_sequence"}
 
-        hits = plannotate_annotate(seq_str, is_detailed=True, linear=False)
+    hits = plannotate_annotate(seq_str, is_detailed=True, linear=False)
 
-        # Save GenBank
-        gbk_dir = Path(output_dir) / "annotations"
-        gbk_dir.mkdir(parents=True, exist_ok=True)
+    features = []
+    if hasattr(hits, "iterrows"):
+        for _, row in hits.iterrows():
+            features.append({
+                "sseqid": row.get("sseqid", ""),
+                "Feature": row.get("Feature", ""),
+                "Type": row.get("Type", ""),
+                "pident": float(row.get("pident", 0)),
+                "qstart": int(row.get("qstart", 0)),
+                "qend": int(row.get("qend", 0)),
+                "slen": int(row.get("slen", 0)),
+                "length": int(row.get("length", row.get("qend", 0) - row.get("qstart", 0))),
+                "percmatch": float(row.get("percmatch", 0)),
+                "fragment": bool(row.get("fragment", False)),
+                "db": row.get("db", ""),
+            })
 
-        features = []
-        if hasattr(hits, "iterrows"):
-            for _, row in hits.iterrows():
-                feat = {
-                    "sseqid": row.get("sseqid", ""),
-                    "Feature": row.get("Feature", ""),
-                    "Type": row.get("Type", ""),
-                    "pident": float(row.get("pident", 0)),
-                    "qstart": int(row.get("qstart", 0)),
-                    "qend": int(row.get("qend", 0)),
-                    "slen": int(row.get("slen", 0)),
-                    "length": int(row.get("length", row.get("qend", 0) - row.get("qstart", 0))),
-                    "percmatch": float(row.get("percmatch", 0)),
-                    "fragment": bool(row.get("fragment", False)),
-                    "db": row.get("db", ""),
-                }
-                features.append(feat)
-
-        return {
-            "seq_id": seq_id,
-            "n_features": len(features),
-            "features": features,
-            "coverage_bp": sum(f["length"] for f in features),
-            "seq_length": len(seq_str),
-        }
-    except Exception as e:
-        return {"seq_id": seq_id, "n_features": 0, "features": [], "error": str(e)}
+    return {
+        "seq_id": seq_id,
+        "n_features": len(features),
+        "features": features,
+        "coverage_bp": sum(f["length"] for f in features),
+        "seq_length": len(seq_str),
+    }
 
 
 def run_prodigal(fasta_path: str, output_dir: str) -> Path:
@@ -159,7 +161,6 @@ def main():
         print(f"\nRunning pLannotate with {args.workers} workers...")
         t0 = time.time()
 
-        # Write individual FASTAs for parallel processing
         tmp_dir = tempfile.mkdtemp(prefix="plannotate_")
         single_fastas = []
         for i, rec in enumerate(records):
@@ -167,25 +168,41 @@ def main():
             SeqIO.write(rec, str(tmp_fa), "fasta")
             single_fastas.append((str(tmp_fa), str(out), rec.id))
 
+        def _safe_annotate(fa: str, odir: str, sid: str) -> dict:
+            # We deliberately catch-and-record per-seq failures here so a single
+            # pathological sequence (e.g. all Ns) does not abort a 1000-seq batch.
+            # Every caught exception is printed to stderr (loud, not silent) and
+            # stored in the result under 'error' so downstream metrics can filter
+            # and audit.
+            try:
+                return run_plannotate_single(fa, odir, sid)
+            except Exception as exc:  # noqa: BLE001
+                traceback.print_exc(file=sys.stderr)
+                print(f"pLannotate failed for {sid}: {exc!r}", file=sys.stderr)
+                return {"seq_id": sid, "n_features": 0, "features": [],
+                        "coverage_bp": 0, "seq_length": -1,
+                        "error": repr(exc)}
+
         results = Parallel(n_jobs=args.workers, backend="loky")(
-            delayed(run_plannotate_single)(fa, odir, sid)
+            delayed(_safe_annotate)(fa, odir, sid)
             for fa, odir, sid in single_fastas
         )
 
         plannotate_time = time.time() - t0
         n_annotated = sum(1 for r in results if r.get("n_features", 0) > 0)
         n_errors = sum(1 for r in results if "error" in r)
+        n_short = sum(1 for r in results if r.get("reason") == "short_sequence")
         print(f"pLannotate: {len(results)} sequences in {plannotate_time:.1f}s "
               f"({plannotate_time/max(len(results),1):.1f}s/seq), "
-              f"{n_annotated} annotated, {n_errors} errors")
+              f"{n_annotated} annotated, {n_short} short (< 100 bp), {n_errors} errors")
+        if n_errors > 0:
+            error_ids = [r["seq_id"] for r in results if "error" in r][:10]
+            print(f"  first {len(error_ids)} failing seq_ids: {error_ids}", file=sys.stderr)
 
-        # Save aggregated results
         with open(out / "plannotate_results.json", "w") as f:
             json.dump(results, f, indent=2)
 
-        # Cleanup temp files
-        import shutil
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        shutil.rmtree(tmp_dir)
 
     # 2. Prodigal
     if not args.skip_prodigal:

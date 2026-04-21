@@ -66,13 +66,16 @@ class PlasmidKmerTokenizer(PreTrainedTokenizer):
         self._vocab = data
         self._id_to_token = {v: k for k, v in self._vocab.items()}
 
-        # Only pass special tokens that exist in vocab
+        # Only pass special tokens that exist in vocab. On reload the tokens
+        # arrive as AddedToken objects rather than raw strings, so we normalise
+        # via str() before the vocab lookup.
         special_kwargs = {}
         for name, tok in [("bos_token", bos_token), ("eos_token", eos_token),
                           ("unk_token", unk_token), ("pad_token", pad_token),
                           ("sep_token", sep_token)]:
-            if tok in self._vocab:
-                special_kwargs[name] = tok
+            tok_str = str(tok) if tok is not None else None
+            if tok_str in self._vocab:
+                special_kwargs[name] = tok_str
 
         # Store k and stride in kwargs so they're saved/loaded
         kwargs["k"] = k
@@ -81,6 +84,19 @@ class PlasmidKmerTokenizer(PreTrainedTokenizer):
         # already contain <BOS>...<SEP> and the model generates <EOS> itself.
         kwargs.setdefault("special_tokens_pattern", "none")
         super().__init__(**special_kwargs, **kwargs)
+
+        # transformers 5.x's PreTrainedTokenizer.__init__ loses plain-string
+        # pad_token / bos_token / ... when a tokenizer is reloaded from disk
+        # (the base class only re-hydrates them from an AddedToken dict, which
+        # save_pretrained doesn't emit for subclasses). Set them explicitly
+        # against the real vocab so that pad_token_id etc. round-trip.
+        missing = [name for name, tok in special_kwargs.items() if tok not in self._vocab]
+        if missing:
+            raise ValueError(
+                f"special tokens {missing} not found in vocab of size {len(self._vocab)}"
+            )
+        for name, tok in special_kwargs.items():
+            setattr(self, name, tok)
 
     @property
     def vocab_size(self) -> int:

@@ -49,17 +49,32 @@ class PlasmidLMTokenizer(PreTrainedTokenizer):
 
         # Only pass special tokens that actually exist in the vocab.
         # PreTrainedTokenizer would otherwise create new IDs for them.
+        # On reload, special tokens arrive as AddedToken objects rather than
+        # raw strings; we normalise via `str()` before the vocab lookup.
         special_kwargs = {}
         for name, tok in [("bos_token", bos_token), ("eos_token", eos_token),
                           ("unk_token", unk_token), ("pad_token", pad_token),
                           ("sep_token", sep_token)]:
-            if tok in self._vocab:
-                special_kwargs[name] = tok
+            tok_str = str(tok) if tok is not None else None
+            if tok_str in self._vocab:
+                special_kwargs[name] = tok_str
 
         # Disable automatic BOS/EOS insertion (transformers 5.x); prompts
         # already contain <BOS>...<SEP> and the model generates <EOS> itself.
         kwargs.setdefault("special_tokens_pattern", "none")
         super().__init__(**special_kwargs, **kwargs)
+
+        # transformers 5.x's PreTrainedTokenizer.__init__ loses plain-string
+        # special tokens when reloading from disk (save_pretrained emits them
+        # as strings but the base class only rehydrates AddedToken dicts). We
+        # re-assert them explicitly so pad_token_id etc. round-trip cleanly.
+        missing = [n for n, tok in special_kwargs.items() if tok not in self._vocab]
+        if missing:
+            raise ValueError(
+                f"special tokens {missing} not found in vocab of size {len(self._vocab)}"
+            )
+        for name, tok in special_kwargs.items():
+            setattr(self, name, tok)
 
     @property
     def vocab_size(self) -> int:

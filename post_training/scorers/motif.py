@@ -9,8 +9,7 @@ Three-pass approach for speed:
   2. Score-only alignment: skip motifs with low normalized score
   3. Full trace alignment: only for candidates passing both filters
 
-This scorer was developed in pretrained_analysis.ipynb and provides
-richer alignment detail than the simpler score-ratio AlignmentScorer.
+Provides richer alignment detail than the simpler score-ratio AlignmentScorer.
 """
 
 from __future__ import annotations

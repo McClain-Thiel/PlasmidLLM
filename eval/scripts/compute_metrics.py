@@ -410,8 +410,10 @@ def compute_discriminator(run_dir: Path, ref_dir: Path) -> dict:
     tier3_path = metrics_dir / "tier3_essentials.parquet"
 
     if not tier1_path.exists():
-        print("Discriminator: No tier1 metrics, skipping")
-        return {}
+        raise FileNotFoundError(
+            f"discriminator metric requires tier1 metrics at {tier1_path}; "
+            "run compute_tier1 first (or invoke compute_metrics with --tiers including '1')"
+        )
 
     gen_t1 = pd.read_parquet(tier1_path)
     gen_t1["label"] = 1  # generated

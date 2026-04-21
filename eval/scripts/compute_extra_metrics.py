@@ -186,12 +186,13 @@ def compute_prompt_fidelity(run_dir: Path, motif_registry: Path | None = None) -
 # ---------------------------------------------------------------------------
 
 def compute_mfe_density(run_dir: Path) -> dict:
-    """Compute DNA MFE density using ViennaRNA with Mathews2004 DNA parameters."""
-    try:
-        import RNA
-    except ImportError:
-        print("MFE: ViennaRNA not installed, skipping")
-        return {}
+    """Compute DNA MFE density using ViennaRNA with Mathews2004 DNA parameters.
+
+    ViennaRNA (the `RNA` Python module) is a hard dependency of this metric. If
+    it is not installed the caller must skip MFE via ``--metrics`` rather than
+    relying on a silent empty-dict return from this function.
+    """
+    import RNA
 
     # Load DNA energy parameters (not RNA — these are DNA plasmids!)
     RNA.params_load_DNA_Mathews2004()
@@ -252,8 +253,10 @@ def compute_codon_usage(run_dir: Path) -> dict:
     gff_path = run_dir / "orfs" / "prodigal.gff"
 
     if not gff_path.exists():
-        print("Codon usage: no prodigal output, skipping")
-        return {}
+        raise FileNotFoundError(
+            f"codon usage metric requires prodigal output at {gff_path}; "
+            "run eval/scripts/annotate.py first"
+        )
 
     # Parse ORF sequences from the FASTA and GFF
     gen_fasta = run_dir / "generations.fasta"
@@ -328,8 +331,10 @@ def compute_codon_usage(run_dir: Path) -> dict:
             n_orfs += 1
 
     if n_orfs == 0:
-        print("Codon usage: no ORFs found")
-        return {}
+        raise RuntimeError(
+            f"codon usage: no ORFs parsed from {gff_path}; "
+            "prodigal output is empty, which is unexpected for plasmid generations"
+        )
 
     total_codons = sum(codon_counts.values())
 
