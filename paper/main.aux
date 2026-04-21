@@ -5,9 +5,9 @@
 \citation{gibson2009,salis2009,addgene2024}
 \citation{dalla2023nucleotide,nguyen2024hyenadna,evo2024}
 \citation{mcguffie2021plannotate}
-\citation{shao2024deepseekmath}
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
 \newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{shao2024deepseekmath}
 \citation{dalla2023nucleotide}
 \citation{zhou2024dnabert2}
 \citation{nguyen2024hyenadna}
@@ -20,32 +20,39 @@
 \citation{zhou2023molrl}
 \citation{jain2022gflownet}
 \citation{shao2024deepseekmath}
-\citation{mcguffie2021plannotate}
 \@writefile{toc}{\contentsline {section}{\numberline {2}Related work}{2}{section.2}\protected@file@percent }
 \newlabel{sec:related}{{2}{2}{Related work}{section.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3}Methods}{2}{section.3}\protected@file@percent }
-\newlabel{sec:methods}{{3}{2}{Methods}{section.3}{}}
+\citation{mcguffie2021plannotate}
 \citation{shao2024deepseekmath}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Methods}{3}{section.3}\protected@file@percent }
+\newlabel{sec:methods}{{3}{3}{Methods}{section.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4}Experimental setup and evaluation}{3}{section.4}\protected@file@percent }
 \newlabel{sec:eval}{{4}{3}{Experimental setup and evaluation}{section.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Structural plausibility pass rates across sequence sources. PlasmidLM generates plasmids that are clearly distinguishable from random and shuffled controls, approaching real Addgene plasmids.}}{4}{figure.caption.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Structural plausibility pass rates across sequence sources. Both base and post-GRPO PlasmidLM are clearly distinguishable from random and shuffled controls; the paired $+2.8$ pp gap between pre- and post-GRPO is within paired bootstrap noise ($95\%$ CI $[-1.4, +7.1]$).}}{4}{figure.caption.2}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{fig:plausibility}{{1}{4}{Structural plausibility pass rates across sequence sources. PlasmidLM generates plasmids that are clearly distinguishable from random and shuffled controls, approaching real Addgene plasmids}{figure.caption.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Structural plausibility of generated plasmids. A pass requires detection of all five essential components (origin of replication, selection marker, promoter, terminator, coding sequence) by pLannotate.}}{4}{table.caption.3}\protected@file@percent }
-\newlabel{tab:plausibility}{{1}{4}{Structural plausibility of generated plasmids. A pass requires detection of all five essential components (origin of replication, selection marker, promoter, terminator, coding sequence) by pLannotate}{table.caption.3}{}}
+\newlabel{fig:plausibility}{{1}{4}{Structural plausibility pass rates across sequence sources. Both base and post-GRPO PlasmidLM are clearly distinguishable from random and shuffled controls; the paired $+2.8$ pp gap between pre- and post-GRPO is within paired bootstrap noise ($95\%$ CI $[-1.4, +7.1]$)}{figure.caption.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5}Experiments}{4}{section.5}\protected@file@percent }
 \newlabel{sec:experiments}{{5}{4}{Experiments}{section.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Viability of generated plasmids}{4}{subsection.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Prompt fidelity and conditional generation}{4}{subsection.5.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Conditional hit rate by component category (dense model, temperature 0.3, Smith-Waterman alignment). Core backbone elements (ORI, AMR, PROM) are recovered reliably; reporters and tags remain challenging due to codon-level accuracy requirements and short peptide lengths, respectively.}}{5}{figure.caption.4}\protected@file@percent }
-\newlabel{fig:hit_rate}{{2}{5}{Conditional hit rate by component category (dense model, temperature 0.3, Smith-Waterman alignment). Core backbone elements (ORI, AMR, PROM) are recovered reliably; reporters and tags remain challenging due to codon-level accuracy requirements and short peptide lengths, respectively}{figure.caption.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Conditional accuracy by component category for the dense model (temperature 0.3, best-of-3, Smith-Waterman alignment at 70\% normalized score threshold on 50 validation prompts).}}{5}{table.caption.5}\protected@file@percent }
-\newlabel{tab:conditional}{{2}{5}{Conditional accuracy by component category for the dense model (temperature 0.3, best-of-3, Smith-Waterman alignment at 70\% normalized score threshold on 50 validation prompts)}{table.caption.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Interplay between viability and prompt fidelity}{5}{subsection.5.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Prompt fidelity vs.\ detection ceiling by category ($n$=1000, pLannotate sseqid matching). The ceiling represents the fraction of features that pLannotate detects even on real plasmids, bounding achievable scores.}}{6}{figure.caption.6}\protected@file@percent }
-\newlabel{fig:ceiling}{{3}{6}{Prompt fidelity vs.\ detection ceiling by category ($n$=1000, pLannotate sseqid matching). The ceiling represents the fraction of features that pLannotate detects even on real plasmids, bounding achievable scores}{figure.caption.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Structural plausibility of generated plasmids on the paired $n=1000$ evaluation. A pass requires detection of all five essential components (origin of replication, selection marker, promoter, terminator, coding sequence) by pLannotate. The $+2.8$ pp pre-/post-GRPO gap is not significant (paired bootstrap $95\%$ CI $[-1.4, +7.1]$, McNemar $p=0.21$).}}{5}{table.caption.3}\protected@file@percent }
+\newlabel{tab:plausibility}{{1}{5}{Structural plausibility of generated plasmids on the paired $n=1000$ evaluation. A pass requires detection of all five essential components (origin of replication, selection marker, promoter, terminator, coding sequence) by pLannotate. The $+2.8$ pp pre-/post-GRPO gap is not significant (paired bootstrap $95\%$ CI $[-1.4, +7.1]$, McNemar $p=0.21$)}{table.caption.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Per-category prompt fidelity (paired $n=1000$, matched sampling). GRPO improves every category except epitope tags, which regress because the training-time reward signal rarely credits them. Error bars are Wilson $95\%$ intervals.}}{5}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:hit_rate}{{2}{5}{Per-category prompt fidelity (paired $n=1000$, matched sampling). GRPO improves every category except epitope tags, which regress because the training-time reward signal rarely credits them. Error bars are Wilson $95\%$ intervals}{figure.caption.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Prompt fidelity and conditional generation}{5}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Composite ``useful plasmid'' metric: plausible \emph  {and} on-prompt}{5}{subsection.5.3}\protected@file@percent }
+\newlabel{sec:useful}{{5.3}{5}{Composite ``useful plasmid'' metric: plausible \emph {and} on-prompt}{subsection.5.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Per-category prompt fidelity for pre- vs.\ post-GRPO, paired $n=1000$. Denominators are number of (prompt, token) pairs across the $1000$ prompts for each category. The TAG regression reflects that short peptide tags are rarely credited by the training-time BLAST-based reward.}}{6}{table.caption.5}\protected@file@percent }
+\newlabel{tab:conditional}{{2}{6}{Per-category prompt fidelity for pre- vs.\ post-GRPO, paired $n=1000$. Denominators are number of (prompt, token) pairs across the $1000$ prompts for each category. The TAG regression reflects that short peptide tags are rarely credited by the training-time BLAST-based reward}{table.caption.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Composite ``useful plasmid'' rate (plausible \emph  {and} fidelity $\geq T$) on the paired $n=1000$ evaluation, with paired bootstrap $95\%$ CIs on the delta and McNemar $p$. At $T=0.5$ the GRPO gain is $+9.8$ pp ($p\approx 6\times 10^{-6}$); GRPO is significantly better at every positive threshold.}}{6}{table.caption.6}\protected@file@percent }
+\newlabel{tab:useful}{{3}{6}{Composite ``useful plasmid'' rate (plausible \emph {and} fidelity $\geq T$) on the paired $n=1000$ evaluation, with paired bootstrap $95\%$ CIs on the delta and McNemar $p$. At $T=0.5$ the GRPO gain is $+9.8$ pp ($p\approx 6\times 10^{-6}$); GRPO is significantly better at every positive threshold}{table.caption.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Does rejection sampling close the gap?}{6}{subsection.5.4}\protected@file@percent }
+\newlabel{sec:bon}{{5.4}{6}{Does rejection sampling close the gap?}{subsection.5.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {6}Discussion}{6}{section.6}\protected@file@percent }
 \newlabel{sec:discussion}{{6}{6}{Discussion}{section.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Left: ``useful plasmid'' rate vs.\ fidelity threshold $T$ for both checkpoints with paired bootstrap $95\%$ bands. Right: paired delta (GRPO $-$ base) across $T$. The effect size peaks near $T=0.5$, the regime where the composite metric distinguishes ``plausible but generic'' plasmids from plausible \emph  {and} on-prompt plasmids.}}{7}{figure.caption.7}\protected@file@percent }
+\newlabel{fig:ceiling}{{3}{7}{Left: ``useful plasmid'' rate vs.\ fidelity threshold $T$ for both checkpoints with paired bootstrap $95\%$ bands. Right: paired delta (GRPO $-$ base) across $T$. The effect size peaks near $T=0.5$, the regime where the composite metric distinguishes ``plausible but generic'' plasmids from plausible \emph {and} on-prompt plasmids}{figure.caption.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Oracle best-of-$K$ on the paired $n=1000$ evaluation. Rejection sampling does not close the GRPO gap: at $K=4$ the post-GRPO model still leads by $+10.8$ pp on the useful metric ($p\approx 2\times 10^{-12}$). Base-at-$K=4$ barely matches GRPO-at-$K=2$.}}{7}{table.caption.8}\protected@file@percent }
+\newlabel{tab:bon}{{4}{7}{Oracle best-of-$K$ on the paired $n=1000$ evaluation. Rejection sampling does not close the GRPO gap: at $K=4$ the post-GRPO model still leads by $+10.8$ pp on the useful metric ($p\approx 2\times 10^{-12}$). Base-at-$K=4$ barely matches GRPO-at-$K=2$}{table.caption.8}{}}
 \bibstyle{plainnat}
 \bibdata{references}
 \bibcite{addgene2024}{{1}{2024}{{Addgene}}{{}}}
@@ -55,25 +62,29 @@
 \bibcite{jain2022gflownet}{{5}{2022}{{Jain et~al.}}{{Jain, Bengio, Hernandez-Garcia, et~al.}}}
 \bibcite{madani2023progen}{{6}{2023}{{Madani et~al.}}{{Madani, Krause, Greene, et~al.}}}
 \bibcite{mcguffie2021plannotate}{{7}{2021}{{McGuffie and Barrick}}{{}}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}Conclusion}{7}{section.7}\protected@file@percent }
 \bibcite{nguyen2024hyenadna}{{8}{2023}{{Nguyen et~al.}}{{Nguyen, Poli, Faber, et~al.}}}
 \bibcite{evo2024}{{9}{2024}{{Nguyen et~al.}}{{Nguyen, Poli, Durrant, et~al.}}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Conclusion}{8}{section.7}\protected@file@percent }
 \bibcite{salis2009}{{10}{2009}{{Salis et~al.}}{{Salis, Mirsky, and Voigt}}}
 \bibcite{sample2019promoter}{{11}{2019}{{Sample et~al.}}{{Sample, Wang, Reid, et~al.}}}
 \bibcite{shao2024deepseekmath}{{12}{2024}{{Shao et~al.}}{{Shao, Wang, Zhu, et~al.}}}
 \bibcite{walsh2020codonopt}{{13}{2020}{{Walsh}}{{}}}
 \bibcite{zhou2023molrl}{{14}{2019}{{Zhou et~al.}}{{Zhou, Kearnes, Li, Zare, and Riley}}}
 \bibcite{zhou2024dnabert2}{{15}{2024}{{Zhou et~al.}}{{Zhou, Ji, Li, et~al.}}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Model and training details}{8}{appendix.A}\protected@file@percent }
-\newlabel{app:model}{{A}{8}{Model and training details}{appendix.A}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {B}Additional results}{8}{appendix.B}\protected@file@percent }
-\newlabel{app:results}{{B}{8}{Additional results}{appendix.B}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Effect of sampling temperature on conditional hit rate and precision for the dense model (50 validation prompts, best-of-3 selection). Moderate temperatures yield the highest recall; greedy decoding (temperature 0.0) performs poorly on both metrics.}}{8}{figure.caption.9}\protected@file@percent }
-\newlabel{fig:temperature_sweep}{{4}{8}{Effect of sampling temperature on conditional hit rate and precision for the dense model (50 validation prompts, best-of-3 selection). Moderate temperatures yield the highest recall; greedy decoding (temperature 0.0) performs poorly on both metrics}{figure.caption.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Model and training hyperparameters.}}{9}{table.caption.8}\protected@file@percent }
-\newlabel{tab:hyperparams}{{3}{9}{Model and training hyperparameters}{table.caption.8}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {C}Evaluation pipeline}{9}{appendix.C}\protected@file@percent }
-\newlabel{app:pipeline}{{C}{9}{Evaluation pipeline}{appendix.C}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Per-category conditional hit rates for the dense model (temperature 0.3) and Mixture-of-Experts variant (temperature 0.7). The dense model performs better on core backbone elements; the MoE model achieves superior recall on reporter and tag categories.}}{10}{figure.caption.10}\protected@file@percent }
-\newlabel{fig:dense_vs_moe}{{5}{10}{Per-category conditional hit rates for the dense model (temperature 0.3) and Mixture-of-Experts variant (temperature 0.7). The dense model performs better on core backbone elements; the MoE model achieves superior recall on reporter and tag categories}{figure.caption.10}{}}
-\gdef \@abspage@last{15}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Model and training details}{9}{appendix.A}\protected@file@percent }
+\newlabel{app:model}{{A}{9}{Model and training details}{appendix.A}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Additional results}{9}{appendix.B}\protected@file@percent }
+\newlabel{app:results}{{B}{9}{Additional results}{appendix.B}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}Base-model temperature sweep}{9}{subsection.B.1}\protected@file@percent }
+\newlabel{app:tempsweep}{{B.1}{9}{Base-model temperature sweep}{subsection.B.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Pre-GRPO base model, small temperature sweep ($n=100$ per cell; matched $n=1000$ run for $t=0.7$ for comparison). Base prompt fidelity peaks at $t=0.3$ ($37.8\%$) and degrades at higher temperatures; the matched $t=0.7$ setting is therefore already near the base's optimum, so the GRPO advantage reported in the main text is not explained by temperature tuning on the base.}}{9}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:temperature_sweep}{{4}{9}{Pre-GRPO base model, small temperature sweep ($n=100$ per cell; matched $n=1000$ run for $t=0.7$ for comparison). Base prompt fidelity peaks at $t=0.3$ ($37.8\%$) and degrades at higher temperatures; the matched $t=0.7$ setting is therefore already near the base's optimum, so the GRPO advantage reported in the main text is not explained by temperature tuning on the base}{figure.caption.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Best-of-$K$ curves by metric}{9}{subsection.B.2}\protected@file@percent }
+\newlabel{app:bon}{{B.2}{9}{Best-of-$K$ curves by metric}{subsection.B.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Evaluation pipeline and reproducibility}{9}{appendix.C}\protected@file@percent }
+\newlabel{app:pipeline}{{C}{9}{Evaluation pipeline and reproducibility}{appendix.C}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Model and training hyperparameters.}}{10}{table.caption.10}\protected@file@percent }
+\newlabel{tab:hyperparams}{{5}{10}{Model and training hyperparameters}{table.caption.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Oracle best-of-$K$ for $K \in \{1, 2, 4\}$ on the paired $n=1000$ evaluation. Left: structural plausibility. Right: composite ``useful'' rate (plausible $\land $ fidelity $\geq 0.5$). Shaded bands are Wilson $95\%$ CIs. On the right panel GRPO stays strictly above base across $K$---rejection sampling does not close the gap even with ground-truth ranking.}}{11}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:dense_vs_moe}{{5}{11}{Oracle best-of-$K$ for $K \in \{1, 2, 4\}$ on the paired $n=1000$ evaluation. Left: structural plausibility. Right: composite ``useful'' rate (plausible $\land $ fidelity $\geq 0.5$). Shaded bands are Wilson $95\%$ CIs. On the right panel GRPO stays strictly above base across $K$---rejection sampling does not close the gap even with ground-truth ranking}{figure.caption.12}{}}
+\gdef \@abspage@last{16}

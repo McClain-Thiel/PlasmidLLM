@@ -11,59 +11,72 @@
 \newblock \url{https://www.addgene.org}, 2024.
 \newblock Accessed: 2026-03-01.
 
-\bibitem[Alamdari et~al.(2023)Alamdari, Thakkar, van~den Berg, et~al.]{alamdari2023evodiff}
+\bibitem[Alamdari et~al.(2023)Alamdari, Thakkar, van~den Berg,
+  et~al.]{alamdari2023evodiff}
 Sarah Alamdari, Nitya Thakkar, Rianne van~den Berg, et~al.
-\newblock {EvoDiff}: Generation of protein sequences and evolutionary alignments via discrete diffusion models.
+\newblock {EvoDiff}: Generation of protein sequences and evolutionary
+  alignments via discrete diffusion models.
 \newblock \emph{bioRxiv}, 2023.
 
-\bibitem[Dalla-Torre et~al.(2024)Dalla-Torre, Gonzalez, Mendoza-Revilla, et~al.]{dalla2023nucleotide}
+\bibitem[Dalla-Torre et~al.(2024)Dalla-Torre, Gonzalez, Mendoza-Revilla,
+  et~al.]{dalla2023nucleotide}
 Hugo Dalla-Torre, Liam Gonzalez, Javier Mendoza-Revilla, et~al.
-\newblock The nucleotide transformer: Building and evaluating robust foundation models for human genomics.
+\newblock The nucleotide transformer: Building and evaluating robust foundation
+  models for human genomics.
 \newblock \emph{Nature Methods}, 21:\penalty0 1--11, 2024.
 
 \bibitem[Gibson et~al.(2009)Gibson, Young, Chuang, et~al.]{gibson2009}
 Daniel~G Gibson, Lei Young, Ray-Yuan Chuang, et~al.
-\newblock Enzymatic assembly of {DNA} molecules up to several hundred kilobases.
+\newblock Enzymatic assembly of {DNA} molecules up to several hundred
+  kilobases.
 \newblock \emph{Nature Methods}, 6:\penalty0 343--345, 2009.
 
-\bibitem[Jain et~al.(2022)Jain, Bengio, Hernandez-Garcia, et~al.]{jain2022gflownet}
+\bibitem[Jain et~al.(2022)Jain, Bengio, Hernandez-Garcia,
+  et~al.]{jain2022gflownet}
 Moksh Jain, Emmanuel Bengio, Alex Hernandez-Garcia, et~al.
 \newblock Biological sequence design with {GFlowNets}.
 \newblock \emph{International Conference on Machine Learning}, 2022.
 
 \bibitem[Madani et~al.(2023)Madani, Krause, Greene, et~al.]{madani2023progen}
 Ali Madani, Ben Krause, Eric~R Greene, et~al.
-\newblock Large language models generate functional protein sequences across diverse families.
+\newblock Large language models generate functional protein sequences across
+  diverse families.
 \newblock \emph{Nature Biotechnology}, 41:\penalty0 1099--1106, 2023.
 
 \bibitem[McGuffie and Barrick(2021)]{mcguffie2021plannotate}
 Matthew~J McGuffie and Jeffrey~E Barrick.
 \newblock {pLannotate}: engineered plasmid annotation.
-\newblock \emph{Nucleic Acids Research}, 49\penalty0 (W1):\penalty0 W516--W522, 2021.
+\newblock \emph{Nucleic Acids Research}, 49\penalty0 (W1):\penalty0 W516--W522,
+  2021.
 
 \bibitem[Nguyen et~al.(2023)Nguyen, Poli, Faber, et~al.]{nguyen2024hyenadna}
 Eric Nguyen, Michael Poli, Matthew Faber, et~al.
-\newblock {HyenaDNA}: Long-range genomic sequence modeling at single nucleotide resolution.
+\newblock {HyenaDNA}: Long-range genomic sequence modeling at single nucleotide
+  resolution.
 \newblock \emph{Advances in Neural Information Processing Systems}, 36, 2023.
 
 \bibitem[Nguyen et~al.(2024)Nguyen, Poli, Durrant, et~al.]{evo2024}
 Eric Nguyen, Michael Poli, Matthew~G Durrant, et~al.
-\newblock Sequence modeling and design from molecular to genome scale with {Evo}.
+\newblock Sequence modeling and design from molecular to genome scale with
+  {Evo}.
 \newblock \emph{Science}, 386\penalty0 (6723):\penalty0 eado9336, 2024.
 
 \bibitem[Salis et~al.(2009)Salis, Mirsky, and Voigt]{salis2009}
 Howard~M Salis, Ethan~A Mirsky, and Christopher~A Voigt.
-\newblock Automated design of synthetic ribosome binding sites to control protein expression.
+\newblock Automated design of synthetic ribosome binding sites to control
+  protein expression.
 \newblock \emph{Nature Biotechnology}, 27:\penalty0 946--950, 2009.
 
 \bibitem[Sample et~al.(2019)Sample, Wang, Reid, et~al.]{sample2019promoter}
 Paul~J Sample, Ban Wang, David~W Reid, et~al.
-\newblock Human 5' {UTR} design and variant effect prediction from a massively parallel translation assay.
+\newblock Human 5' {UTR} design and variant effect prediction from a massively
+  parallel translation assay.
 \newblock \emph{Nature Biotechnology}, 37:\penalty0 803--809, 2019.
 
 \bibitem[Shao et~al.(2024)Shao, Wang, Zhu, et~al.]{shao2024deepseekmath}
 Zhihong Shao, Peiyi Wang, Qihao Zhu, et~al.
-\newblock {DeepSeekMath}: Pushing the limits of mathematical reasoning in open language models.
+\newblock {DeepSeekMath}: Pushing the limits of mathematical reasoning in open
+  language models.
 \newblock \emph{arXiv preprint arXiv:2402.03300}, 2024.
 
 \bibitem[Walsh(2020)]{walsh2020codonopt}
@@ -78,7 +91,8 @@ Zhenpeng Zhou, Steven Kearnes, Li~Li, Richard~N Zare, and Patrick Riley.
 
 \bibitem[Zhou et~al.(2024)Zhou, Ji, Li, et~al.]{zhou2024dnabert2}
 Zhihan Zhou, Yanrong Ji, Weijian Li, et~al.
-\newblock {DNABERT-2}: Efficient foundation model and benchmark for multi-species genome.
+\newblock {DNABERT-2}: Efficient foundation model and benchmark for
+  multi-species genome.
 \newblock \emph{arXiv preprint arXiv:2306.15006}, 2024.
 
 \end{thebibliography}
