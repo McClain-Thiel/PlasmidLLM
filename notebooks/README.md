@@ -5,11 +5,9 @@ Analysis notebooks for PlasmidLLM evaluation and ablations.
 ## Files
 
 - `base_vs_grpo_analysis.py` — **marimo** notebook. Compares pre-GRPO (`McClain/PlasmidLM-kmer6`)
-  vs post-GRPO (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) generations: bootstrap CIs, Wilson intervals,
-  paired McNemar on prompt-level viability, per-category breakdowns.
-- `Build_Training_Pairs.py` — legacy marimo/jupytext script for constructing the conditional-prompt
-  training set.
-- `pretrained_analysis.ipynb` / `rl_MOE_test.ipynb` — older Jupyter notebooks.
+  vs post-GRPO (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) generations: bootstrap CIs, Wilson
+  intervals, paired McNemar on prompt-level viability, per-category breakdowns, and best-of-$K$
+  rejection sampling (the paper's headline figure).
 
 ## Opening a notebook — the one command you need
 

@@ -34,10 +34,10 @@ The actor never imports an algorithm. The algorithm never subclasses the actor. 
 post_training/
 ├── config.py           # PostTrainingConfig dataclass
 ├── configs/
-│   ├── smoke_test.py       # Quick 20-step pipeline test (gpt2, CPU)
-│   ├── grpo_motif.py       # GRPO + MotifScorer on PlasmidLM
-│   ├── grpo_alignment.py   # GRPO + AlignmentScorer on PlasmidLM
-│   └── ppo_motif.py        # PPO + MotifScorer on PlasmidLM
+│   ├── grpo_plannotate_anyscale.py     # produced the released HF model
+│   ├── grpo_plannotate_anyscale_v2.py  # tighter KL / 2x GPUs variant
+│   ├── grpo_plannotate_v3_anyscale.py  # adds length penalty
+│   └── grpo_plannotate_curriculum_anyscale.py  # motif→plannotate curriculum variant
 ├── common/
 │   ├── model.py        # ModelActor — Ray remote GPU worker
 │   ├── objects.py       # GenerationResult, LogProbResult, etc.
@@ -157,10 +157,10 @@ python -m post_training.runners.run post_training/configs/my_run.py
 
 | Config | Algorithm | Scorer | Model | Purpose |
 |--------|-----------|--------|-------|---------|
-| `smoke_test.py` | GRPO | substring | gpt2 | Pipeline sanity check, no GPU needed |
-| `grpo_motif.py` | GRPO | motif | PlasmidLM-kmer6-MoE | Production GRPO with CIGAR-based motif scoring |
-| `grpo_alignment.py` | GRPO | alignment | PlasmidLM-kmer6-MoE | Production GRPO with Smith-Waterman scoring |
-| `ppo_motif.py` | PPO | motif | PlasmidLM-kmer6-MoE | PPO alternative for comparison |
+| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) |
+| `grpo_plannotate_anyscale_v2.py` | GRPO | plannotate | PlasmidLM-kmer6 | kl_coef=0.3, lower warmup, 2×L40S variant |
+| `grpo_plannotate_v3_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Adds length penalty to discourage sequence drift |
+| `grpo_plannotate_curriculum_anyscale.py` | GRPO | plannotate | binary_motif checkpoint | Motif→plannotate curriculum variant (ablation) |
 
 ## Actor API surface
 

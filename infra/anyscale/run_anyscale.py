@@ -54,10 +54,10 @@ def install_blast():
 
 
 def main():
-    config_name = os.environ.get("CONFIG", "grpo_dense_anyscale")
+    config_name = os.environ.get("CONFIG", "grpo_plannotate_anyscale")
 
     # ── Install BLAST+ if BLAST-based scorer ──────────────────────────────
-    if "plannotate" in config_name or "motif" in config_name or "fractional" in config_name:
+    if "plannotate" in config_name:
         install_blast()
 
     # ── Download data ─────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ def main():
     # ── Load config ───────────────────────────────────────────────────────
     from post_training.runners.run import load_config, run
 
-    config_name = os.environ.get("CONFIG", "grpo_dense_anyscale")
+    config_name = os.environ.get("CONFIG", "grpo_plannotate_anyscale")
     config_path = ROOT / "post_training" / "configs" / f"{config_name}.py"
     log.info("Using config: %s", config_path)
     cfg = load_config(config_path)

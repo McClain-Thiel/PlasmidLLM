@@ -8,8 +8,8 @@ Causal language modeling on plasmid DNA sequences. Trains a transformer decoder 
 # Smoke test (100 steps, verifies pipeline end-to-end)
 python -m pretraining.train pretraining/configs/p4_smoke_test.py
 
-# Full training run
-python -m pretraining.train pretraining/configs/p4_kmer6_moe.py
+# Full training run (reproduces the released `McClain/PlasmidLM-kmer6` base checkpoint)
+python -m pretraining.train pretraining/configs/p4_kmer6_s3.py
 ```
 
 ## How it works
@@ -141,9 +141,4 @@ The training script saves:
 | Config | Description |
 |--------|-------------|
 | `p4_smoke_test.py` | 100-step pipeline test |
-| `p4_baseline.py` | Dense char-level baseline |
-| `p4_kmer6_s3.py` | 6-mer tokenizer, stride 3, dense FFN |
-| `p4_kmer6_s4.py` | 6-mer tokenizer, stride 4, dense FFN |
-| `p4_moe_half.py` | Char-level + MoE (half-size experts) |
-| `p4_moe_full.py` | Char-level + MoE (full-size experts) |
-| `p4_kmer6_moe.py` | 6-mer + MoE (best-of-both-worlds) |
+| `p4_kmer6_s3.py` | 6-mer tokenizer, stride 3, dense FFN — the released base model |

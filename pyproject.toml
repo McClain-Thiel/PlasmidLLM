@@ -37,3 +37,8 @@ target-version = "py310"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: requires Ray + model download (may be slow)"]
+
+[dependency-groups]
+dev = [
+    "marimo>=0.23.1",
+]

@@ -35,7 +35,7 @@ annotations.parquet       plannotate feature calls (AMR, ORI, PROM, ...)
         +
 metadata.parquet          species, vector type, copy number
         ↓
-  (notebooks/Build_Training_Pairs.py)
+  (Databricks notebook; produced `training_pairs_v4.parquet` and is not in main)
         ↓
 training_pairs_v4.parquet   <BOS><tokens><SEP>SEQUENCE<EOS> formatted pairs
 ```

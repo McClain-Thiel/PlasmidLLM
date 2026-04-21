@@ -41,6 +41,10 @@ wheels/
 # Pytest
 .pytest_cache/
 
+# marimo
+notebooks/__marimo__/
+**/__marimo__/
+
 # IDEs
 .idea/
 .vscode/

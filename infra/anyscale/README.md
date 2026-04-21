@@ -104,14 +104,14 @@ job_config.yaml            # Alternative YAML-based job config (not used by subm
 1. Anyscale provisions a `g5.2xlarge` head node (A10G GPU, 24GB VRAM)
 2. Ray autoscaler spins up GPU worker nodes as needed
 3. `run_anyscale.py` downloads data from S3 → local disk
-4. Loads config from `post_training/configs/grpo_dense_anyscale.py`
+4. Loads config from `post_training/configs/grpo_plannotate_anyscale.py`
 5. Runs GRPO training loop with MotifScorer
 6. Background thread syncs checkpoints to S3 every 5 minutes
 7. Final checkpoint synced on completion
 
 ### Training config
 
-See `post_training/configs/grpo_dense_anyscale.py`:
+See `post_training/configs/grpo_plannotate_anyscale.py`:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
@@ -157,7 +157,7 @@ compute_config:
       max_nodes: 3
 ```
 
-Then set `num_actors=4` in `grpo_dense_anyscale.py`. Each actor gets 1 GPU.
+Then set `num_actors=4` in `grpo_plannotate_anyscale.py`. Each actor gets 1 GPU.
 
 ## Files
 
