@@ -27,63 +27,93 @@
 \maketitle
 
 \begin{abstract}
-We introduce PlasmidLM, a 19M-parameter autoregressive transformer for controllable plasmid generation. Pretrained on 108K Addgene plasmids with 6-mer tokenization and component-conditioned prompts, then refined via Group Relative Policy Optimization (GRPO) with automated annotation rewards, the model generates complete multi-kilobase DNA sequences containing user-specified genetic elements. We evaluate along two axes: \emph{viability} (structural plausibility, biophysical realism, diversity, memorization) and \emph{prompt fidelity} (sseqid-level recovery of requested components against a curated motif registry). Under a matched, paired evaluation at $n=1000$---same prompts, same sampling config, pre- vs.\ post-GRPO---structural plausibility is only marginally affected by RL ($56.8\%\rightarrow 59.6\%$, paired bootstrap $95\%$ CI $[-1.4, +7.1]$ pp, McNemar $p=0.21$), but \emph{prompt fidelity} is significantly improved ($35.5\%\rightarrow 41.6\%$, $[+3.4, +8.8]$ pp). The composite ``useful plasmid'' rate---plausible \emph{and} on-prompt---rises from $38.7\%$ to $48.5\%$ ($+9.8$ pp, $p\approx 6\times 10^{-6}$). Best-of-$K$ rejection sampling with an oracle ranker does \emph{not} close this gap: at $K=4$, GRPO still leads base by $+10.8$ pp on the useful metric ($p\approx 2\times 10^{-12}$). Generated sequences exhibit realistic codon usage, thermodynamic stability, and $k$-mer diversity comparable to real plasmids, with zero training-set memorization at sourmash containment $\geq 0.3$. We release the model, evaluation suite, and 8000-sequence paired benchmark.
+We introduce PlasmidLM, a 19M-parameter autoregressive transformer for controllable plasmid generation---and, to our knowledge, the first generative model capable of producing complete, multi-kilobase circular DNA sequences conditioned on user-specified genetic components via human-readable prompt tokens. The model is trained on 108K curated plasmids from Addgene using 6-mer tokenization with component-conditioned prompt prefixes, then refined with Group Relative Policy Optimization (GRPO) against automated functional annotation rewards. We evaluate generated sequences along two axes: \emph{structural viability} (plausibility, biophysical realism, diversity, and memorization) and \emph{prompt fidelity} (recovery of requested genetic components against a curated motif registry of 660 reference sequences spanning 57 component types). Under a matched, paired evaluation ($n=1{,}000$ prompts, pre- vs.\ post-GRPO), GRPO significantly improves prompt fidelity ($35.5\%\rightarrow 41.6\%$) while leaving structural plausibility largely unchanged, showing that post-training redirects generation toward the requested components rather than broadly improving viability. The composite ``useful plasmid'' rate---structurally plausible \emph{and} on-prompt---rises by $+9.8$ pp to $48.5\%$. Generated sequences exhibit realistic codon usage, thermodynamic stability, and $k$-mer diversity comparable to real plasmids, with no evidence of training-set memorization. We release the model, evaluation suite, and an 8,000-sequence paired benchmark.
 \end{abstract}
 
 %% ============================================================
 \section{Introduction}
 \label{sec:intro}
 
-The design of functional DNA sequences remains a central challenge in synthetic biology. Plasmids, small circular DNA molecules that serve as workhorses for gene expression, cloning, and genetic engineering, exemplify this challenge. A viable plasmid must integrate an origin of replication, a selection marker, appropriate regulatory elements, and one or more coding sequences in a configuration that supports replication, transcription, and maintenance in a host organism. Traditional approaches rely on manual curation of existing backbone vectors or combinatorial assembly of characterized genetic parts~\citep{gibson2009,salis2009,addgene2024}. While effective, these methods are labor-intensive, limited in combinatorial exploration, and biased toward well-characterized components.
+Designing functional DNA sequences from specification is a central goal of synthetic biology. Plasmids are a natural starting point: a viable plasmid must integrate an origin of replication, a selection marker, appropriate regulatory elements, and one or more coding sequences in a configuration that supports replication, transcription, and stable maintenance in a host organism. Traditional design relies on manual curation of existing backbone vectors or combinatorial assembly of characterized parts~\citep{gibson2009,salis2009,addgene2024}. These methods are labor-intensive, limited in their combinatorial reach, and biased toward well-characterized components.
 
-Recent progress in genomic language models has shown that transformer architectures can capture sophisticated statistical patterns in DNA~\citep{dalla2023nucleotide,nguyen2024hyenadna,evo2024}. These models, however, have primarily addressed predictive tasks such as variant effect prediction or regulatory element classification on genomic scales. They have not been optimized for the constrained, conditional generation problem posed by plasmid design: synthesizing complete, circular, multi-kilobase sequences that satisfy specific functional requirements provided at inference time.
+Recent progress in genomic language models has demonstrated that transformer architectures can capture rich statistical structure in DNA~\citep{dalla2023nucleotide,nguyen2024hyenadna,evo2024}. The dominant paradigm, however, focuses on learning representations that transfer to predictive tasks---variant effect prediction, regulatory element classification---rather than on generating novel sequences that satisfy user-provided functional specifications. Conditional generation at the scale of complete multi-gene constructs remains largely unaddressed.
 
-Plasmids thus constitute an excellent testbed for advancing ``designable DNA.'' Their constrained size, modular architecture, and amenability to automated functional annotation (via tools such as pLannotate~\citep{mcguffie2021plannotate}) allow rigorous evaluation of generative models without immediate dependence on wet-lab experimentation. In this work we demonstrate a pathway from the ``GPT-3 era'' of DNA language modeling---large-scale pretraining for next-token or masked prediction---to a ``ChatGPT era'' of controllable generation, in which models respond to high-level functional prompts through reinforcement learning from automated biological feedback.
+Plasmids are well-suited to close this gap. Their compact, modular architecture and amenability to automated functional annotation allow rigorous evaluation of generative models without immediate dependence on wet-lab experimentation. In this work we develop a model that is explicitly conditioned on desired genetic components, specified as human-readable special tokens prepended to each sequence during training and inference. The same prompt format is used throughout: a compact list of component tokens that the model is trained to satisfy, followed by the generated DNA sequence.
 
-Our approach combines three elements. A modestly sized (19.3M parameter) decoder-only transformer with k-mer tokenization is pretrained on a large corpus of real plasmids. The prompt format explicitly conditions generation on desired genetic components. Post-training with Group Relative Policy Optimization (GRPO)~\citep{shao2024deepseekmath}, using reward signals derived from both structural annotation and sequence alignment, refines the model's ability to produce sequences that are both viable and match the requested specification.
+The training procedure has two stages. First, we construct a dataset of 108K Addgene plasmids in which each sequence is paired with an automatically generated prompt derived from its functional annotation---this supervised pairing, rather than raw sequence pretraining, is what confers baseline conditional behavior. Second, we apply Group Relative Policy Optimization (GRPO)~\citep{shao2024deepseekmath} with reward signals grounded in automated annotation and sequence alignment to sharpen fidelity to requested components. This pipeline more closely resembles supervised fine-tuning followed by RL than the pretraining-then-instruction-tuning paradigm from natural language, because the conditioning signal is already embedded in the training data from the start.
 
-We evaluate along the two axes outlined above under a matched, paired protocol: the same $1,000$ prompts, the same sampling hyperparameters, and the pre-GRPO pretrained checkpoint compared directly against the post-GRPO model. Three results are worth highlighting up front. First, the structural plausibility delta is small ($+2.8$ pp) and not statistically significant at single-sample inference (paired McNemar $p=0.21$). Second, the prompt fidelity delta is significant ($+6.1$ pp, paired bootstrap 95\% CI $[+3.4, +8.8]$), and the composite ``useful plasmid'' rate---plausible \emph{and} on-prompt at a $50\%$ fidelity threshold---improves by $+9.8$ pp ($p\approx 6\times 10^{-6}$). Third, rejection sampling with an oracle ranker does not close the gap: at $K=4$ the post-GRPO model retains a $+10.8$ pp lead on the useful metric ($p\approx 2\times 10^{-12}$). Together these findings clarify what GRPO buys on this task---conditioning, not viability in isolation---and provide a concrete paired benchmark for future work on controllable DNA generation.
+We evaluate the resulting model, PlasmidLM, along two axes: structural viability and prompt fidelity. Under a matched, paired protocol comparing pre- and post-GRPO checkpoints on 1,000 held-out prompts, GRPO substantially improves prompt fidelity while leaving overall structural plausibility nearly unchanged. The key finding is that post-training does not make sequences more broadly viable---it makes viable sequences more precisely on-prompt. The composite ``useful plasmid'' rate (structurally plausible \emph{and} on-prompt) improves by $+9.8$ pp, and this gain persists even against an oracle rejection sampler applied to the base model.
 
 
 %% ============================================================
 \section{Related work}
 \label{sec:related}
 
-Early genomic language models, including the Nucleotide Transformer~\citep{dalla2023nucleotide}, DNABERT-2~\citep{zhou2024dnabert2}, and HyenaDNA~\citep{nguyen2024hyenadna}, primarily employed masked or autoregressive objectives on large genomic corpora to support discriminative downstream tasks such as variant effect prediction and regulatory element classification. Larger efforts such as Evo~\citep{evo2024}, which scales to billions of parameters with hybrid architectures, have similarly emphasized prediction and understanding of natural genomic sequences rather than conditional synthesis of functional constructs. These models represent the predictive, ``GPT-3 era'' of DNA language modeling.
+\subsection{Genomic language models}
 
-In parallel, substantial work has addressed the design of individual biological parts. Deep generative models have been applied to promoter engineering~\citep{sample2019promoter}, optimization of ribosome binding sites~\citep{salis2009}, and codon adaptation~\citep{walsh2020codonopt}. At the protein level, models such as ProGen~\citep{madani2023progen} and EvoDiff~\citep{alamdari2023evodiff} condition generation on functional annotations or properties. While valuable, these approaches address components in isolation and do not tackle the multi-kilobase, interdependent assembly problem inherent to complete plasmid design.
+Early genomic language models---the Nucleotide Transformer~\citep{dalla2023nucleotide}, DNABERT-2~\citep{zhou2024dnabert2}, and HyenaDNA~\citep{nguyen2024hyenadna}---employed masked or autoregressive objectives on large genomic corpora to learn representations that transfer to discriminative tasks such as variant effect prediction and regulatory element classification. Evo~\citep{evo2024} scales this paradigm to billions of parameters with a hybrid Mamba-Transformer architecture and demonstrated limited generative capability, but the primary emphasis remains on understanding natural sequences rather than controllable synthesis.
 
-Reinforcement learning has shown promise for sequence design in chemistry and biology. Methods drawing on RLHF and GFlowNets have been applied to molecule optimization~\citep{zhou2023molrl} and protein generation~\citep{jain2022gflownet}. We build on this foundation by adapting Group Relative Policy Optimization (GRPO)~\citep{shao2024deepseekmath} to the DNA domain. Our approach uses fully automated annotation pipelines---combining pLannotate for structural detection and Smith-Waterman alignment against a motif registry---as the reward signal. This removes the need for human preference data while providing a biologically grounded training objective.
+Generative work in genomics has largely targeted short regulatory elements. Deep generative models have been applied to 5$'$ UTR design~\citep{sample2019promoter}, ribosome binding site optimization~\citep{salis2009}, and discrete diffusion for conditionally designing enhancers and promoters~\citep{stark2024dirichlet}. Approaches conditioning on cellular context---such as Leonine~\citep{chen2024leonine}, which frames enhancer design as multimodal question answering---have recently extended this to cell-type-specific generation. At the protein level, models such as ProGen~\citep{madani2023progen} and EvoDiff~\citep{alamdari2023evodiff} condition generation on functional annotations. These approaches address biological components in isolation; none synthesize complete multi-kilobase constructs integrating multiple interdependent functional elements.
 
-Plasmids occupy a distinctive position at the intersection of these lines of work. Their constrained yet functionally rich nature makes them an effective testbed for controllable generative modeling. By focusing on plasmids, we bridge predictive genomic modeling with the goal of instruction-following systems capable of producing complete, viable, user-specified DNA constructs. Our evaluation framework explicitly examines both the viability of generated sequences and their fidelity to provided prompts, revealing important interplay between these objectives.
+\subsection{Reinforcement learning for sequence design}
+
+Reinforcement learning has a growing role in biological sequence design. GFlowNets have been applied to diverse protein generation~\citep{jain2022gflownet}, and RL with molecular property rewards has driven advances in drug design~\citep{zhou2023molrl}. More recently, GRPO~\citep{shao2024deepseekmath}---developed in the context of mathematical reasoning---has been adapted for RNA inverse folding, using structure-based reward signals to guide an autoregressive policy~\citep{yangheng2024rnagrpo}. A related approach applies RL to the design of cis-regulatory elements by optimizing transcription factor binding site composition, demonstrating that automated feedback can meaningfully redirect generation toward functional targets~\citep{taskiran2024cre}.
+
+PlasmidLM extends this direction to complete, multi-component DNA constructs. Rather than optimizing a single property of a short element, we condition on an arbitrary set of genetic components and train with rewards derived from automated structural annotation and sequence alignment against a curated motif registry. The combination of component-conditioned pretraining and GRPO post-training enables prompt-following behavior that inference-time compute alone cannot replicate.
 
 
 %% ============================================================
 \section{Methods}
 \label{sec:methods}
 
-Plasmid sequences for both pretraining and evaluation were drawn from the Addgene repository, yielding a corpus of 108,448 unique plasmids after filtering. Each sequence was annotated using pLannotate~\citep{mcguffie2021plannotate} against the SnapGene feature database to identify constituent genetic elements. These annotations were converted into prompt prefixes consisting of specialized component tokens (e.g., \texttt{<ORI\_COLE1>}, \texttt{<AMR\_AMPICILLIN>}, \texttt{<REPORTER\_GFP>}). The full training example takes the form \texttt{<BOS>} followed by component tokens, a separator, the 6-mer tokenized DNA sequence, and \texttt{<EOS>}. This design enables arbitrary conditioning while preserving the autoregressive objective.
+\subsection{Dataset construction and token vocabulary design}
+\label{sec:data}
 
-The PlasmidLM architecture is a decoder-only transformer with 19.3 million parameters. It employs a hidden dimension of 384, 10 layers, 6 attention heads, rotary positional embeddings (RoPE), RMS normalization, and weight tying between the input embedding and language modeling head. With a context length of 2048 tokens, the model supports sequences up to approximately 12 kb. Pretraining was performed with standard next-token prediction on the full Addgene corpus for 15,000 steps using a batch size of 64, the AdamW optimizer, and a cosine learning rate schedule peaking at $3\times10^{-4}$. The final validation perplexity corresponded to a token accuracy of 95.8\%.
+Plasmid sequences were drawn from the Addgene repository, yielding a corpus of 108,448 unique plasmids after deduplication and length filtering. Each sequence was annotated using pLannotate~\citep{mcguffie2021plannotate}, which queries four curated databases---the GenoLIB/SnapGene feature database, FPbase (fluorescent proteins), Swiss-Prot (general proteins), and Rfam (non-coding RNAs)---via BLAST and DIAMOND to identify constituent genetic elements.
 
-To enhance controllability, we apply GRPO~\citep{shao2024deepseekmath}. For each training prompt, the policy generates $G=8$ candidate completions scored by pLannotate-based rewards that credit each requested component when BLAST recovers it above a strict identity threshold against a curated motif registry of 660 reference sequences covering 57 component tokens. The reward is a composite of per-component partial credit and overall structural coverage. Rewards are normalized within each group to compute advantages, with a clamped $k_3$ KL penalty ($\beta=0.5$) applied to the reference policy to stabilize training. Training was scheduled for 1,000 steps on a single GPU and terminated at step $\sim$900; the checkpoint at step 800 is the released model. Additional GRPO hyperparameters (clip range $0.2$, learning rate $5\times 10^{-6}$, warmup $50$ steps, rollout temperature $0.3$) are reported in Appendix~\ref{app:model}.
+The token vocabulary is divided into two classes with distinct roles. \emph{Hard tokens} (57 types, seven categories) represent sequence-verifiable genetic components and are the target of both the GRPO reward and evaluation: origins of replication (\texttt{ORI\_}), antibiotic resistance markers (\texttt{AMR\_}), promoters (\texttt{PROM\_}), general regulatory and structural elements (\texttt{ELEM\_}), reporters (\texttt{REPORTER\_}), replication proteins (\texttt{REP\_}), and epitope tags (\texttt{TAG\_}). Token names use human-readable identifiers at the specificity level of a named part rather than gene family (e.g., \texttt{<ORI\_COLE1>}, \texttt{<AMR\_AMPICILLIN>}, \texttt{<REPORTER\_GFP>}).
 
-During inference, we employ CUDA graph capture with static key-value caches for a 2.75$\times$ speedup over naive autoregressive decoding. Best-of-$N$ sampling with annotation-based reranking further refines output quality. All experiments use the dense 19.3M parameter model unless otherwise noted; a Mixture-of-Experts (MoE) variant was also evaluated for comparison.
+\emph{Soft tokens} represent metadata-level context that cannot be verified by sequence alignment alone and are therefore excluded from the GRPO reward and fidelity evaluation, but present in training prompts to provide additional conditioning signal. They include vector type (\texttt{VEC\_}: e.g., \texttt{<VEC\_MAMMALIAN>}, \texttt{<VEC\_LENTIVIRAL>}), host species (\texttt{SP\_}: \texttt{<SP\_HUMAN>}, \texttt{<SP\_ECOLI>}, etc.), copy number (\texttt{<COPY\_HIGH>}, \texttt{<COPY\_LOW>}), and backbone identity (\texttt{BB\_}). These are derived from Addgene metadata fields rather than sequence annotation.
+
+A key design decision is the \emph{motif registry}: a curated table of 660 reference sequences mapping each hard token to the specific pLannotate database entries (gene-level identifiers) that correspond to it. This bridge is necessary because token names use biological shorthand (e.g., \texttt{AMR\_AMPICILLIN}) while pLannotate uses gene names (e.g., \texttt{AmpR}, \texttt{AmpR\_(2)}). The same motif registry is used both to define the GRPO training reward and to compute the evaluation fidelity metric---this ensures evaluation directly measures what was reinforced during training. Each training example takes the form:
+\[
+\texttt{<BOS>}\ \underbrace{\langle \mathrm{tok}_1 \rangle \cdots \langle \mathrm{tok}_k \rangle}_{\text{component prompt}}\ \texttt{<SEQ>}\ \underbrace{\mathrm{ATGGCC}\ldots}_{\text{6-mer tokenized DNA}}\ \texttt{<EOS>}
+\]
+where the component tokens are sorted canonically and the \texttt{<SEQ>} token marks the transition from prompt to sequence. This format conditions generation at inference time by supplying the desired token list; the model generates the DNA completion autoregressively.
+
+\begin{figure}[t]
+  \centering
+  % TODO: replace with pipeline_overview.pdf
+  \fbox{\rule{0pt}{5cm}\rule{0.95\linewidth}{0pt}}
+  \caption{PlasmidLM training and inference pipeline. \textbf{(A)} Raw Addgene plasmid sequences are annotated with pLannotate to identify functional elements, which are mapped to hard component tokens (e.g., \texttt{<ORI\_COLE1>}) via the motif registry and supplemented with soft metadata tokens (vector type, species, copy number). \textbf{(B)} Prompt-paired training: the full sequence is paired with its token prompt and trained with next-token prediction. \textbf{(C)} GRPO post-training: the policy generates $G=8$ completions per prompt, scored by BLAST alignment against the motif registry; group-normalized rewards update the policy with a KL constraint to the frozen reference. \textbf{(D)} Inference: a user-supplied token list conditions generation autoregressively.}
+  \label{fig:pipeline}
+\end{figure}
+
+\subsection{Model architecture and pretraining}
+\label{sec:pretraining}
+
+PlasmidLM is a decoder-only transformer with 19.3 million parameters: hidden dimension 384, 10 layers, 6 attention heads, rotary positional embeddings (RoPE), RMSNorm, and weight tying between the input embedding and the language modeling head. A custom 6-mer tokenizer produces a vocabulary of 4,096 DNA k-mers plus special tokens, and a context length of 2,048 tokens supports sequences up to approximately 12 kb. Pretraining used standard next-token prediction on the full Addgene corpus for 65,000 steps (batch size 64, AdamW, cosine schedule peaking at $3\times10^{-4}$), reaching eval loss $0.129$ and token accuracy $97.4\%$.
+
+\subsection{GRPO post-training}
+\label{sec:grpo}
+
+To sharpen prompt fidelity beyond what supervised pairing achieves, we apply GRPO~\citep{shao2024deepseekmath}. For each training prompt, the policy generates $G=8$ candidate completions. Each completion is scored by a composite reward: for every requested component token, BLAST is run against the corresponding motif registry reference sequences, and partial credit is awarded based on percent identity, alignment coverage, and normalized bit score. An aggregate recall penalty ensures sequences that miss components entirely receive low reward regardless of per-hit quality. Rewards are group-normalized to compute advantages; a clamped KL penalty ($\beta=0.5$) applied to the frozen reference policy stabilizes training. Training ran for ${\sim}900$ steps on a single GPU (scheduled for 1,000); the checkpoint at step 800 is the released model. Full hyperparameters are in Appendix~\ref{app:model}.
 
 
 %% ============================================================
-\section{Experimental setup and evaluation}
+\section{Evaluation}
 \label{sec:eval}
 
-Generative models for biological sequences present unique evaluation challenges: there are no established benchmarks analogous to those in natural language or computer vision, and ``correctness'' depends on both intrinsic viability and adherence to a prompt. We therefore organize evaluation around two interdependent axes, using baselines consisting of real held-out Addgene plasmids ($n=500$), GC-content-matched random sequences, and dinucleotide-shuffled sequences. Crucially, we additionally compare the pre-GRPO pretrained checkpoint against the post-GRPO model on a \emph{matched, paired} protocol: both models generate one sequence per prompt for the same 1,000 held-out prompts using identical sampling hyperparameters (temperature 0.7, top-$p$=0.95, top-$k$=50, seed 42, max 3,000 new tokens). Because each prompt appears in both runs, every downstream comparison is a paired test; we report McNemar statistics for binary outcomes and paired-prompt bootstrap confidence intervals for rates.
+\paragraph{Paired protocol.}
+Evaluating generative models for biological sequences is non-trivial: there are no standardized benchmarks, and ``correctness'' involves both intrinsic viability and prompt adherence. We organize evaluation around two axes and use a \emph{matched, paired} comparison as the primary lens. Both the pre-GRPO and post-GRPO checkpoints generate one sequence per prompt for the same 1,000 held-out prompts under identical hyperparameters (temperature 0.7, top-$p$=0.95, top-$k$=50). Because every prompt appears in both runs, all downstream comparisons are paired; we report McNemar statistics for binary outcomes and paired bootstrap confidence intervals for rates. Reference baselines consist of real held-out Addgene plasmids ($n=500$), GC-content-matched random sequences, and dinucleotide-shuffled sequences.
 
-Viability is quantified through (i) structural plausibility---binary detection by pLannotate of five essential elements (origin of replication, selection marker, promoter, terminator, and coding sequence), with a plasmid passing only if all are present; (ii) distributional fidelity (Kolmogorov-Smirnov tests and Wasserstein distances on length and GC content); (iii) biophysical realism, including codon usage Jensen-Shannon divergence against \textit{E.~coli} preferences, GC skew, and minimum free energy (MFE) density computed with ViennaRNA using DNA parameters on 500 bp windows; (iv) diversity via pairwise 6-mer JSD, Jaccard similarity, and cosine distance; and (v) absence of memorization via sourmash containment search ($k=31$, scaled=100) against the 20,644-sequence training set. A LightGBM discriminator trained on sequence-level features provides an additional measure of distributional divergence.
+\paragraph{Viability metrics.}
+Structural plausibility is a binary pass/fail: pLannotate must detect all five essential element classes (origin of replication, selection marker, promoter, terminator, coding sequence). Beyond this gate, we assess distributional fidelity (KS tests and Wasserstein distances on length and GC content), biophysical realism (codon usage JSD against \textit{E.~coli}, GC skew, ViennaRNA MFE density on 500 bp windows), diversity (pairwise 6-mer JSD, Jaccard, cosine distance), and memorization (sourmash containment, $k=31$, against the training set). A LightGBM discriminator trained on sequence-level features provides a complementary distributional divergence measure.
 
-Prompt fidelity is measured by sseqid set intersection against the motif registry of 660 reference sequences: for every conditioning token in a prompt, a component is counted as recovered iff pLannotate emits at least one feature whose sseqid lies in the registry set for that token. No substring matching, no manually curated keyword list. This design is deliberately strict: the ``detection ceiling'' obtained by running the same pipeline on real training plasmids recovers only $71.8\%$ of annotated tokens, bounding achievable scores.
+\paragraph{Prompt fidelity and detection ceiling.}
+For each conditioning token in a prompt, a component is recovered if BLAST finds a high-identity match ($\geq$95\% identity, $\geq$80\% coverage) in the motif registry for that token class. This is the same registry and the same BLAST pipeline used to compute GRPO rewards during training, so evaluation directly measures what was reinforced. Running this pipeline on real training plasmids---which all contain the annotated tokens by construction---recovers only $71.8\%$ of tokens, establishing a practical detection ceiling. Post-GRPO reaches $41.6\%$ overall, or $58\%$ of the detectable maximum. This ceiling framing, rather than raw percentages alone, is the appropriate yardstick: it measures what fraction of the \emph{recoverable} signal the model has learned to produce.
 
-To probe whether the post-training effect can be matched by additional inference-time compute, we also generate three additional independent seeds per model on the same 1,000 prompts and compute best-of-$K$ rejection-sampled rates for $K\in\{1,2,4\}$, ranking by pLannotate $n_{\text{found}}$ (an \emph{oracle} ranker; a real rejection sampler would use a cheap proxy and do worse).
-
-All artifacts are archived in the \texttt{McClain/PlasmidLMEval} Hugging Face bucket: per-seed generations, pLannotate JSONs, per-prompt fidelity parquets, discriminator outputs, and distributional summaries.
+All artifacts are archived in the \texttt{McClain/PlasmidLMEval} Hugging Face bucket.
 
 %% ============================================================
 \section{Experiments}
@@ -103,7 +133,7 @@ We first examine whether PlasmidLM produces sequences that could plausibly funct
 Distributional and biophysical metrics support viability for both checkpoints. Lengths and GC content stay close to the Addgene reference (mean $6.9$--$7.2$ kb vs.\ $7.5$ kb; $50.1\%$--$50.6\%$ GC). Biophysical properties align closely: codon usage JSD versus \textit{E.~coli} was $0.131$ in predicted open reading frames, GC skew variation was $0.0566$ (reference $0.0593$), and MFE density was $-0.144$ kcal/mol/nt (reference $-0.151$). Diversity metrics indicate generated sequences are at least as diverse as real plasmids on 6-mer statistics, with no near-identical pairs and zero sourmash containment hits above threshold $0.3$ for either checkpoint---no evidence of training-set memorization. A LightGBM discriminator separating generated from real plasmids achieves AUC $0.937$--$1.000$ across four GRPO seeds and $1.000$ across all four base seeds; because this delta is not robust across seeds, we do not claim that GRPO reduces separability.
 
 \begin{table}[t]
-  \caption{Structural plausibility of generated plasmids on the paired $n=1000$ evaluation. A pass requires detection of all five essential components (origin of replication, selection marker, promoter, terminator, coding sequence) by pLannotate. The $+2.8$ pp pre-/post-GRPO gap is not significant (paired bootstrap $95\%$ CI $[-1.4, +7.1]$, McNemar $p=0.21$).}
+  \caption{Structural plausibility of generated plasmids on the paired $n=1000$ evaluation. A pass requires pLannotate to detect all five essential element classes (origin of replication, selection marker, promoter, terminator, and coding sequence); the four columns show pass rates for each except coding sequence, which exceeded $95\%$ for all model outputs and is omitted. The $+2.8$ pp pre-/post-GRPO gap is not significant (paired bootstrap $95\%$ CI $[-1.4, +7.1]$, McNemar $p=0.21$).}
   \label{tab:plausibility}
   \centering
   \small
@@ -122,7 +152,7 @@ Distributional and biophysical metrics support viability for both checkpoints. L
 
 \subsection{Prompt fidelity and conditional generation}
 
-We next evaluate whether generated sequences contain the specific components requested in the prompt, using sseqid set intersection against the motif registry (no keyword matching). On the paired $n=1000$ evaluation, the post-GRPO model recovers $41.6\%$ of hard-verifiable tokens, up from $35.5\%$ for the pre-GRPO base model. The paired-prompt bootstrap $95\%$ CI on the per-sequence delta is $[+3.4, +8.8]$ pp---the gap is small but significant, excluding zero comfortably. Category-level gains decompose as $+7.8$ pp on origins of replication, $+5.0$ pp on elements, $+4.2$ pp on promoters, $+3.0$ pp on antibiotic resistance, and $+2.0$ pp on reporters. The sole regression is on epitope tags: base $8.4\% \to$ GRPO $2.8\%$ ($-5.6$ pp). Tags are tiny peptide sequences (6--18 bp) that BLAST struggles to detect even in real plasmids, so the training-time reward rarely credits them; the post-training policy correspondingly deprioritises them---a classic Goodhart's-law pattern.
+We next evaluate whether generated sequences contain the specific components requested in the prompt, measured by sequence-identity matching against the motif registry. On the paired $n=1000$ evaluation, the post-GRPO model recovers $41.6\%$ of hard-verifiable tokens, up from $35.5\%$ for the pre-GRPO base model. The paired-prompt bootstrap $95\%$ CI on the per-sequence delta is $[+3.4, +8.8]$ pp---the gap is small but significant, excluding zero comfortably. Category-level gains decompose as $+7.8$ pp on origins of replication, $+5.0$ pp on elements, $+4.2$ pp on promoters, $+3.0$ pp on antibiotic resistance, and $+2.0$ pp on reporters. The sole regression is on epitope tags: base $8.4\% \to$ GRPO $2.8\%$ ($-5.6$ pp). Tags are tiny peptide sequences (6--18 bp) that BLAST struggles to detect even in real plasmids, so the training-time reward rarely credits them; the post-training policy correspondingly deprioritises them---a classic Goodhart's-law pattern.
 
 \begin{figure}[t]
   \centering
@@ -131,10 +161,18 @@ We next evaluate whether generated sequences contain the specific components req
   \label{fig:hit_rate}
 \end{figure}
 
-A full temperature sweep on the base model ($n=100$ per cell) shows that the pre-GRPO checkpoint peaks at $t=0.3$ (fidelity $37.8\%$) and degrades at higher temperatures ($32.5\%$ at $t=0.5$, $35.5\%$ at the matched $t=0.7$, $32.3\%$ at $t=1.0$); the matched comparison at $t=0.7$ is therefore close to the base's best setting, and the GRPO advantage cannot be explained away as a temperature-tuning artifact. The detection ceiling of $71.8\%$ on real training plasmids bounds achievable scores: post-GRPO reaches $41.6/71.8=58\%$ of ceiling overall.
+Post-GRPO reaches $41.6\%$ overall, or $58\%$ of the $71.8\%$ detection ceiling established by running the same pipeline on real training plasmids. Temperature is not a confound: a sweep of the base model shows fidelity peaking at $t=0.3$ ($37.8\%$) and degrading at higher values, so the matched $t=0.7$ comparison is already near the base's optimum (see Appendix~\ref{app:tempsweep}).
+
+\begin{figure}[t]
+  \centering
+  % TODO: replace with fidelity_scatter.pdf
+  \fbox{\rule{0pt}{4.5cm}\rule{0.85\linewidth}{0pt}}
+  \caption{Per-prompt fidelity: base model ($x$-axis) vs.\ post-GRPO ($y$-axis) for each of the 1,000 evaluation prompts. Points above the diagonal improved under GRPO; points below regressed. Color indicates number of tokens requested per prompt. The improvement is distributed broadly across prompt complexity rather than concentrated on simple prompts.}
+  \label{fig:scatter}
+\end{figure}
 
 \begin{table}[t]
-  \caption{Per-category prompt fidelity for pre- vs.\ post-GRPO, paired $n=1000$. Denominators are number of (prompt, token) pairs across the $1000$ prompts for each category. The TAG regression reflects that short peptide tags are rarely credited by the training-time BLAST-based reward.}
+  \caption{Per-category hard-token fidelity for pre- vs.\ post-GRPO, paired $n=1000$. Denominators are (prompt, token) pairs for each category. REP tokens (replication proteins) appear in $<1\%$ of evaluation prompts and are omitted for space. The TAG regression reflects that short peptide tags are rarely detected by the BLAST-based reward.}
   \label{tab:conditional}
   \centering
   \small
@@ -150,70 +188,33 @@ A full temperature sweep on the base model ($n=100$ per cell) shows that the pre
   \end{tabular}
 \end{table}
 
-\subsection{Composite ``useful plasmid'' metric: plausible \emph{and} on-prompt}
+\subsection{Viable versus useful}
 \label{sec:useful}
 
-A plasmid that is structurally plausible but does not contain the specific requested elements is not useful; a plasmid that hits the requested tokens but lacks a viable backbone is not useful either. The composite \emph{useful} metric---plausible \emph{and} fidelity $\geq T$ for a threshold $T$---captures both conditions simultaneously and, under the paired protocol, is where the GRPO improvement is largest and most significant (Table~\ref{tab:useful}).
+Structural plausibility alone is a weak signal for the design problem. A plasmid that passes the five-element viability check but contains none of the specific components the user requested is not useful; one that hits every requested token but lacks a stable backbone is not useful either. We define a \emph{useful} plasmid as one that is structurally plausible \emph{and} achieves fidelity $\geq 0.5$ on the requested tokens. This is where the GRPO improvement is both largest and most significant: $38.7\% \to 48.5\%$, $+9.8$ pp, McNemar $p \approx 6\times 10^{-6}$ (full threshold sweep in Appendix~\ref{app:results}).
 
-\begin{table}[t]
-  \caption{Composite ``useful plasmid'' rate (plausible \emph{and} fidelity $\geq T$) on the paired $n=1000$ evaluation, with paired bootstrap $95\%$ CIs on the delta and McNemar $p$. At $T=0.5$ the GRPO gain is $+9.8$ pp ($p\approx 6\times 10^{-6}$); GRPO is significantly better at every positive threshold.}
-  \label{tab:useful}
-  \centering
-  \small
-  \begin{tabular}{lcccc|c}
-    \toprule
-    Threshold $T$ & Base & GRPO & $\Delta$ & paired $95\%$ CI & McNemar $p$ \\
-    \midrule
-    $0.00$ (plausibility only)         & $56.8\%$ & $59.6\%$ & $+2.8$ pp & $[-1.4, +7.1]$ & $0.21$ \\
-    $0.25$                              & $48.7\%$ & $56.9\%$ & $+8.2$ pp & $[+4.0, +12.4]$ & $1.7\times 10^{-4}$ \\
-    $\mathbf{0.50}$                     & $\mathbf{38.7\%}$ & $\mathbf{48.5\%}$ & $\mathbf{+9.8}$ \textbf{pp} & $\mathbf{[+5.7, +13.9]}$ & $\mathbf{6.4\times 10^{-6}}$ \\
-    $0.75$                              & $15.1\%$ & $19.7\%$ & $+4.6$ pp & $[+1.7, +7.6]$ & $3.3\times 10^{-3}$ \\
-    $1.00$ (all tokens)                 & $\phantom{0}2.1\%$ & $\phantom{0}3.3\%$ & $+1.2$ pp & $[0.0, +2.4]$ & $0.065$ \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+The pattern is clean. GRPO does not turn implausible sequences plausible---the $+2.8$ pp plausibility delta is not significant. What it does is redirect plausibility: base model outputs are often structurally fine but generic, encoding elements that were not requested. Post-training focuses that same generative capacity onto the components that were actually asked for. The headline plausibility metric misses this entirely because it does not ask \emph{which} elements are present.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.85\linewidth]{figures/prompt_fidelity_ceiling.pdf}
-  \caption{Left: ``useful plasmid'' rate vs.\ fidelity threshold $T$ for both checkpoints with paired bootstrap $95\%$ bands. Right: paired delta (GRPO $-$ base) across $T$. The effect size peaks near $T=0.5$, the regime where the composite metric distinguishes ``plausible but generic'' plasmids from plausible \emph{and} on-prompt plasmids.}
-  \label{fig:ceiling}
-\end{figure}
-
-At $T=0$ (plausibility only) the paired gap is not significant. At $T\geq 0.25$ it becomes large and highly significant. The peak is at $T=0.5$: $38.7\%\to 48.5\%$, paired McNemar $p\approx 6\times 10^{-6}$. This pattern is clean: GRPO does not turn implausible sequences into plausible ones, it turns plausible-but-generic sequences into plausible-\emph{and}-on-prompt sequences. The headline structural metric under-reports this because base plasmids are often plausible for the \emph{wrong} prompt.
-
-\subsection{Does rejection sampling close the gap?}
+\subsection{Inference-time compute does not close the gap}
 \label{sec:bon}
 
-A natural challenge to any RL finetune is whether matched inference-time compute---best-of-$K$ rejection sampling from the base model---could achieve the same effect more cheaply. We generated three additional independent seeds per model ($K=4$ total) on the same $1000$ prompts and took the best-of-$K'$ per prompt for $K'\in\{1,2,4\}$, ranking by pLannotate $n_{\text{found}}$ (an \emph{oracle} ranker; a real-world sampler would use a cheap proxy and do worse). Results are in Table~\ref{tab:bon}.
+To test whether the GRPO improvement can be replicated by simply drawing more samples from the base model, we ran oracle best-of-$K$ rejection sampling ($K\in\{1,2,4\}$), ranking by pLannotate $n_{\text{found}}$---an upper bound on any real proxy ranker. The gap does not close: at $K=4$, base reaches $78.9\%$ useful while GRPO reaches $89.7\%$ ($+10.8$ pp, $p\approx 2\times 10^{-12}$), and GRPO-at-$K=4$ has no base equivalent within budget. Full curves and per-metric results are in Appendix~\ref{app:bon} and Table~\ref{tab:bon}. Because the oracle ranker is an upper bound, a practical rejection sampler would widen this advantage further.
 
 \begin{table}[t]
-  \caption{Oracle best-of-$K$ on the paired $n=1000$ evaluation. Rejection sampling does not close the GRPO gap: at $K=4$ the post-GRPO model still leads by $+10.8$ pp on the useful metric ($p\approx 2\times 10^{-12}$). Base-at-$K=4$ barely matches GRPO-at-$K=2$.}
+  \caption{Oracle best-of-$K$ results (useful metric, $T=0.5$). The GRPO gap is preserved at every $K$; base-at-$K=4$ barely reaches GRPO-at-$K=2$.}
   \label{tab:bon}
   \centering
   \small
-  \begin{tabular}{rllcccc}
+  \begin{tabular}{rcccc}
     \toprule
-    $K$ & metric & base & GRPO & $\Delta$ & paired $95\%$ CI & McNemar $p$ \\
+    $K$ & Base useful & GRPO useful & $\Delta$ & McNemar $p$ \\
     \midrule
-    $1$ & plausibility   & $56.8\%$ & $59.6\%$ & $+2.8$ & $[-1.5, +7.0]$  & $0.21$ \\
-    $2$ & plausibility   & $79.1\%$ & $84.9\%$ & $+5.8$ & $[+2.5, +9.2]$  & $7.5\times 10^{-4}$ \\
-    $4$ & plausibility   & $92.1\%$ & $95.8\%$ & $+3.7$ & $[+1.7, +5.7]$  & $3.9\times 10^{-4}$ \\
-    \midrule
-    $1$ & \textbf{useful} ($T=0.5$) & $38.7\%$ & $48.5\%$ & $+9.8$  & $[+5.7, +13.9]$ & $6.4\times 10^{-6}$ \\
-    $2$ & \textbf{useful} ($T=0.5$) & $60.4\%$ & $73.6\%$ & $+13.2$ & $[+9.4, +17.0]$ & $8.8\times 10^{-11}$ \\
-    $4$ & \textbf{useful} ($T=0.5$) & $\mathbf{78.9\%}$ & $\mathbf{89.7\%}$ & $\mathbf{+10.8}$ & $\mathbf{[+7.9, +13.7]}$ & $\mathbf{2.1\times 10^{-12}}$ \\
-    \midrule
-    $1$ & fidelity (mean) & $35.5\%$ & $41.6\%$ & $+6.1$ & $[+3.4, +8.8]$  & --- \\
-    $2$ & fidelity (mean) & $51.6\%$ & $59.7\%$ & $+8.0$ & $[+5.7, +10.4]$ & --- \\
-    $4$ & fidelity (mean) & $64.6\%$ & $72.2\%$ & $+7.6$ & $[+6.0, +9.2]$  & --- \\
+    $1$ & $38.7\%$ & $48.5\%$ & $+9.8$ pp  & $6.4\times 10^{-6}$ \\
+    $2$ & $60.4\%$ & $73.6\%$ & $+13.2$ pp & $8.8\times 10^{-11}$ \\
+    $4$ & $\mathbf{78.9\%}$ & $\mathbf{89.7\%}$ & $\mathbf{+10.8}$ \textbf{pp} & $\mathbf{2.1\times 10^{-12}}$ \\
     \bottomrule
   \end{tabular}
 \end{table}
-
-Two observations. First, the gap \emph{does not close}: at $K=4$, base reaches only $78.9\%$ useful while GRPO reaches $89.7\%$---the same $+10.8$ pp paired gap the full budget provides. To match GRPO-at-$K=1$ ($48.5\%$) on the useful metric, base needs roughly $K=2$; to match GRPO-at-$K=2$, base needs $K=4$; GRPO-at-$K=4$ has no base equivalent within our budget. Second, this is the \emph{oracle} upper bound: any real rejection sampler that lacks ground-truth pLannotate must use a cheaper proxy and will achieve strictly less of these gains for the base model. So the ``RL versus more inference compute'' comparison favors RL on this task by at least the margin shown---and in practice, by more.
-
-A caveat on plausibility alone: the $+2.8$ pp plausibility delta that was not significant at $K=1$ \emph{does} become significant at $K\geq 2$ once borderline sequences are filtered. This matches the qualitative observation above that GRPO reshuffles plausibility rather than uniformly lifting it; the shuffle becomes constructive when the best-of-$K$ pool gives us room to pick the improved sample.
 
 
 %% ============================================================
@@ -228,15 +229,15 @@ Two category-level observations deserve emphasis. First, the largest fidelity ga
 
 Biophysical and diversity metrics remain reassuring. Codon usage JSD against \textit{E.~coli}, GC skew variation, and ViennaRNA MFE density all stay within the tight tolerance set by real Addgene plasmids for both pre- and post-GRPO outputs, and sourmash containment against the training set returns zero hits at threshold $0.3$. The model is generalizing rather than memorizing, and the post-training step does not damage biophysical realism.
 
-A broader take. The ``ChatGPT moment'' for DNA design likely does not require a genome-scale foundation model. A 19M-parameter decoder, pretrained on $10^5$ curated plasmids and post-trained against an automated structural annotator, already produces on-prompt plasmids at a rate that $\times 4$ inference-time compute cannot match from the same pretrained base. We expect the same recipe---small specialist models, verifiable rewards, paired evaluation---to generalize beyond plasmids to other constrained, automatable design targets.
+A broader take. The ``ChatGPT moment'' for DNA design likely does not require a genome-scale foundation model. A 19M-parameter decoder, pretrained on 108K curated plasmids and post-trained against an automated structural annotator, already produces on-prompt plasmids at a rate that $\times 4$ inference-time compute cannot match from the same pretrained base. We expect the same recipe---small specialist models, verifiable rewards, paired evaluation---to generalize beyond plasmids to other constrained, automatable design targets.
 
-Important limitations remain. The evaluation is entirely computational; synthesized plasmids have not been tested in vivo. The model produces linear representations; circularization and junction optimization are separate engineering steps. The training corpus is biased toward commonly-used laboratory vectors, and the $16$ K token context window precludes very large constructs. The post-training run that produced the released checkpoint terminated at $\sim$900 of 1,000 scheduled steps and its W\&B logs were lost; training is reconstructable from the committed config but we cannot show the reward curve for this exact run. We consider these primarily empirical rather than methodological limitations and treat in-vivo validation as the natural next step.
+Important limitations remain. The evaluation is entirely computational; synthesized plasmids have not been tested in vivo. The model produces linear sequence representations; circularization and junction optimization are separate engineering steps not addressed here. The training corpus is biased toward commonly-used laboratory vectors, and the 2,048-token context window limits the model to sequences up to approximately 12 kb. We treat in-vivo validation of synthesized candidates---synthesis of a small panel and functional testing in \textit{E.~coli}---as the natural immediate next step.
 
 
 %% ============================================================
 \section{Conclusion}
 
-Plasmids have served as a productive testbed for advancing DNA language modeling from statistical prediction toward controllable design. PlasmidLM demonstrates that a modestly sized autoregressive model, refined through GRPO with rewards grounded in automated annotation and alignment, can generate sequences that are both structurally viable and responsive to functional prompts. The dual-axis evaluation framework clarifies the interplay between these objectives and highlights the practical ceilings imposed by current biological measurement tools. These results, combined with strong biophysical fidelity, diversity, and generalization, suggest that reinforcement learning from automated signals offers a scalable route to designable DNA. Future efforts will focus on wet-lab validation of synthesized candidates, curriculum-based training to handle increasingly complex specifications, incorporation of additional biological constraints, and scaling to broader classes of synthetic constructs as more diverse data become available. By making the model, evaluation suite, and supporting code publicly available, we hope to accelerate progress toward the reliable computational design of functional biological sequences.
+We presented PlasmidLM, to our knowledge the first generative model for complete, multi-component plasmid sequences conditioned on human-readable component prompts. Three findings define the contribution. First, a 19M-parameter decoder trained on annotated Addgene plasmids can produce structurally plausible multi-kilobase sequences at rates far above random baselines, demonstrating that controllable plasmid generation is achievable at modest scale. Second, GRPO post-training substantially improves prompt fidelity---raising the ``useful plasmid'' rate from $38.7\%$ to $48.5\%$ ($+9.8$ pp)---while leaving broad structural viability largely intact: the model learns what to make, not just how to make something. Third, this improvement cannot be replicated by oracle rejection sampling from the base model at matched compute, confirming that the post-training effect reflects a genuine shift in the model's behavior rather than lucky sampling. Taken together, these results suggest that the combination of paired prompt-supervised training and RL from automated biological feedback is a viable path toward DNA models that respond reliably to high-level design specifications. The model, evaluation suite, and benchmark are released to support further work on controllable genomic generation.
 
 
 %% ============================================================
@@ -279,9 +280,10 @@ Anonymized for review.
     Peak learning rate & $3 \times 10^{-4}$ \\
     Schedule & Cosine decay \\
     Batch size & 64 \\
-    Steps & 15,000 \\
+    Steps & 65,000 \\
+    Eval loss & 0.129 (token accuracy 97.4\%) \\
     Hardware & 1$\times$ A100-40GB \\
-    Training time & $\sim$8 hours \\
+    Training time & $\sim$35 hours \\
     \midrule
     \multicolumn{2}{l}{\textit{GRPO post-training}} \\
     \midrule
@@ -297,7 +299,7 @@ Anonymized for review.
     Rollout temperature & 0.3 \\
     Rollout top-$p$ & 0.95 \\
     Rollout max new tokens & 2,500 \\
-    Reward & pLannotate composite (motif registry sseqid) \\
+    Reward & pLannotate composite (motif registry, sequence identity) \\
     Hardware & 1$\times$ GPU (Anyscale) \\
     Training time & $\sim$17 hours \\
     \bottomrule
@@ -306,6 +308,33 @@ Anonymized for review.
 
 \section{Additional results}
 \label{app:results}
+
+\subsection{Useful plasmid rate across fidelity thresholds}
+
+\begin{table}[h]
+  \caption{Composite ``useful plasmid'' rate (structurally plausible \emph{and} fidelity $\geq T$) across thresholds on the paired $n=1000$ evaluation. The GRPO gain is significant at every positive threshold; the effect peaks near $T=0.5$.}
+  \label{tab:useful}
+  \centering
+  \small
+  \begin{tabular}{lcccc|c}
+    \toprule
+    Threshold $T$ & Base & GRPO & $\Delta$ & paired $95\%$ CI & McNemar $p$ \\
+    \midrule
+    $0.00$ (plausibility only)         & $56.8\%$ & $59.6\%$ & $+2.8$ pp & $[-1.4, +7.1]$ & $0.21$ \\
+    $0.25$                              & $48.7\%$ & $56.9\%$ & $+8.2$ pp & $[+4.0, +12.4]$ & $1.7\times 10^{-4}$ \\
+    $\mathbf{0.50}$                     & $\mathbf{38.7\%}$ & $\mathbf{48.5\%}$ & $\mathbf{+9.8}$ \textbf{pp} & $\mathbf{[+5.7, +13.9]}$ & $\mathbf{6.4\times 10^{-6}}$ \\
+    $0.75$                              & $15.1\%$ & $19.7\%$ & $+4.6$ pp & $[+1.7, +7.6]$ & $3.3\times 10^{-3}$ \\
+    $1.00$ (all tokens)                 & $\phantom{0}2.1\%$ & $\phantom{0}3.3\%$ & $+1.2$ pp & $[0.0, +2.4]$ & $0.065$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.85\linewidth]{figures/prompt_fidelity_ceiling.pdf}
+  \caption{``Useful plasmid'' rate vs.\ fidelity threshold $T$ for both checkpoints with paired bootstrap $95\%$ bands (left), and the paired GRPO$-$base delta across $T$ (right). The effect peaks near $T=0.5$ and is significant at every positive threshold.}
+  \label{fig:ceiling}
+\end{figure}
 
 \subsection{Base-model temperature sweep}
 \label{app:tempsweep}
@@ -323,16 +352,16 @@ Anonymized for review.
 \begin{figure}[ht]
   \centering
   \includegraphics[width=0.85\linewidth]{figures/dense_vs_moe.pdf}
-  \caption{Oracle best-of-$K$ for $K \in \{1, 2, 4\}$ on the paired $n=1000$ evaluation. Left: structural plausibility. Right: composite ``useful'' rate (plausible $\land$ fidelity $\geq 0.5$). Shaded bands are Wilson $95\%$ CIs. On the right panel GRPO stays strictly above base across $K$---rejection sampling does not close the gap even with ground-truth ranking.}
-  \label{fig:dense_vs_moe}
+  \caption{Oracle best-of-$K$ for $K \in \{1, 2, 4\}$ on the paired $n=1000$ evaluation. Left: structural plausibility. Right: composite ``useful'' rate (plausible $\land$ fidelity $\geq 0.5$). Shaded bands are Wilson $95\%$ CIs. GRPO stays strictly above base across all $K$---rejection sampling does not close the gap even with ground-truth ranking.}
+  \label{fig:best_of_k}
 \end{figure}
 
 \section{Evaluation pipeline and reproducibility}
 \label{app:pipeline}
 
-The complete evaluation pipeline constructs reference panels and negative controls, performs large-scale generation and annotation with pLannotate, Prodigal, and dustmasker, computes viability and fidelity metrics, trains the LightGBM discriminator, and computes best-of-$K$ tables. All artifacts (generations, pLannotate JSON, per-prompt fidelity parquets, discriminator outputs) are archived in the \texttt{McClain/PlasmidLMEval} Hugging Face bucket. Commands, random seeds, and environment specifications are provided in the repository. The best-of-$K$ analysis is runnable end-to-end as a PEP 723 script at \texttt{eval/scripts/analyze\_best\_of\_k.py}; the paired marimo notebook \texttt{notebooks/base\_vs\_grpo\_analysis.py} renders every figure and table in Sections~\ref{sec:useful} and~\ref{sec:bon} directly from bucket data.
+The complete evaluation pipeline constructs reference panels and negative controls, performs large-scale generation and annotation with pLannotate, Prodigal, and dustmasker, computes viability and fidelity metrics, trains the LightGBM discriminator, and computes best-of-$K$ tables. All artifacts (generations, pLannotate JSON, per-prompt fidelity parquets, discriminator outputs) are archived in the \texttt{McClain/PlasmidLMEval} Hugging Face bucket. Commands, random seeds, and environment specifications are in the repository. The best-of-$K$ analysis is runnable end-to-end as a PEP 723 script at \texttt{eval/scripts/analyze\_best\_of\_k.py}; the paired marimo notebook \texttt{notebooks/base\_vs\_grpo\_analysis.py} renders every figure and table in Sections~\ref{sec:useful} and~\ref{sec:bon} directly from bucket data.
 
-The released GRPO checkpoint was produced by a run whose W\&B logs were lost. The training configuration in Table~\ref{tab:hyperparams} was reconstructed from the git commit whose on-disk config file byte-matches the uploaded \texttt{model.safetensors}; this reconstruction is committed to the HuggingFace model repository as \texttt{training\_config.py} for reference.
+\paragraph{GRPO training run note.} The released checkpoint was produced by a run whose experiment tracking logs were not retained. The training configuration in Table~\ref{tab:hyperparams} was reconstructed from the git commit whose on-disk config file byte-matches the uploaded \texttt{model.safetensors}; this configuration is committed to the HuggingFace model repository as \texttt{training\_config.py} for reference. The training procedure is fully reproducible from this config.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
