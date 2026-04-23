@@ -8,6 +8,11 @@ Analysis notebooks for PlasmidLLM evaluation and ablations.
   vs post-GRPO (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) generations: bootstrap CIs, Wilson
   intervals, paired McNemar on prompt-level viability, per-category breakdowns, and best-of-$K$
   rejection sampling (the paper's headline figure).
+- `soft_token_conditioning.py` — **marimo** notebook. Asks whether the base model conditions on
+  the soft / non-reward tags (`BB_`, `COPY_`, `SP_`, `VEC_`) at all, and whether GRPO (which
+  never saw them in the reward) perturbed that behavior. Probes each soft value via its
+  biologically-expected hard tokens and the existing motif registry; four-bucket classifier
+  (correct / wrong / unclassified / no_signal) with Wilson CIs and paired McNemar.
 
 ## Opening a notebook — the one command you need
 
