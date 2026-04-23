@@ -165,9 +165,8 @@ Post-GRPO reaches $41.6\%$ overall, or $58\%$ of the $71.8\%$ detection ceiling 
 
 \begin{figure}[t]
   \centering
-  % TODO: replace with fidelity_scatter.pdf
-  \fbox{\rule{0pt}{4.5cm}\rule{0.85\linewidth}{0pt}}
-  \caption{Per-prompt fidelity: base model ($x$-axis) vs.\ post-GRPO ($y$-axis) for each of the 1,000 evaluation prompts. Points above the diagonal improved under GRPO; points below regressed. Color indicates number of tokens requested per prompt. The improvement is distributed broadly across prompt complexity rather than concentrated on simple prompts.}
+  \includegraphics[width=0.80\linewidth]{figures/fidelity_scatter.pdf}
+  \caption{Per-prompt fidelity, base model ($x$-axis) vs.\ post-GRPO ($y$-axis) for each prompt with $n_{\text{requested}}>0$. Marker jitter is added to separate points that land on shared fractions (e.g., 1/2, 2/3). Point colour encodes the number of tokens requested per prompt; marginal histograms show each model's univariate distribution. $46.3\%$ of prompts improve under GRPO, $33.5\%$ regress, and $20.1\%$ are unchanged; the improvement is broadly distributed across prompt complexity rather than concentrated on simple prompts.}
   \label{fig:scatter}
 \end{figure}
 
@@ -187,6 +186,15 @@ Post-GRPO reaches $41.6\%$ overall, or $58\%$ of the $71.8\%$ detection ceiling 
     \bottomrule
   \end{tabular}
 \end{table}
+
+The category-level view hides a strong long-tail effect at the token level (Figure~\ref{fig:per-token}). A handful of high-frequency tokens --- \texttt{ELEM\_IRES}, \texttt{ELEM\_TRACRRNA}, \texttt{ORI\_COLE1}, \texttt{PROM\_AMPR} --- achieve $50$--$60\%$ hit rates in both runs, while a long tail of rarer tokens stays at or near zero in both: \texttt{AMR\_CHLORAMPHENICOL} ($0/82$), \texttt{ORI\_P15A} ($0/21$), \texttt{ORI\_PSC101} ($0/17$), \texttt{ORI\_RSF} ($0/8$), and the majority of short epitope tags (\texttt{TAG\_V5}, \texttt{TAG\_GST}, \texttt{TAG\_MYC}, \texttt{TAG\_HA}) all sit at zero. The pattern is consistent with the training corpus: tokens that appear fewer than $\sim\!100$ times in pretraining are effectively outside the model's actionable vocabulary regardless of post-training, and this is what drives both the TAG regression and the \texttt{COPY\_LOW} failure discussed in Section~\ref{sec:soft-tokens}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.88\linewidth]{figures/per_token_hit_rates.pdf}
+  \caption{Per-token hit rate, rank-ordered by the maximum of the base and GRPO rates. Each row shows one hard token: base (grey) and GRPO (green) dots connected by a light line to highlight the shift. Category colour strip on the far left. Right panel is $n_{\text{requested}}$ in the paired eval on a log scale. The figure makes two patterns visible: GRPO uniformly lifts the already-detectable tokens, and a long tail of rare tokens stays at zero in both runs (the zero-hit tail is the same set that explains the TAG regression and the \texttt{COPY\_LOW} soft-token failure in Section~\ref{sec:soft-tokens}).}
+  \label{fig:per-token}
+\end{figure}
 
 \subsection{Soft-token conditioning: does the model use the metadata it was trained on?}
 \label{sec:soft-tokens}
