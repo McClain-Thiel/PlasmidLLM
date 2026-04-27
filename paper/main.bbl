@@ -1,15 +1,9 @@
-\begin{thebibliography}{18}
+\begin{thebibliography}{26}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
-
-\bibitem[{Addgene}(2024)]{addgene2024}
-{Addgene}.
-\newblock Addgene: The nonprofit plasmid repository.
-\newblock \url{https://www.addgene.org}, 2024.
-\newblock Accessed: 2026-03-01.
 
 \bibitem[Alamdari et~al.(2023)Alamdari, Thakkar, van~den Berg,
   et~al.]{alamdari2023evodiff}
@@ -18,11 +12,24 @@ Sarah Alamdari, Nitya Thakkar, Rianne van~den Berg, et~al.
   alignments via discrete diffusion models.
 \newblock \emph{bioRxiv}, 2023.
 
+\bibitem[Brixi et~al.(2025)Brixi, Durrant, Ku, et~al.]{brixi2025evo2}
+Garyk Brixi, Matthew~G Durrant, Jerome Ku, et~al.
+\newblock Genome modeling and design across all domains of life with {Evo}~2.
+\newblock \emph{bioRxiv}, 2025.
+\newblock 2025.02.18.638918.
+
 \bibitem[Chen et~al.(2024)]{chen2024leonine}
 Zicheng Chen et~al.
 \newblock Multimodal cell context instruction tuning for conditional {DNA}
   regulatory sequence generation.
 \newblock \emph{bioRxiv}, 2024.
+
+\bibitem[Christiano et~al.(2017)Christiano, Leike, Brown, Martic, Legg, and
+  Amodei]{christiano2017preferences}
+Paul~F. Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg, and Dario
+  Amodei.
+\newblock Deep reinforcement learning from human preferences.
+\newblock \emph{Advances in Neural Information Processing Systems}, 30, 2017.
 
 \bibitem[Dalla-Torre et~al.(2024)Dalla-Torre, Gonzalez, Mendoza-Revilla,
   et~al.]{dalla2023nucleotide}
@@ -31,17 +38,34 @@ Hugo Dalla-Torre, Liam Gonzalez, Javier Mendoza-Revilla, et~al.
   models for human genomics.
 \newblock \emph{Nature Methods}, 21:\penalty0 1--11, 2024.
 
-\bibitem[Gibson et~al.(2009)Gibson, Young, Chuang, et~al.]{gibson2009}
-Daniel~G Gibson, Lei Young, Ray-Yuan Chuang, et~al.
-\newblock Enzymatic assembly of {DNA} molecules up to several hundred
-  kilobases.
-\newblock \emph{Nature Methods}, 6:\penalty0 343--345, 2009.
-
 \bibitem[Jain et~al.(2022)Jain, Bengio, Hernandez-Garcia,
   et~al.]{jain2022gflownet}
 Moksh Jain, Emmanuel Bengio, Alex Hernandez-Garcia, et~al.
 \newblock Biological sequence design with {GFlowNets}.
 \newblock \emph{International Conference on Machine Learning}, 2022.
+
+\bibitem[Krakovna et~al.(2020)Krakovna, Uesato, Mikulik, Rahtz, Everitt, Kumar,
+  Kenton, Leike, and Legg]{krakovna2020specification}
+Victoria Krakovna, Jonathan Uesato, Vladimir Mikulik, Matthew Rahtz, Tom
+  Everitt, Ramana Kumar, Zac Kenton, Jan Leike, and Shane Legg.
+\newblock Specification gaming: The flip side of {AI} ingenuity.
+\newblock \emph{DeepMind Blog}, 2020.
+\newblock URL
+  \url{https://deepmind.google/discover/blog/specification-gaming-the-flip-side-of-ai-ingenuity/}.
+
+\bibitem[Lambert et~al.(2024)Lambert, Morrison, Pyatkin, Huang, Ivison,
+  Brahman, Miranda, et~al.]{lambert2024tulu}
+Nathan Lambert, Jacob Morrison, Valentina Pyatkin, Shengyi Huang, Hamish
+  Ivison, Faeze Brahman, Lester James~V. Miranda, et~al.
+\newblock Tülu 3: Pushing frontiers in open language model post-training.
+\newblock \emph{arXiv preprint arXiv:2411.15124}, 2024.
+
+\bibitem[Lightman et~al.(2024)Lightman, Kosaraju, Burda, Edwards, Baker, Lee,
+  Leike, Schulman, Sutskever, and Cobbe]{lightman2024prm}
+Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy
+  Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe.
+\newblock Let's verify step by step.
+\newblock \emph{International Conference on Learning Representations}, 2024.
 
 \bibitem[Madani et~al.(2023)Madani, Krause, Greene, et~al.]{madani2023progen}
 Ali Madani, Ben Krause, Eric~R Greene, et~al.
@@ -67,6 +91,21 @@ Eric Nguyen, Michael Poli, Matthew~G Durrant, et~al.
   {Evo}.
 \newblock \emph{Science}, 386\penalty0 (6723):\penalty0 eado9336, 2024.
 
+\bibitem[Ouyang et~al.(2022)Ouyang, Wu, Jiang, Almeida, Wainwright, Mishkin,
+  Zhang, Agarwal, Slama, Ray, et~al.]{ouyang2022instructgpt}
+Long Ouyang, Jeff Wu, Xu~Jiang, Diogo Almeida, Carroll~L. Wainwright, Pamela
+  Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et~al.
+\newblock Training language models to follow instructions with human feedback.
+\newblock \emph{Advances in Neural Information Processing Systems}, 35, 2022.
+
+\bibitem[Rafailov et~al.(2023)Rafailov, Sharma, Mitchell, Ermon, Manning, and
+  Finn]{rafailov2023dpo}
+Rafael Rafailov, Archit Sharma, Eric Mitchell, Stefano Ermon, Christopher~D.
+  Manning, and Chelsea Finn.
+\newblock Direct preference optimization: Your language model is secretly a
+  reward model.
+\newblock \emph{Advances in Neural Information Processing Systems}, 36, 2023.
+
 \bibitem[Salis et~al.(2009)Salis, Mirsky, and Voigt]{salis2009}
 Howard~M Salis, Ethan~A Mirsky, and Christopher~A Voigt.
 \newblock Automated design of synthetic ribosome binding sites to control
@@ -85,15 +124,35 @@ Zhihong Shao, Peiyi Wang, Qihao Zhu, et~al.
   language models.
 \newblock \emph{arXiv preprint arXiv:2402.03300}, 2024.
 
+\bibitem[Skalse et~al.(2022)Skalse, Howe, Krasheninnikov, and
+  Krueger]{skalse2022goodhart}
+Joar Skalse, Nikolaus H.~R. Howe, Dmitrii Krasheninnikov, and David Krueger.
+\newblock Defining and characterizing reward hacking.
+\newblock \emph{Advances in Neural Information Processing Systems}, 35, 2022.
+
 \bibitem[Stark et~al.(2024)Stark, Jing, Wang, et~al.]{stark2024dirichlet}
 Hannes Stark, Bowen Jing, Chenyu Wang, et~al.
 \newblock Dirichlet diffusion score model for biological sequence generation.
 \newblock \emph{International Conference on Machine Learning}, 2024.
 
+\bibitem[Stiennon et~al.(2020)Stiennon, Ouyang, Wu, Ziegler, Lowe, Voss,
+  Radford, Amodei, and Christiano]{stiennon2020summarization}
+Nisan Stiennon, Long Ouyang, Jeffrey Wu, Daniel~M. Ziegler, Ryan Lowe, Chelsea
+  Voss, Alec Radford, Dario Amodei, and Paul~F. Christiano.
+\newblock Learning to summarize with human feedback.
+\newblock \emph{Advances in Neural Information Processing Systems}, 33, 2020.
+
 \bibitem[Taskiran et~al.(2024)Taskiran, Spanier, et~al.]{taskiran2024cre}
 Ibrahim~I Taskiran, Katina~I Spanier, et~al.
 \newblock Cell-type-directed design of synthetic enhancers.
 \newblock \emph{Nature}, 626:\penalty0 212--220, 2024.
+
+\bibitem[Wei et~al.(2022)Wei, Bosma, Zhao, Guu, Yu, Lester, Du, Dai, and
+  Le]{wei2022flan}
+Jason Wei, Maarten Bosma, Vincent Zhao, Kelvin Guu, Adams~Wei Yu, Brian Lester,
+  Nan Du, Andrew~M. Dai, and Quoc~V. Le.
+\newblock Finetuned language models are zero-shot learners.
+\newblock \emph{International Conference on Learning Representations}, 2022.
 
 \bibitem[Yang et~al.(2024)]{yangheng2024rnagrpo}
 Heng Yang et~al.

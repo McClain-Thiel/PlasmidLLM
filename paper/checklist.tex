@@ -32,7 +32,7 @@ IMPORTANT, please:
 \item {\bf Claims}
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
-    \item[] Justification: The abstract and introduction clearly articulate the testbed role of plasmids for controllable DNA generation, the shift from predictive to instruction-following models via GRPO with automated rewards, the dual viability and prompt-fidelity evaluation axes, and key quantitative results (59.6\% plausibility, 62.4\% conditional accuracy). Limitations (detection ceilings, lack of wet-lab validation, data bias) are explicitly discussed in the Introduction, Experiments, and Discussion sections. Claims are supported by experiments in Sections~\ref{sec:eval}--\ref{sec:experiments} and archived evaluation results.
+    \item[] Justification: The abstract and introduction clearly articulate the testbed role of plasmids for controllable DNA generation, the shift from predictive to instruction-following models via GRPO with automated rewards, the dual viability and prompt-fidelity evaluation axes, and key quantitative results (plausibility $56.8\% \to 59.6\%$, prompt fidelity $35.5\% \to 41.6\%$, composite useful-plasmid rate $38.7\% \to 48.5\%$, and best-of-$K{=}4$ $78.9\% \to 89.7\%$). Limitations (detection ceilings, lack of wet-lab validation, data bias, non-uniform soft-token controllability) are explicitly discussed in the Introduction, Experiments, and Discussion sections. Claims are supported by experiments in Sections~\ref{sec:eval}--\ref{sec:experiments} and archived evaluation results.
     \item[] Guidelines: See above.
 
 \item {\bf Limitations}
@@ -105,19 +105,19 @@ IMPORTANT, please:
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
-    \item[] Justification: Methods (Section~\ref{sec:methods}), Experimental Setup (Section~\ref{sec:eval}), and Appendix (Table~\ref{tab:hyperparams}) provide full details on the dataset (108,448 Addgene plasmids), tokenizer, 19.3M model architecture, pretraining (15,000 steps, AdamW, cosine LR), GRPO ($G=8$, KL $\beta=0.3$, alignment and binary motif scorers), inference, baselines, temperatures, alignment thresholds, and evaluation pipeline.
+    \item[] Justification: Methods (Section~\ref{sec:methods}), Experimental Setup (Section~\ref{sec:eval}), and Appendix (Table~\ref{tab:hyperparams}) provide full details on the dataset (108,448 Addgene plasmids), tokenizer, 19.3M model architecture, pretraining (65{,}000 steps, AdamW, cosine LR, peak $3\times10^{-4}$), GRPO ($G{=}8$, KL $\beta{=}0.5$, pLannotate composite reward against the motif registry), inference, baselines, temperatures, alignment thresholds, and evaluation pipeline.
     \item[] Guidelines: See above.
 
 \item {\bf Experiment statistical significance}
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
-    \item[] Answer: \answerNA{}
-    \item[] Justification: Large fixed evaluations ($n=1000$ viability, 50-prompt conditional with best-of-3) from deterministic pipelines. KS p-values and full counts/hit rates are reported in tables in Section~\ref{sec:experiments}. No multiple random seeds or error bars are required for the main claims.
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The paired $n{=}1{,}000$ evaluation reports Wilson $95\%$ confidence intervals on all rates, paired bootstrap $95\%$ CIs on deltas, and McNemar $p$-values on all binary paired comparisons (plausibility, fidelity at every threshold, best-of-$K$ at $K\in\{1,2,4\}$). Four independent seeds per model are used for the best-of-$K$ analysis and to confirm plausibility run-to-run standard deviation ($\approx 1$ pp). The per-sequence fidelity CI is bootstrapped over the $996$ prompts that contain at least one hard token; the per-category hit-rate CIs are Wilson intervals on token-pooled counts, with the non-independence of tokens within a prompt explicitly flagged in Section~\ref{sec:eval}.
     \item[] Guidelines: See above.
 
 \item {\bf Experiments compute resources}
     \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources (type of compute workers, memory, time of execution) needed to reproduce the experiments?
     \item[] Answer: \answerYes{}
-    \item[] Justification: Methods and Appendix specify A100-40GB GPU usage: pretraining $\sim$8 hours, GRPO $\sim$7 hours, generation $\sim$46 min for 1,000 sequences. Full configs and scripts are in the repository.
+    \item[] Justification: Methods and Appendix specify compute: pretraining $\sim$35 hours on $1{\times}$A100-40GB ($65{,}000$ steps), GRPO post-training $\sim$17 hours on a single GPU (Anyscale), generation $\sim$46 min for $1{,}000$ sequences, and the full evaluation pipeline (pLannotate + Prodigal + dustmasker + downstream metrics) on the $1{,}000$-sequence eval in approximately two hours on a single machine. Full configs and scripts are in the repository.
     \item[] Guidelines: See above.
     
 \item {\bf Code of ethics}
