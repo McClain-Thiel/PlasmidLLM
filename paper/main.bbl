@@ -1,9 +1,15 @@
-\begin{thebibliography}{26}
+\begin{thebibliography}{32}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[{Addgene}(2024)]{addgene2024}
+{Addgene}.
+\newblock Addgene: The nonprofit plasmid repository.
+\newblock \url{https://www.addgene.org}, 2024.
+\newblock Accessed: 2026-03-01.
 
 \bibitem[Alamdari et~al.(2023)Alamdari, Thakkar, van~den Berg,
   et~al.]{alamdari2023evodiff}
@@ -17,6 +23,12 @@ Garyk Brixi, Matthew~G Durrant, Jerome Ku, et~al.
 \newblock Genome modeling and design across all domains of life with {Evo}~2.
 \newblock \emph{bioRxiv}, 2025.
 \newblock 2025.02.18.638918.
+
+\bibitem[Brown and Irber(2016)]{brown2016sourmash}
+C~Titus Brown and Luiz Irber.
+\newblock {sourmash}: a library for {MinHash} sketching of {DNA}.
+\newblock \emph{Journal of Open Source Software}, 1\penalty0 (5):\penalty0 27,
+  2016.
 
 \bibitem[Chen et~al.(2024)]{chen2024leonine}
 Zicheng Chen et~al.
@@ -37,6 +49,14 @@ Hugo Dalla-Torre, Liam Gonzalez, Javier Mendoza-Revilla, et~al.
 \newblock The nucleotide transformer: Building and evaluating robust foundation
   models for human genomics.
 \newblock \emph{Nature Methods}, 21:\penalty0 1--11, 2024.
+
+\bibitem[Hyatt et~al.(2010)Hyatt, Chen, LoCascio, Land, Larimer, and
+  Hauser]{hyatt2010prodigal}
+Doug Hyatt, Gwo-Liang Chen, Philip~F. LoCascio, Miriam~L. Land, Frank~W.
+  Larimer, and Loren~J. Hauser.
+\newblock Prodigal: prokaryotic gene recognition and translation initiation
+  site identification.
+\newblock \emph{BMC Bioinformatics}, 11\penalty0 (1):\penalty0 119, 2010.
 
 \bibitem[Jain et~al.(2022)Jain, Bengio, Hernandez-Garcia,
   et~al.]{jain2022gflownet}
@@ -67,6 +87,12 @@ Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy
 \newblock Let's verify step by step.
 \newblock \emph{International Conference on Learning Representations}, 2024.
 
+\bibitem[Lorenz et~al.(2011)Lorenz, Bernhart, Honer~zu Siederdissen,
+  et~al.]{lorenz2011viennarna}
+Ronny Lorenz, Stephan~H Bernhart, Christian Honer~zu Siederdissen, et~al.
+\newblock {ViennaRNA} package 2.0.
+\newblock \emph{Algorithms for Molecular Biology}, 6:\penalty0 26, 2011.
+
 \bibitem[Madani et~al.(2023)Madani, Krause, Greene, et~al.]{madani2023progen}
 Ali Madani, Ben Krause, Eric~R Greene, et~al.
 \newblock Large language models generate functional protein sequences across
@@ -78,6 +104,13 @@ Matthew~J McGuffie and Jeffrey~E Barrick.
 \newblock {pLannotate}: engineered plasmid annotation.
 \newblock \emph{Nucleic Acids Research}, 49\penalty0 (W1):\penalty0 W516--W522,
   2021.
+
+\bibitem[Nakamura et~al.(2000)Nakamura, Gojobori, and
+  Ikemura]{nakamura2000kazusa}
+Yasukazu Nakamura, Takashi Gojobori, and Toshimichi Ikemura.
+\newblock Codon usage tabulated from international dna sequence databases:
+  status for the year 2000.
+\newblock \emph{Nucleic Acids Research}, 28\penalty0 (1):\penalty0 292, 2000.
 
 \bibitem[Nguyen et~al.(2023)Nguyen, Poli, Faber, et~al.]{nguyen2024hyenadna}
 Eric Nguyen, Michael Poli, Matthew Faber, et~al.
@@ -123,6 +156,13 @@ Zhihong Shao, Peiyi Wang, Qihao Zhu, et~al.
 \newblock {DeepSeekMath}: Pushing the limits of mathematical reasoning in open
   language models.
 \newblock \emph{arXiv preprint arXiv:2402.03300}, 2024.
+
+\bibitem[Sharp and Li(1987)]{sharp1987cai}
+Paul~M. Sharp and Wen-Hsiung Li.
+\newblock The codon adaptation index--a measure of directional synonymous codon
+  usage bias, and its potential applications.
+\newblock \emph{Nucleic Acids Research}, 15\penalty0 (3):\penalty0 1281--1295,
+  1987.
 
 \bibitem[Skalse et~al.(2022)Skalse, Howe, Krasheninnikov, and
   Krueger]{skalse2022goodhart}
