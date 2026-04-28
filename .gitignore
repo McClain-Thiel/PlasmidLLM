@@ -62,3 +62,8 @@ checkpoints/
 
 # MLflow
 mlruns/
+
+# Local audit + tooling artifacts (not tracked)
+.paper-audit/
+.claude/
+notebooks/__marimo__/
