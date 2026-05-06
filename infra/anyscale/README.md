@@ -88,7 +88,7 @@ anyscale job logs --id <JOB_ID>
 anyscale job list
 ```
 
-Training metrics are logged to wandb at https://wandb.ai/mcclain/PlasmidLLM.
+Training metrics are logged to wandb at https://wandb.ai/<entity>/PlasmidLLM.
 
 ## Architecture
 
@@ -115,7 +115,7 @@ See `post_training/configs/grpo_plannotate_anyscale.py`:
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Model | `McClain/PlasmidLM-kmer6` | 19.3M param dense transformer |
+| Model | `<org>/PlasmidLM-kmer6` | 19.3M param dense transformer |
 | Algorithm | GRPO | Group Relative Policy Optimization |
 | Scorer | MotifScorer (combined) | CIGAR-based motif alignment |
 | Steps | 1000 | ~100 checkpoints at every=100 |

@@ -59,7 +59,7 @@ Built and launched the single-token binary motif curriculum training pipeline en
 - Checkpoints saved every 100 steps to S3 + final checkpoint.
 
 **Links:**
-- W&B run (v1): https://wandb.ai/mcclain/PlasmidLLM/runs/apb93zow
+- W&B run (v1): https://wandb.ai/<entity>/PlasmidLLM/runs/apb93zow
 - Anyscale job: https://console.anyscale.com/jobs/prodjob_hqrkwgqiualwbwjk91zvgdst99
 - S3 checkpoints: `s3://anyscale-production-data-vm-us-east-1-f7164253/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm/checkpoints/grpo_binary_motif/`
 
@@ -108,7 +108,7 @@ Hit two issues during launch:
 
 **Links:**
 - Anyscale job (v2 L40S): https://console.anyscale.com/jobs/prodjob_i5ymtkxjs9i17el39tijf3nln2
-- W&B run (v2): project https://wandb.ai/mcclain/PlasmidLLM, run name `grpo_binary_motif_1tok_v2`
+- W&B run (v2): project https://wandb.ai/<entity>/PlasmidLLM, run name `grpo_binary_motif_1tok_v2`
 - S3 checkpoints (v2): `s3://anyscale-production-data-vm-us-east-1-f7164253/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm/checkpoints/grpo_binary_motif_v2/`
 
 ### Open questions
@@ -121,4 +121,4 @@ Hit two issues during launch:
 
 - Monitor v2 run to completion (~20 hours from now).
 - If reward > 0.8, generate 2-token curriculum data (`--max-tokens 2`) and plan next stage.
-- Consider uploading best checkpoint to HuggingFace as `McClain/PlasmidLM-kmer6-binary-motif-1tok`.
+- Consider uploading best checkpoint to HuggingFace as `<org>/PlasmidLM-kmer6-binary-motif-1tok`.

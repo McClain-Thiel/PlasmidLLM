@@ -4,8 +4,8 @@ Analysis notebooks for PlasmidLLM evaluation and ablations.
 
 ## Files
 
-- `base_vs_grpo_analysis.py` — **marimo** notebook. Compares pre-GRPO (`McClain/PlasmidLM-kmer6`)
-  vs post-GRPO (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) generations: bootstrap CIs, Wilson
+- `base_vs_grpo_analysis.py` — **marimo** notebook. Compares pre-GRPO (`<org>/PlasmidLM-kmer6`)
+  vs post-GRPO (`<org>/PlasmidLM-kmer6-GRPO-plannotate`) generations: bootstrap CIs, Wilson
   intervals, paired McNemar on prompt-level viability, per-category breakdowns, and best-of-$K$
   rejection sampling (the paper's headline figure).
 - `soft_token_conditioning.py` — **marimo** notebook. Asks whether the base model conditions on

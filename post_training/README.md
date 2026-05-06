@@ -34,9 +34,8 @@ The actor never imports an algorithm. The algorithm never subclasses the actor. 
 post_training/
 ├── config.py           # PostTrainingConfig dataclass
 ├── configs/
-│   ├── grpo_plannotate_anyscale.py     # produced the released HF model
-│   ├── grpo_plannotate_anyscale_v2.py  # tighter KL / 2x GPUs variant
-│   ├── grpo_plannotate_v3_anyscale.py  # adds length penalty
+│   ├── grpo_plannotate_anyscale.py             # produced the released checkpoint
+│   ├── grpo_plannotate_v3_anyscale.py          # adds length penalty, longer schedule
 │   └── grpo_plannotate_curriculum_anyscale.py  # motif→plannotate curriculum variant
 ├── common/
 │   ├── model.py        # ModelActor — Ray remote GPU worker
@@ -79,7 +78,7 @@ from post_training.config import PostTrainingConfig
 
 config = PostTrainingConfig(
     # Model
-    model="McClain/PlasmidLM-kmer6-MoE",
+    model="<org>/PlasmidLM-kmer6-MoE",
     bf16=True,
     num_actors=2,
 
@@ -157,8 +156,7 @@ python -m post_training.runners.run post_training/configs/my_run.py
 
 | Config | Algorithm | Scorer | Model | Purpose |
 |--------|-----------|--------|-------|---------|
-| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) |
-| `grpo_plannotate_anyscale_v2.py` | GRPO | plannotate | PlasmidLM-kmer6 | kl_coef=0.3, lower warmup, 2×L40S variant |
+| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`<org>/PlasmidLM-kmer6-GRPO-plannotate`) |
 | `grpo_plannotate_v3_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Adds length penalty to discourage sequence drift |
 | `grpo_plannotate_curriculum_anyscale.py` | GRPO | plannotate | binary_motif checkpoint | Motif→plannotate curriculum variant (ablation) |
 
@@ -228,7 +226,7 @@ Multiple actors train in parallel with gradient averaging:
 
 ```python
 config = PostTrainingConfig(
-    model="McClain/PlasmidLM-kmer6-MoE",
+    model="<org>/PlasmidLM-kmer6-MoE",
     num_actors=4,
     ...
 )
@@ -357,7 +355,7 @@ The point of this design is combinatorial flexibility. Once you trust your score
 ```python
 config = PostTrainingConfig(
     algorithm="grpo",                    # ← swap algorithm
-    model="McClain/PlasmidLM-kmer6-MoE", # ← swap model
+    model="<org>/PlasmidLM-kmer6-MoE", # ← swap model
     scorer="motif",                       # ← swap scorer
     ...
 )
@@ -374,7 +372,7 @@ for algo in ["grpo", "ppo"]:
         cfg = PostTrainingConfig(
             algorithm=algo,
             scorer=scorer,
-            model="McClain/PlasmidLM-kmer6-MoE",
+            model="<org>/PlasmidLM-kmer6-MoE",
             wandb_project="PlasmidLLM",
             wandb_run_name=f"{algo}_{scorer}",
             ...

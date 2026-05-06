@@ -47,7 +47,7 @@ def benchmark(model, input_ids, max_new_tokens, gen_fn, warmup=1, runs=3, label=
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="McClain/PlasmidLM", help="HF model ID or local path")
+    parser.add_argument("--model", default="<org>/PlasmidLM", help="HF model ID or local path")
     parser.add_argument("--max-new-tokens", type=int, default=3000)
     parser.add_argument("--compiled-generate", action="store_true", help="Use generate_compiled (CUDA graph + static KV cache)")
     parser.add_argument("--half", action="store_true", help="Use fp16 precision")

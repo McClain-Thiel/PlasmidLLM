@@ -1,4 +1,5 @@
 from post_training.common.losses import LOSS_REGISTRY, register_loss
+from post_training.common.model import ModelActor
 from post_training.common.objects import (
     BackwardResult,
     EntropyResult,
@@ -7,8 +8,3 @@ from post_training.common.objects import (
     LogProbResult,
 )
 from post_training.common.utils import average_gradients, timer, wandb_log
-
-try:
-    from post_training.common.model import ModelActor
-except ImportError:
-    pass

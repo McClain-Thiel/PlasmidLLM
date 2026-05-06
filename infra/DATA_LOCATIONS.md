@@ -74,9 +74,9 @@ aws s3 sync \
 
 ## HuggingFace Hub
 
-- `McClain/PlasmidLM-kmer6` — 19.3M param dense transformer
-- `McClain/PlasmidLM-kmer6-MoE` — MoE variant
+- `<org>/PlasmidLM-kmer6` — 19.3M param dense transformer
+- `<org>/PlasmidLM-kmer6-MoE` — MoE variant
 
 ## Monitoring
 
-- WandB: https://wandb.ai/mcclain/PlasmidLLM
+- WandB: https://wandb.ai/<entity>/PlasmidLLM

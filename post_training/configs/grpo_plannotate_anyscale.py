@@ -18,7 +18,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 config = PostTrainingConfig(
     # Model — dense kmer6, start from v2 motif checkpoint
-    model="McClain/PlasmidLM-kmer6",
+    model="<org>/PlasmidLM-kmer6",
     bf16=True,
     num_actors=1,
 

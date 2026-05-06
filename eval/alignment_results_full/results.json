@@ -1,5 +1,5 @@
 {
-  "McClain/PlasmidLM-kmer6": {
+  "<org>/PlasmidLM-kmer6": {
     "0.0": {
       "tps": 944.4908322923791,
       "scores": [
@@ -21665,7 +21665,7 @@
       ]
     }
   },
-  "McClain/PlasmidLM-kmer6-MoE": {
+  "<org>/PlasmidLM-kmer6-MoE": {
     "0.0": {
       "tps": 833.4910668469761,
       "scores": [

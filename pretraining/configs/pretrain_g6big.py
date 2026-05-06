@@ -46,5 +46,5 @@ config = PretrainingConfig(
 
     # MLflow — Databricks hosted tracking
     mlflow_tracking_uri="databricks",
-    mlflow_experiment="/Users/mcclain.thiel@gmail.com/plasmid_pretrain_v4",
+    mlflow_experiment="/plasmid_pretrain_v4",
 )

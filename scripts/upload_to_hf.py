@@ -1,7 +1,7 @@
 """Upload pretrained PlasmidLM checkpoint to HuggingFace Hub.
 
 Usage:
-    python scripts/upload_to_hf.py /path/to/checkpoint --repo McClain/PlasmidLM
+    python scripts/upload_to_hf.py /path/to/checkpoint --repo <org>/PlasmidLM
 """
 
 from __future__ import annotations
@@ -90,8 +90,8 @@ This is a **base pretrained model**. It has learned the statistical patterns of 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-model = AutoModelForCausalLM.from_pretrained("McClain/PlasmidLM", trust_remote_code=True)
-tokenizer = AutoTokenizer.from_pretrained("McClain/PlasmidLM", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("<org>/PlasmidLM", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("<org>/PlasmidLM", trust_remote_code=True)
 
 # Generate a plasmid with kanamycin resistance and ColE1 origin
 prompt = "<BOS><AMR_KANAMYCIN><ORI_COLE1><SEP>"
@@ -139,7 +139,7 @@ We are actively running REINFORCE with KL penalty to improve motif placement acc
 2. **Smooth length reward**: Hard reward=0 cliff for sequences <100bp caused irrecoverable mode collapse. Replaced with smooth ramp over [0, 500bp].
 3. **EMA reward baseline**: Batch-mean baseline gave zero advantage when all rewards collapsed. EMA (decay=0.95) retains memory of previous rewards, providing negative advantage signal to push away from degenerate outputs.
 
-**MLflow tracking**: Experiments logged to Databricks MLflow at experiment path `/Users/mcclain.thiel@gmail.com/tracking/PlasmidLLM`.
+**MLflow tracking**: Experiments logged to Databricks MLflow.
 
 ## Limitations
 
@@ -151,11 +151,11 @@ We are actively running REINFORCE with KL penalty to improve motif placement acc
 ## Citation
 
 ```bibtex
-@misc{thiel2026plasmidlm,
+@misc{anonymous2026plasmidlm,
   title={PlasmidLM: Language Models for Conditional Plasmid DNA Generation},
-  author={Thiel, McClain},
+  author={Anonymous},
   year={2026},
-  url={https://huggingface.co/McClain/PlasmidLM}
+  url={https://huggingface.co/<org>/PlasmidLM}
 }
 ```
 """
@@ -176,7 +176,7 @@ UPLOAD_FILES = [
 def main():
     parser = argparse.ArgumentParser(description="Upload PlasmidLM to HuggingFace Hub")
     parser.add_argument("checkpoint", type=Path, help="Path to checkpoint directory")
-    parser.add_argument("--repo", default="McClain/PlasmidLM", help="HuggingFace repo ID")
+    parser.add_argument("--repo", required=True, help="HuggingFace repo ID")
     parser.add_argument("--private", action="store_true", help="Make repo private")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded")
     args = parser.parse_args()

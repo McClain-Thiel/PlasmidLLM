@@ -8,7 +8,7 @@ Usage::
 
     # In a config file (post_training/configs/grpo_motif.py):
     config = PostTrainingConfig(
-        model="McClain/PlasmidLM-kmer6-MoE",
+        model="<org>/PlasmidLM-kmer6-MoE",
         algorithm="grpo",
         scorer="motif",
         ...

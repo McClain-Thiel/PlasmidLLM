@@ -6,7 +6,7 @@ Saves FASTA + parquet with per-sequence metadata.
 
 Usage:
     python eval/scripts/generate.py \
-        --model McClain/PlasmidLM-kmer6-GRPO-plannotate \
+        --model <org>/PlasmidLM-kmer6-GRPO-plannotate \
         --n 100 --temperature 0.85 --top-p 0.95 \
         --output-dir eval/runs/firstlight_20260408
 """
@@ -32,7 +32,7 @@ def clean_dna(raw: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="McClain/PlasmidLM-kmer6-GRPO-plannotate")
+    parser.add_argument("--model", default="<org>/PlasmidLM-kmer6-GRPO-plannotate")
     parser.add_argument("--prompts", default="data/training_pairs_v4.parquet",
                         help="Parquet with 'prompt' column. Sampled without replacement "
                              "unless --prompts-verbatim is set.")

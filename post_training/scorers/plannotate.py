@@ -433,7 +433,11 @@ class PlannotateScorer(Scorer):
         ]
         if extra_args:
             cmd.extend(extra_args)
-        subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"{program} failed (exit {result.returncode}): {result.stderr.strip()}"
+            )
 
     # --------------------------------------------------- single-query BLAST
     def _run_blast(

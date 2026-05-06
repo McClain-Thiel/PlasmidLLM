@@ -4,7 +4,7 @@
 
 **11:30** — Phase 0 started. Installed sourmash 4.3, minimap2 2.30, lightgbm 4.6, shap 0.49, sklearn 1.7 into plannotate conda env. Fixed sourmash pkg_resources issue (setuptools<70).
 
-**11:45** — Downloaded Addgene-500 reference panel from HF bucket `McClain/PlasmidRL/reference/`. 500 plasmids, 418 not in training set. Pre-computed: length, GC, longest ORF, MFE density, 3-mer freqs.
+**11:45** — Downloaded Addgene-500 reference panel from HF bucket `<org>/PlasmidRL/reference/`. 500 plasmids, 418 not in training set. Pre-computed: length, GC, longest ORF, MFE density, 3-mer freqs.
 
 **11:50** — Pinned tool versions in `eval/config/environment.yml`. pLannotate 1.2.2 (snapgene DB 2021-11), prodigal 2.6.3, BLAST+ 2.17.0.
 
@@ -30,9 +30,9 @@
 
 **15:05** — Extended sweep to test temp=0.3 and 0.5. Coverage plateaus at ~70% across 0.3-0.7, but temp=0.7 has longest sequences (7.6kb, closest to Addgene ref 7.5kb) and fewest <1kb failures. Keeping temp=0.7.
 
-**15:15** — Uploaded all Phase 0+1 data to HF bucket `McClain/PlasmidLMEval` (81 files, 17.2 MB). Used `hf buckets sync` CLI — the Python `batch_bucket_files()` API silently fails for non-README files.
+**15:15** — Uploaded all Phase 0+1 data to HF bucket `<org>/PlasmidLMEval` (81 files, 17.2 MB). Used `hf buckets sync` CLI — the Python `batch_bucket_files()` API silently fails for non-README files.
 
-**15:20** — Phase 2 started: generating 1000 plasmids with winning config (temp=0.7, top_p=0.95, top_k=50, no rep penalty). Model: `McClain/PlasmidLM-kmer6-GRPO-plannotate`.
+**15:20** — Phase 2 started: generating 1000 plasmids with winning config (temp=0.7, top_p=0.95, top_k=50, no rep penalty). Model: `<org>/PlasmidLM-kmer6-GRPO-plannotate`.
 
 **16:06** — Phase 2 complete. 1000 sequences in 46.3 min (21.6 seq/min). Mean length 7.2kb, median 9.0kb, 50.6% GC, 48.7% EOS rate, 5.6% <1kb. Baselines also annotated: random 5.2% hit rate, shuffled 7.6%, real 100%.
 

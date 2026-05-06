@@ -16,8 +16,8 @@ The story in one paragraph
 --------------------------
 Two 1000-sequence generation runs using identical prompts and identical sampling
 config (temp=0.7, top_p=0.95, top_k=50, seed=42, max_new_tokens=3000) — one from
-the pretrained base `McClain/PlasmidLM-kmer6`, one from the post-trained
-`McClain/PlasmidLM-kmer6-GRPO-plannotate`. The GRPO model's headline HF-card
+the pretrained base `<org>/PlasmidLM-kmer6`, one from the post-trained
+`<org>/PlasmidLM-kmer6-GRPO-plannotate`. The GRPO model's headline HF-card
 claim of "+8.8 pp overall hit rate" was on a 50-prompt best-of-3 setup with no
 matched paired baseline. Replicating under matched paired sampling at n=1000:
 the plausibility delta is not significant, the prompt-fidelity delta is, and
@@ -26,7 +26,7 @@ the composite "plausible AND on-prompt" metric is where GRPO's real gain lives
 
 Data provenance
 ---------------
-Both runs live under `hf://buckets/McClain/PlasmidLMEval/runs/`:
+Both runs live under `hf://buckets/<org>/PlasmidLMEval/runs/`:
     grpo_plannotate_full_20260408/     (generated 2026-04-08, annotated 2026-04-09)
     base_kmer6_matched_20260420_1303/  (generated + annotated 2026-04-20)
 
@@ -86,7 +86,7 @@ def _():
     from pathlib import Path
     import subprocess
 
-    BUCKET = "McClain/PlasmidLMEval"
+    BUCKET = "<org>/PlasmidLMEval"
     GRPO_RUN = "runs/grpo_plannotate_full_20260408"
     BASE_RUN = "runs/base_kmer6_matched_20260420_1303"
 
@@ -121,9 +121,9 @@ def _():
 
     # The notebook reads from a local cache of bucket files. To populate it:
     #
-    #   hf buckets sync hf://buckets/McClain/PlasmidLMEval/runs/grpo_plannotate_full_20260408 \
+    #   hf buckets sync hf://buckets/<org>/PlasmidLMEval/runs/grpo_plannotate_full_20260408 \
     #       /tmp/plasmidlm_eval_cache/runs__grpo_plannotate_full_20260408
-    #   hf buckets sync hf://buckets/McClain/PlasmidLMEval/runs/base_kmer6_matched_20260420_1303 \
+    #   hf buckets sync hf://buckets/<org>/PlasmidLMEval/runs/base_kmer6_matched_20260420_1303 \
     #       /tmp/plasmidlm_eval_cache/runs__base_kmer6_matched_20260420_1303
     #   (same pattern for the three sweep cells)
     #

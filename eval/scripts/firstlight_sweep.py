@@ -6,7 +6,7 @@ pLannotate eval on a sample, and picks the best config.
 
 Usage:
     python eval/scripts/firstlight_sweep.py \
-        --model McClain/PlasmidLM-kmer6-GRPO-plannotate \
+        --model <org>/PlasmidLM-kmer6-GRPO-plannotate \
         --n-per-cell 50 \
         --output-dir eval/runs/firstlight_20260408
 """
@@ -95,7 +95,7 @@ def quick_plannotate(fasta_path: str, output_dir: str, workers: int = 4) -> list
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="McClain/PlasmidLM-kmer6-GRPO-plannotate")
+    parser.add_argument("--model", default="<org>/PlasmidLM-kmer6-GRPO-plannotate")
     parser.add_argument("--n-per-cell", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--output-dir", required=True)

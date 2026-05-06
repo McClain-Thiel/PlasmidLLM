@@ -21,7 +21,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 config = PostTrainingConfig(
     # Model — overridden by RESUME_FROM_S3 in entrypoint
-    model="McClain/PlasmidLM-kmer6",
+    model="<org>/PlasmidLM-kmer6",
     bf16=True,
     num_actors=1,
 

@@ -2,6 +2,18 @@
 
 Language models for synthetic plasmid DNA sequence generation with reinforcement learning.
 
+> **Anonymized for double-blind review.** Author names, institutional
+> affiliations, and personal identifiers have been removed or replaced with
+> placeholders (`<org>`, `<entity>`). Some references to externally-hosted
+> artifacts — HuggingFace model repos (`<org>/PlasmidLM-*`), Weights & Biases
+> projects, and Databricks MLflow experiments — point at namespaces controlled
+> by the original authors. These URLs will not resolve as written; reviewers
+> should treat them as opaque identifiers. Code paths that load these
+> checkpoints (e.g. `from_pretrained("<org>/PlasmidLM-kmer6")`) require
+> substituting a real namespace before running. Everything else (training,
+> eval, scorers, tests) is self-contained and runs on the data shipped under
+> `data/`.
+
 ## Goal
 
 Train a transformer to generate plasmid DNA sequences that contain specific functional elements — antibiotic resistance genes, origins of replication, promoters, reporters, and other components — specified through a categorical token prompt. The model first learns plasmid structure through pretraining on real plasmid sequences, then is refined with reinforcement learning using sequence alignment rewards to improve motif fidelity.
@@ -40,23 +52,21 @@ PlasmidLLM/
 │   └── runners/                  End-to-end training scripts
 │
 ├── eval/                     Evaluation framework
-│   ├── models/                   Model quality metrics (recall, precision, per-component)
+│   ├── eval_plannotate.py        End-to-end checkpoint eval (BLAST-based)
 │   ├── scorers/                  Scorer validation (separation, AUROC, degradation)
-│   └── plasmidspace/             Visualization UI (TBD)
+│   ├── scripts/                  Generation, metrics, figures
+│   └── plasmidspace/             Visualization UI
 │
-├── evaluation/               Evaluation scripts (alignment, plannotate, checkpoint)
 ├── scripts/                  Utilities (generation, motif registry, HF upload)
-├── notebooks/                Analysis notebooks
-├── data/                     Sample data + vocabularies (see data/README.md)
-├── tests/                    Unit and integration tests
-└── notes/                    Working notes
+├── notebooks/                Analysis notebooks (marimo)
+├── data/                     Vocabulary + special tokens (see data/README.md)
+└── tests/                    Unit and integration tests
 ```
 
 Each stage has its own README with detailed documentation:
 - **[pretraining/README.md](pretraining/README.md)** — Model architecture, tokenization, config reference
 - **[post_training/README.md](post_training/README.md)** — Actor/algorithm design, scorers, multi-actor training
 - **[eval/README.md](eval/README.md)** — Evaluation axes, metrics, scorer pass criteria
-- **[data/README.md](data/README.md)** — Data formats, file inventory, known issues
 
 ## Model
 

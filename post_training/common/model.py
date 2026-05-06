@@ -550,7 +550,15 @@ class ModelActor:
         """Sync a local directory to S3 (runs on worker node)."""
         import subprocess
         log.info("Syncing %s → %s", local_dir, s3_dest)
-        subprocess.call(["aws", "s3", "sync", local_dir, s3_dest, "--quiet"])
+        result = subprocess.run(
+            ["aws", "s3", "sync", local_dir, s3_dest, "--quiet"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"aws s3 sync {local_dir} → {s3_dest} failed "
+                f"(exit {result.returncode}): {result.stderr.strip()}"
+            )
 
     def load_checkpoint(self, path: str) -> None:
         """Resume from a checkpoint saved by save_checkpoint()."""

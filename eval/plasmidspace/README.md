@@ -9,13 +9,13 @@ app_file: app.py
 pinned: false
 python_version: "3.10"
 models:
-  - McClain/PlasmidLM-kmer6-GRPO-plannotate
+  - <org>/PlasmidLM-kmer6-GRPO-plannotate
 ---
 
 # PlasmidSpace
 
 Design synthetic plasmids from natural language using
-[PlasmidLM](https://huggingface.co/McClain/PlasmidLM-kmer6-GRPO-plannotate).
+[PlasmidLM](https://huggingface.co/<org>/PlasmidLM-kmer6-GRPO-plannotate).
 
 ## How it works
 

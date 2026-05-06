@@ -71,3 +71,6 @@ mlruns/
 .paper-audit/
 .claude/
 notebooks/__marimo__/
+claims.yaml
+research.toml
+paper/

@@ -8,7 +8,7 @@ Causal language modeling on plasmid DNA sequences. Trains a transformer decoder 
 # Smoke test (100 steps, verifies pipeline end-to-end)
 python -m pretraining.train pretraining/configs/p4_smoke_test.py
 
-# Full training run (reproduces the released `McClain/PlasmidLM-kmer6` base checkpoint)
+# Full training run (reproduces the released `<org>/PlasmidLM-kmer6` base checkpoint)
 python -m pretraining.train pretraining/configs/p4_kmer6_s3.py
 ```
 
