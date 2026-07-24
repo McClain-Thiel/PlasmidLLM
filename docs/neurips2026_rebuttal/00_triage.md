@@ -48,7 +48,9 @@ Measured today, against code and artifacts. ✅ helps us · ⚠️ hurts us · �
 | ⚠️ **F2** | Reward is **recall-only**: `geo_mean(found quality) × (0.5 + 0.5·recall)`. No precision term. | pSXh W2 correct, not arguable. |
 | ⚠️ **F3** | 95/5 train/val split is pair-level random. | Taints only the val-loss table entry. |
 | ✅ **F10** | A disjoint benchmark **is** constructible: 120,449 unseen plasmids; built and running. | Enables M2.0. |
-| ✅ **F14** | **On the disjoint benchmark the GRPO effect replicates exactly: +9.8 pp** (30.0% → 39.8%), McNemar p=2e-06, CI [+5.8,+13.8]. Paper reported +9.8 pp. Absolute levels ~9 pp lower. | Contamination did **not** manufacture the gain. Best result of the triage. |
+| ✅ **F14** | **GRPO effect replicates exactly on the disjoint benchmark: +9.8 pp** (30.0% → 39.8%), p=2e-06. Paper reported +9.8 pp. | Contamination did **not** manufacture the gain. |
+| ✅ **F15** | Best-of-4 replicates too: 67.0% → 80.5% (paper 78.9% → 89.7%). | Both headline numbers survive an honest benchmark. |
+| ⚠️ **F16** | **Model does not compose.** On novel component combinations, full-spec satisfaction is **0%** (as is retrieval); substituted-in component produced 4.6% of the time, reverts to the removed one 40.2%. GRPO gain still replicates (+9.8pp @ T=0.5). | Cannot claim compositional/de-novo design. Narrows the contribution. |
 
 **The spine of the response**, if the pending number supports it:
 
@@ -624,6 +626,43 @@ lower — consistent with F14. The best-of-K story survives the honest benchmark
 model-plus-annotation-ranker system, not one-pass reliability. And the ~95% retrieval
 baseline (F13) sits above even best-of-4, so best-of-K does not change the metric-saturation
 picture.
+
+### F16 — ⚠️ The model does **not** compose: novel-combination benchmark. **MEASURED — negative, and important.**
+
+The experiment McClain most wanted, and the honest answer is not the one we hoped for.
+Built 500 prompts by substituting one well-supported component into a real held-out
+plasmid's set, verified absent from every training plasmid ("pUC19 backbone but
+chloramphenicol instead of ampicillin"). By construction retrieval is capped at F=1.0 → 0%.
+
+| panel | viable | F≥0.5 | **F=1.0 (full spec)** |
+|---|---|---|---|
+| retrieval (ceiling) | — | 100.0% | **0.0%** (by construction) |
+| PlasmidLM base | 44.6% | 16.6% | **0.0%** [0.0, 0.8] |
+| PlasmidLM GRPO | 61.0% | 26.4% | **0.0%** [0.0, 0.8] |
+
+**The capability claim I set this up to make does not hold.** It is not "only the generative
+model satisfies novel specs" — *neither* does, at full satisfaction. The model scores 0%.
+
+The mechanism, and it is the sharpest diagnostic in the whole triage: when asked for the
+substituted-**in** component, the model produces it **4.6%** of the time (base 3.4%), and
+**reverts to the substituted-out component 40.2%** of the time (base 28.8%). It defaults to
+the familiar training co-occurrence instead of following the instruction. That is the same
+long-tail / co-occurrence failure the paper already documents (§5.3), now shown directly for
+composition — the model has learned plasmid *templates*, not a compositional grammar over parts.
+
+**What survives:** the GRPO gain replicates even here. useful@T=0.5: 16.6% → 26.4%, +9.8 pp,
+CI [+4.8, +14.8], McNemar p=2e-4 — identical in size to F14/F15. GRPO robustly improves
+partial satisfaction on novel specs; it does not buy compositional generalization.
+
+**Consequence for the rebuttal — this is load-bearing.** F16 means we **cannot** claim
+compositional / de-novo design as a demonstrated capability. The honest contribution narrows
+to: *promptable generation of novel sequence realising component specifications that resemble
+training combinations*, with GRPO improving partial faithfulness. Retrieval beats us on
+in-distribution specs (F13); we beat retrieval on nothing measured so far at full
+satisfaction. The paper's designer-facing framing ("hand the model a spec, get the
+construct") is not supported for novel specs. Better we found this now.
+
+Scripts: `experiments/neurips_rebuttal/novel_combination.py`, `score_novel.py`.
 
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
