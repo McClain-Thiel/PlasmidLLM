@@ -17,11 +17,13 @@
 > and in all three run configs behind the paper's numbers. **This is a factual error in the
 > Methods and must be corrected regardless of what happens with this submission.**
 >
-> **F9:** but the model is *not* regurgitating. BLASTed against the training corpus,
-> generations are **half as likely to be near-duplicates as genuinely held-out real Addgene
-> plasmids are** (10.7% vs 21.1% among viable generations). F0 is a Methods-description and
-> re-run problem, **not** evidence that the headline numbers are memorisation-inflated —
-> and F9 is a strong, ready-made answer to meta-review point 2.
+> **F9:** but the model is *not* regurgitating. Pooling *all* 20,644 training plasmids and
+> allowing arbitrary fragment stitching, the median generation has only **43%** of its length
+> explained by the training corpus — versus **81%** for a genuinely held-out real Addgene
+> plasmid. The gap holds inside every length bin. F0 is a Methods-description and re-run
+> problem, **not** evidence that the headline numbers are memorisation-inflated, and F9
+> answers the memorisation half of meta-review point 2 outright.
+> ⚠️ The *retrieval* half (M2.3) is still untested and is the bigger risk — run it early.
 
 The meta-review is the decision function, and it is *not* a summary of the three reviews —
 it is a sharper argument than any of them. It reduces to one claim:
@@ -228,43 +230,74 @@ baseline* if we want one.
 
 ### F9 — ✅ The model is **not** regurgitating training plasmids. **MEASURED — best rebuttal asset we have.**
 
-Ran the analysis the AC actually asked for ("quantify train–test similarity at plasmid and
-backbone levels"), and the one that beats the sourmash objection. BLASTN of each generation
-against all 20,644 training plasmids; for each query take the single best subject by
-**union-of-HSP query coverage** (summing raw HSP lengths double-counts overlaps and repeats).
+Ran the analysis the AC asked for ("quantify train–test similarity") and the one that beats
+the sourmash objection. BLASTN of every generation against all 20,644 training plasmids.
 
-**The control is what makes this interpretable.** Generated plasmids share long stretches
-with training plasmids because plasmids are assembled from a shared parts catalogue — a raw
-coverage number means nothing alone. Real Addgene plasmids **not** in the training corpus
-(418 of the 500-plasmid reference panel; the other 82 are in training and were excluded)
-give the reference for how similar a genuinely novel plasmid looks.
+**Primary statistic — mosaic coverage.** For each query, the union of *all* HSPs against
+*any* training plasmid: what fraction of this sequence can the training corpus explain, if
+you are allowed to stitch fragments from arbitrarily many training plasmids? This is
+deliberately the most generous possible test of Dok5 W2, whose hypothesis is explicitly a
+multi-plasmid "BLAST-stitched mosaic of training fragments."
 
-| Panel | n | median best-match coverage | near-dup (cov≥90%, id≥99%) | derivative (cov≥75%, id≥95%) |
+**The control is what makes it interpretable.** Plasmids are built from a shared parts
+catalogue, so raw coverage means nothing alone. Real Addgene plasmids **not** in training
+(418 of the 500-plasmid panel; the other 82 are in training and were excluded) set the bar
+for how similar a genuinely novel plasmid looks.
+
+| Panel | n | median mosaic coverage | mean | ≥90% covered |
 |---|---|---|---|---|
-| **Generated (all)** | 997 | 0.528 | **6.9%** | 19.5% |
-| **Generated (viable only)** | 596 | 0.639 | **10.7%** | 31.2% |
-| **Real held-out Addgene** | 418 | 0.789 | **21.1%** | 56.2% |
+| **Generated** | 1,000 | **0.429** | 0.418 | 7.3% |
+| **Real held-out Addgene** | 418 | **0.809** | 0.774 | 25.4% |
 
-**Generations are roughly half as likely to be near-duplicates of the training corpus as
-genuine held-out Addgene deposits are**, and the gap holds on the strictest comparison
-(viable-only, which removes the objection that short/degenerate failures deflate the
-generated numbers — the 154 no-hit generations are shorter, median 4.9 kb vs 9.0 kb).
+**The median generation has only ~43% of its length explained by the entire training corpus,
+versus ~81% for a genuine held-out Addgene deposit.** If generations were stitched from
+training fragments, this number would approach 1.0. It is less than half the value for real
+novel plasmids. **The mosaic hypothesis is rejected.**
 
-This directly rebuts meta-review point 2 ("Substantial overlap would undermine both the
-held-out rates and the claim of de novo generation") and Dok5 W2 (BLAST-stitched-mosaic
-hypothesis). The mosaic hypothesis predicts generations should look *more* training-derived
-than real plasmids; they look considerably less.
+Length-stratified, since generations skew longer (median 9.0 kb vs 7.2 kb real) — the gap
+holds inside every bin, so it is not a length artefact:
+
+| length bin | gen n | gen median | real n | real median |
+|---|---|---|---|---|
+| 2–4 kb | 52 | 0.206 | 41 | 0.866 |
+| 4–6 kb | 139 | 0.721 | 87 | 0.818 |
+| 6–8 kb | 152 | 0.598 | 123 | 0.804 |
+| 8–10 kb | 584 | 0.350 | 88 | 0.821 |
+
+<details><summary>Secondary: best-single-subject stats (⚠️ length-confounded — do not lead with these)</summary>
+
+| Panel | n | median best-match cov | near-dup (cov≥90%, id≥99%) | derivative (cov≥75%, id≥95%) |
+|---|---|---|---|---|
+| Generated (all) | 997 | 0.523 | 7.0% | 19.5% |
+| Generated (viable only) | 596 | 0.637 | 10.9% | 31.2% |
+| Real held-out Addgene | 418 | 0.790 | 21.1% | 56.5% |
+
+**Do not put the 7.0% / 21.1% near-duplicate contrast in the response.** near-dup is gated at
+≥90% coverage *by a single subject*, and generations are longer (9.0 kb) than typical training
+plasmids (~7.5 kb) — so a long generation is *mechanically* capped below 90% single-subject
+coverage however derivative it is. That biases the gap in our favour for a reason unrelated to
+novelty, and Dok5 ("checked the math carefully", confidence 5) is exactly the reader who would
+catch it. The mosaic table above is the length-robust version and says the same thing more
+strongly.
+
+Viable-only subset uses `tier3_essentials.parquet`; index alignment (`gen_i` ↔ generations row
+*i*) **verified by sequence join, 1000/1000**, not assumed.
+</details>
 
 Script: [`eval/scripts/train_similarity_blast.py`](../../eval/scripts/train_similarity_blast.py)
-(reproduces the whole table; `blastn` only, ~1 min on 8 threads).
+— reproduces every table above end-to-end; `blastn` only, ~2 min on 8 threads. Numbers here are
+that script's output. BLAST's `max_target_seqs` tie-breaking makes the third decimal vary
+slightly between runs; nothing load-bearing moves.
 
 **Caveats to state honestly in the rebuttal:**
-- This is nucleotide-identity novelty, **not** functional novelty. It shows the model is not
-  copying; it does not show the constructs work.
-- Best-*single*-subject coverage does not exclude a mosaic stitched from *several* training
-  plasmids. A multi-subject tiling version would close that gap and is worth adding (M2.2b).
-- Run on the current (F0-contaminated) benchmark. Re-run on the M2.0 outputs — though if
-  anything a disjoint pool should push generated similarity *lower*.
+- Nucleotide-identity novelty, **not** functional novelty. Shows the model is not copying;
+  does not show the constructs work.
+- **F9 answers only the memorisation half of meta-review point 2.** The retrieval half
+  (M2.3) is untested and is the one that can actually sink the contribution — a model that
+  isn't copying can still be matched by simple prompt-Jaccard retrieval, which would make
+  "de novo generation" hollow regardless of F9. **Run M2.3 before drafting.**
+- Run on the current (F0-contaminated) benchmark; re-run on M2.0 outputs, though a disjoint
+  pool should if anything push generated similarity lower.
 
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
@@ -311,8 +344,7 @@ critique). Plan is to *measure* it.
 |---|---|---|---|---|
 | **M2.0** | 🚨 **Re-run the benchmark on a genuinely plasmid-ID-disjoint prompt pool.** Regenerate n=1,000 for base and GRPO, re-annotate, recompute useful-plasmid rate and best-of-K. Report the new numbers whatever they are. | 🔴🔴 | **WINDOW**, blocked on C1′ | Consequence of F0. Generation is ~46 min/1,000 per the eval log; pLannotate ~35 min at 8 workers. The compute is the easy part — **C1′ is the blocker.** Nothing else in M2 matters until this is settled. |
 | M2.1 | **Correct the benchmark description in §3.1** and every "held-out" claim (abstract, §4, conclusion). Also state that the 95/5 train/val split is pair-level (F3). | 🔴 | **NOW** | Required regardless of rebuttal outcome. This is a correction, not a rebuttal tactic. |
-| M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, with real held-out Addgene as control. Generations are ~half as likely to be near-duplicates as genuine held-out deposits. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
-| M2.2b | **Multi-subject mosaic version:** greedily tile each generation with HSPs from *any* number of training plasmids; report fraction explained. | 🟠 | **WINDOW** | Closes the one gap F9 leaves — Dok5's "BLAST-stitched mosaic of training fragments" is a multi-plasmid hypothesis and F9 tests only the best single plasmid. Same BLAST output, more analysis. |
+| M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, mosaic (multi-subject) coverage, real held-out Addgene control, length-stratified. Median generation 43% explained vs 81% for real held-out. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to the memorisation half of M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
 | M2.3 | **Nearest-neighbour retrieval baseline.** For each eval prompt, return the training plasmid with max prompt-token-set Jaccard; score it through the identical viability/faithfulness pipeline. | 🔴 | **WINDOW** | Dok5 W2 + pSXh W4 + meta M3 in one number. No model inference needed — pure retrieval + existing annotation pipeline. If PlasmidLM beats retrieval, that is the paper's missing keystone. **If it doesn't, we need to know now, not in the camera-ready.** |
 | M2.4 | **Backbone/cluster analysis.** MMseqs2 or CD-HIT at 90% nt identity over the 20,644; report cluster-size distribution and BB_* class distribution. | 🟠 | **WINDOW**, blocked on C3/F8 | Dok5 Q1/Q2. Needs a tool install. |
 | M2.5 | Disclose eval-prompt ∩ GRPO-rollout-prompt overlap. | 🟠 | **NOW** | **Answered: 100%** (F0/F5). Number in hand; needs stating, not computing. |
@@ -363,8 +395,8 @@ correction · 9. M2.5 prompt-overlap disclosure · 10. M3.1 reframing pass ·
 11. M1.5 viability recalibration · 12. M3.2 supported-vocabulary table · 13. M3.4/M3.5 prose answers.
 
 **Phase 3 — new analyses on existing artifacts.**
-14. **M1.1 precision/specificity** (highest value-per-hour) · 15. M2.2b mosaic tiling ·
-16. M2.3 retrieval baseline.  (M2.2 ✅ done — F9.)
+14. **M2.3 retrieval baseline** — promoted; the untested half of M2 and the single item most
+able to sink the contribution · 15. **M1.1 precision/specificity** · (M2.2 ✅ done — F9.)
 ⚠️ M1.1, M2.2 and M2.2b should be **re-run on the M2.0 outputs** once those exist; the current
 runs characterise a benchmark we are about to retire.
 

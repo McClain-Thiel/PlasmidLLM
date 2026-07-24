@@ -53,6 +53,43 @@ def union_coverage(intervals: list[tuple[int, int, float]]) -> int:
     return total + cur_end - cur_start + 1
 
 
+def mosaic_coverage(tsv: Path) -> dict[str, tuple[float, int]]:
+    """query -> (fraction of the query covered by the union of HSPs against ANY
+    training plasmid, query_length).
+
+    This is the primary statistic. It tests Dok5 W2 directly — the "BLAST-stitched
+    mosaic of training fragments" hypothesis is about *many* training plasmids, which
+    best-single-subject coverage cannot test.
+
+    It is also the length-robust statistic. Single-subject coverage has a mechanical
+    ceiling: a 9 kb generation cannot reach 90% coverage from one ~7.5 kb training
+    plasmid however derivative it is, which biases single-subject near-duplicate rates
+    downward for the longer generated sequences. Pooling subjects removes that ceiling.
+    """
+    ivs: dict[str, list[tuple[int, int]]] = collections.defaultdict(list)
+    qlen: dict[str, int] = {}
+    with open(tsv) as fh:
+        for line in fh:
+            q, _s, _p, _aln, ql, _sl, qstart, qend, _b = line.rstrip("\n").split("\t")
+            qlen[q] = int(ql)
+            a, b = int(qstart), int(qend)
+            ivs[q].append((min(a, b), max(a, b)))
+
+    out = {}
+    for q, iv in ivs.items():
+        iv.sort()
+        total = 0
+        cur_start, cur_end = iv[0]
+        for a, b in iv[1:]:
+            if a <= cur_end + 1:
+                cur_end = max(cur_end, b)
+            else:
+                total += cur_end - cur_start + 1
+                cur_start, cur_end = a, b
+        out[q] = ((total + cur_end - cur_start + 1) / qlen[q], qlen[q])
+    return out
+
+
 def best_match_per_query(tsv: Path) -> dict[str, tuple[float, float, str]]:
     """query -> (coverage_fraction, length_weighted_identity, best_subject)."""
     hsps: dict[tuple[str, str], list] = collections.defaultdict(list)
@@ -162,14 +199,47 @@ def main() -> None:
                                  {q: v for q, v in gen_best.items() if q in viable},
                                  len(viable)))
 
-    hdr = f"{'panel':<28}{'n':>6}{'no hit':>8}{'med cov':>10}{'near-dup':>10}{'derivative':>12}"
+    # ---- primary result: mosaic coverage, pooled over all training plasmids ----
+    gen_mos = mosaic_coverage(w / "gen_vs_train.tsv")
+    real_mos = mosaic_coverage(w / "real_vs_train.tsv")
+    real_mos = {q: v for q, v in real_mos.items() if q.split("|")[0] not in train_ids}
+
+    gen_lens = [len(s or "") for (s,) in
+                duckdb.sql(f"select sequence from '{args.generations}'").fetchall()]
+    # queries with no HSP at all still count, at coverage 0
+    gen_all = {f"gen_{i}": (gen_mos.get(f"gen_{i}", (0.0, L))[0], L)
+               for i, L in enumerate(gen_lens)}
+
+    print(f"\n{'MOSAIC coverage (union over ALL training plasmids)':<52}"
+          f"{'n':>6}{'median':>9}{'mean':>8}{'>=90%':>8}")
+    print("-" * 83)
+    for label, d, total in [("generated", gen_all, len(gen_all)),
+                            ("real held-out Addgene", real_mos, n_control)]:
+        covs = [v[0] for v in d.values()] + [0.0] * (total - len(d))
+        print(f"{label:<52}{total:>6}{statistics.median(covs):>9.3f}"
+              f"{statistics.mean(covs):>8.3f}{sum(1 for c in covs if c >= .9)/total*100:>7.1f}%")
+
+    print(f"\n{'length-stratified median mosaic coverage':<24}"
+          f"{'gen n':>7}{'gen med':>10}{'real n':>8}{'real med':>10}")
+    print("-" * 59)
+    for lo, hi in [(2, 4), (4, 6), (6, 8), (8, 10), (10, 14)]:
+        gb = [c for c, L in gen_all.values() if lo * 1000 <= L < hi * 1000]
+        rb = [c for c, L in real_mos.values() if lo * 1000 <= L < hi * 1000]
+        if len(gb) >= 15 and len(rb) >= 15:
+            print(f"{f'{lo}-{hi} kb':<24}{len(gb):>7}{statistics.median(gb):>10.3f}"
+                  f"{len(rb):>8}{statistics.median(rb):>10.3f}")
+
+    # ---- secondary: best-single-subject, length-confounded, kept for context ----
+    hdr = f"{'BEST-SINGLE-SUBJECT (length-confounded)':<40}{'n':>6}{'no hit':>8}{'med cov':>10}{'near-dup':>10}{'derivative':>12}"
     print("\n" + hdr)
     print("-" * len(hdr))
     for r in rows:
-        print(f"{r['panel']:<28}{r['n']:>6}{r['no_hit']:>8}{r['median_cov']:>10.3f}"
+        print(f"{r['panel']:<40}{r['n']:>6}{r['no_hit']:>8}{r['median_cov']:>10.3f}"
               f"{r['near_dup_pct']:>9.1f}%{r['derivative_pct']:>11.1f}%")
     print("\nnear-dup = best-match coverage >=90% and identity >=99%")
     print("derivative = coverage >=75% and identity >=95%")
+    print("NOTE: near-dup rates are length-confounded — a generation longer than a typical")
+    print("training plasmid cannot reach 90% coverage from one subject. Prefer the mosaic table.")
 
 
 if __name__ == "__main__":
