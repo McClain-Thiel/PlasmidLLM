@@ -604,6 +604,27 @@ faithfulness. Both need saying; "it's a viability gap" would have been wrong.
 Scripts: [`eval/scripts/build_disjoint_benchmark.py`](../../eval/scripts/build_disjoint_benchmark.py),
 [`eval/scripts/score_disjoint.py`](../../eval/scripts/score_disjoint.py).
 
+### F15 — ✅ Best-of-4 replicates on the disjoint benchmark too. **MEASURED.**
+
+The abstract's second headline (89.7% best-of-4) had no honest version — the disjoint run
+was single-shot only. Generated 3 more seeds for each checkpoint (seeds 43/44/45; the
+single-shot seed 42 is the 4th draw), oracle ranker over K draws, same scoring path.
+
+| K | base | post-GRPO |
+|---|---|---|
+| 1 | 30.0% | 39.8% |
+| 2 | 47.7% | 61.6% |
+| 4 | **67.0%** [64.0, 69.8] | **80.5%** [77.9, 82.8] |
+
+Paper reported 78.9% → 89.7% best-of-4 (base → GRPO). Disjoint gives 67.0% → 80.5%. Same
+shape: GRPO strictly above base at every K (+9.8 to +13.9 pp), absolute levels ~9-12 pp
+lower — consistent with F14. The best-of-K story survives the honest benchmark.
+
+⚠️ Still the same ranker caveat as the paper (pSXh W6): best-of-K evaluates a
+model-plus-annotation-ranker system, not one-pass reliability. And the ~95% retrieval
+baseline (F13) sits above even best-of-4, so best-of-K does not change the metric-saturation
+picture.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
