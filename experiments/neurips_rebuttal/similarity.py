@@ -16,7 +16,7 @@ Real Addgene plasmids that are *not* in the training corpus give the reference
 point for how similar a genuinely novel plasmid looks.
 
 Usage:
-  python eval/scripts/train_similarity_blast.py \\
+  python similarity.py \\
       --train-pairs training_pairs_v4.parquet \\
       --generations runs/grpo_plannotate_full_20260408/generations.parquet \\
       --control addgene_500.fasta \\

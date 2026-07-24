@@ -37,7 +37,7 @@ claim — is unaffected. Faithfulness is defined over hard tokens only in any ca
 omitted classes are outside the metric by construction.
 
 Usage:
-  python eval/scripts/build_disjoint_benchmark.py \\
+  python build_benchmark.py \\
       --plannotate heldout_ann/plannotate_results.json \\
       --metadata metadata.parquet \\
       --pool heldout_2000.csv \\
@@ -48,18 +48,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO))
+import duckdb
+import pandas as pd
 
-import duckdb  # noqa: E402
-import pandas as pd  # noqa: E402
-from scripts.build_motif_registry import (  # noqa: E402
-    MIN_PERCMATCH,
-    feature_to_category_token,
-)
+from common import MIN_PERCMATCH, detect
 
 # Order tokens the way training prompts do, so the prompt string is in-distribution.
 CATEGORY_ORDER = ["VEC", "SP", "COPY", "AMR", "ORI", "PROM", "ELEM", "REPORTER", "TAG"]
@@ -68,17 +62,6 @@ COPY_MAP = {"High Copy": "<COPY_HIGH>", "Low Copy": "<COPY_LOW>"}
 
 def category_of(token: str) -> str:
     return token.strip("<>").split("_")[0]
-
-
-def hard_tokens(features: list[dict]) -> set[str]:
-    out = set()
-    for f in features:
-        if (f.get("percmatch") or 0) < MIN_PERCMATCH or f.get("fragment"):
-            continue
-        m = feature_to_category_token(str(f.get("Feature", "")))
-        if m:
-            out.add(m[0])
-    return out
 
 
 def render(tokens: set[str]) -> str:
@@ -116,7 +99,7 @@ def main() -> None:
 
     rows = []
     for pid in ids:
-        hard = hard_tokens(feats[pid])
+        hard = detect(feats[pid])
         if not hard:
             continue  # faithfulness is undefined without a requested hard token
         toks = set(hard)

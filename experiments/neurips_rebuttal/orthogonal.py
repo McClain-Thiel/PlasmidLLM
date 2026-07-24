@@ -19,7 +19,7 @@ hit belongs to is the id minus its last underscore field.
 
 Usage:
   amrfinder --protein prodigal_proteins.faa --plus -o run_amr.tsv
-  python eval/scripts/orthogonal_amr.py \\
+  python orthogonal.py \\
       --amr base_amr.tsv --generations base_generations.parquet --label base
 """
 
@@ -34,7 +34,7 @@ from pathlib import Path
 
 import duckdb
 
-TOKEN_RE = re.compile(r"<AMR_[A-Z0-9_]+>")
+AMR_TOKEN_RE = re.compile(r"<AMR_[A-Z0-9_]+>")
 
 # AMRFinderPlus element symbol -> the resistance token(s) that symbol satisfies.
 # Sets, not single tokens: aph(3')-II is the classic NeoR/KanR cassette and legitimately
@@ -97,7 +97,7 @@ def main() -> None:
     per_token_req: collections.Counter = collections.Counter()
     per_token_hit: collections.Counter = collections.Counter()
     for i, prompt in enumerate(prompts):
-        req = set(TOKEN_RE.findall(prompt))
+        req = set(AMR_TOKEN_RE.findall(prompt))
         if not req:
             continue
         det = detected.get(f"gen_{i}", set())
