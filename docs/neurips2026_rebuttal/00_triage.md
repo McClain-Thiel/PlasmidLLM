@@ -454,6 +454,57 @@ conceding it is stronger than pretending AMRFinderPlus settles the question.
 
 Script: [`eval/scripts/orthogonal_amr.py`](../../eval/scripts/orthogonal_amr.py).
 
+### F13 — 🚨 A retrieval baseline **saturates** the useful-plasmid rate. **MEASURED — the most serious finding in this triage.**
+
+Dok5 W2 and pSXh W4 both demand the null the paper never ran. Ran it on the new
+plasmid-disjoint benchmark (F10): index each of the 20,583 training plasmids by the union of
+hard tokens across its prompts, retrieve the plasmid maximising Jaccard against the
+requested set, and score **that retrieved plasmid** against the prompt.
+
+Scored two ways, and the fair one is the second:
+
+| retrieval scored by… | mean faithfulness | faithful @ T=0.5 | implied useful rate |
+|---|---|---|---|
+| the plasmid's recorded annotation | 96.2% | 100.0% | 95.0% |
+| **the same pLannotate detector the model faces** | **95.7%** | **100.0%** [99.6, 100.0] | **95.0%** |
+
+I expected the second to be much lower — the model is scored by a lossy detector, so scoring
+retrieval off ground-truth labels would have been an unfair advantage. It isn't: pLannotate
+finds the components reliably in real plasmids, so the fair comparison gives the same answer.
+Useful rate assumes the paper's 95.0% real-panel viability, which is generous by design —
+a null should be steelmanned.
+
+**Nearest-neighbour lookup achieves a ~95% useful-plasmid rate.** The paper reports 48.5%
+single-shot and 89.7% best-of-4. On the paper's own primary metric, retrieving an existing
+Addgene plasmid beats the model.
+
+⚠️ **Do not compare 95.0% against the paper's 48.5% directly.** Prompts in this benchmark
+were derived through the same pLannotate + `percmatch≥95` filter used to score, so tokens the
+detector cannot re-find were never requested (mean 8.64 hard tokens/prompt vs 10.42 in the
+paper's). The detection ceiling here is ~100%, against 71.8% in the paper. The valid
+comparison is **model vs retrieval on this benchmark**, both measured identically — which is
+exactly what M2.0 will produce.
+
+**What this does and does not show.** It does not show the model is worthless. It shows the
+**useful-plasmid rate cannot distinguish design from lookup**, because it contains no novelty
+term. That is a critique of the metric, and it is correct.
+
+**The defensible position combines F13 with F9**, and it is the strongest framing available:
+
+> Retrieval attains ~95% useful rate but returns an existing plasmid — by construction 100%
+> of it is training sequence. PlasmidLM's outputs have a median of 43% explained by the whole
+> training corpus, against 81% for a genuinely novel Addgene deposit (F9). Retrieval wins on
+> component satisfaction and scores zero on novelty; the model produces novel constructs at a
+> faithfulness cost. **Reported alone, the useful-plasmid rate is saturated by a trivial
+> baseline — it needs a novelty axis to mean anything.**
+
+That is a real scientific contribution (the metric, honestly characterised) and it aligns
+with SeFq's advice to lead with the failure analysis. It is also, bluntly, the most that can
+be salvaged: the paper's headline framing does not survive this baseline.
+
+Scripts: [`eval/scripts/retrieval_baseline.py`](../../eval/scripts/retrieval_baseline.py)
+(fast, annotation-free) plus the same-detector rescoring described above.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
@@ -501,7 +552,7 @@ critique). Plan is to *measure* it.
 | **M2.0** | 🚨 **Re-run the benchmark on a genuinely plasmid-ID-disjoint prompt pool.** Regenerate n=1,000 for base and GRPO, re-annotate, recompute useful-plasmid rate and best-of-K. Report the new numbers whatever they are. | 🔴🔴 | **WINDOW**, blocked on C1′ | Consequence of F0. Generation is ~46 min/1,000 per the eval log; pLannotate ~35 min at 8 workers. The compute is the easy part — **C1′ is the blocker.** Nothing else in M2 matters until this is settled. |
 | M2.1 | **Correct the benchmark description in §3.1** and every "held-out" claim (abstract, §4, conclusion). Also state that the 95/5 train/val split is pair-level (F3). | 🔴 | **NOW** | Required regardless of rebuttal outcome. This is a correction, not a rebuttal tactic. |
 | M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, mosaic (multi-subject) coverage, real held-out Addgene control, length-stratified. Median generation 43% explained vs 81% for real held-out. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to the memorisation half of M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
-| M2.3 | **Nearest-neighbour retrieval baseline.** For each eval prompt, return the training plasmid with max prompt-token-set Jaccard; score it through the identical viability/faithfulness pipeline. | 🔴 | **WINDOW** | Dok5 W2 + pSXh W4 + meta M3 in one number. No model inference needed — pure retrieval + existing annotation pipeline. If PlasmidLM beats retrieval, that is the paper's missing keystone. **If it doesn't, we need to know now, not in the camera-ready.** |
+| M2.3 | ✅ **DONE — see F13.** Retrieval reaches **95.0%** implied useful rate on the disjoint benchmark, scored through the same detector. **It does not beat retrieval.** | 🔴🔴 | **COMPLETE** | We needed to know now, and now we know. Forces the reframing in F13: report novelty alongside useful rate, or the metric is saturated by lookup. |
 | M2.4 | **Backbone/cluster analysis.** MMseqs2 or CD-HIT at 90% nt identity over the 20,644; report cluster-size distribution and BB_* class distribution. | 🟠 | **WINDOW**, blocked on C3/F8 | Dok5 Q1/Q2. Needs a tool install. |
 | M2.5 | Disclose eval-prompt ∩ GRPO-rollout-prompt overlap. | 🟠 | **NOW** | **Answered: 100%** (F0/F5). Number in hand; needs stating, not computing. |
 
