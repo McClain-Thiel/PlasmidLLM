@@ -11,13 +11,17 @@
 
 ## 0. Executive read
 
-> ## 🚨 STOP — read F0 first.
-> **The 1,000-prompt evaluation benchmark was drawn from the pretraining corpus, not from
-> the 22,400-pair holdout.** All 1,000 prompts appear verbatim in
-> `training_pairs_v4.parquet`. This is verified in the eval code and in all three run
-> configs behind the paper's numbers. The paper's Section 3.1 description of the benchmark
-> does not match what the code did. **This is a factual error in the paper and it must be
-> corrected regardless of what happens with this submission.** See §1/F0.
+> ## Read F0 and F9 together — one bad, one good.
+> **F0:** the 1,000-prompt evaluation benchmark was drawn from the pretraining corpus, not
+> from the 22,400-pair holdout the paper describes. Verified in `eval/scripts/generate.py`
+> and in all three run configs behind the paper's numbers. **This is a factual error in the
+> Methods and must be corrected regardless of what happens with this submission.**
+>
+> **F9:** but the model is *not* regurgitating. BLASTed against the training corpus,
+> generations are **half as likely to be near-duplicates as genuinely held-out real Addgene
+> plasmids are** (10.7% vs 21.1% among viable generations). F0 is a Methods-description and
+> re-run problem, **not** evidence that the headline numbers are memorisation-inflated —
+> and F9 is a strong, ready-made answer to meta-review point 2.
 
 The meta-review is the decision function, and it is *not* a summary of the three reviews —
 it is a sharper argument than any of them. It reduces to one claim:
@@ -30,16 +34,24 @@ that "if these reservations are substantially correct, resolving them would like
 more than rebuttal-stage clarification" — i.e. they have pre-committed to reject unless we
 produce *evidence*, not prose.
 
-**The reservations are substantially correct on the points that matter, and the split
-concern in particular is materially worse than any reviewer realised.** F0 means the
-rebuttal cannot be organised around defending the headline numbers. The realistic options
-are (a) re-run the benchmark on genuinely held-out prompts inside the window and report
-whatever it says, or (b) withdraw/major-revise. Both are legitimate; (a) is worth
-attempting because the infrastructure is fast (~46 min for 1,000 generations per the eval
-log) — but only if a genuinely disjoint prompt pool can be constructed (see C1).
+**The reservations are substantially correct on the points that matter** — the reward really
+is recall-only, the appendix really is empty, and the benchmark really was drawn from the
+training corpus. But the *inference* the AC and Dok5 draw from the split problem — that the
+headline rates are retrieval/memorisation artefacts — **is measurably false** (F9). That
+asymmetry is the rebuttal's spine:
 
-There are still **four factual corrections** we can make with confidence, and they are
-worth making — but they are now secondary to F0.
+> Concede the process errors completely and without hedging. Contest the memorisation
+> conclusion with the BLAST control, which is stronger evidence than anything currently in
+> the paper.
+
+Plan: (1) fix the Methods description and re-run the benchmark on a genuinely disjoint pool
+(fast — ~46 min for 1,000 generations per the eval log, once a pool exists); (2) lead the
+rebuttal with F9 plus the precision metric (M1.1); (3) bank the four free factual
+corrections. Withdrawal is **not** indicated on current evidence.
+
+Residual risk: the M2.0 re-run could still move the rates. F9 makes a collapse unlikely —
+the model is not leaning on seen sequences — but the numbers should be in hand before any
+response language is finalised.
 
 ---
 
@@ -83,29 +95,31 @@ All three run families behind every headline number share one identical 1,000-pr
 and **100% of it was seen during pretraining.** Because GRPO also rolled out over the whole
 of `training_pairs_v4.parquet` (F5), 100% was seen during post-training too.
 
-Worse, the prompts are largely plasmid-specific:
+⚠️ **The overlap table above is corroborating, not diagnostic — do not lead with it.** There
+are only 5,124 unique prompts in the entire corpus, so *any* 1,000-prompt sample, including
+one drawn from a legitimately plasmid-disjoint holdout, would also show ~100% verbatim
+overlap. A sharp AC will make exactly that point. **The dispositive evidence is the run
+config and `generate.py`, not the overlap count.**
+
+Context on prompt specificity (same caveat applies):
 
 | Training plasmids carrying that exact prompt | eval prompts |
 |---|---|
-| **exactly 1** | **530** |
+| exactly 1 | 530 |
 | 2 | 173 |
 | 3–5 | 162 |
 | ≥6 | 135 |
 
-For **530 of 1,000** benchmark prompts, pretraining contained exactly one plasmid with that
-token set — i.e. a near-unique (prompt → sequence) mapping the model was directly trained on.
-
-**What this does and does not mean.** It does *not* prove the outputs are memorised: the
+**What this does and does not mean.** It does *not* show the outputs are memorised — the
 model still emits a multi-kb sequence, and prompts are unordered token sets, not answers.
-Testing memorisation is a separate measurement (M2.2). What it *does* mean is that the
-paper's stated evaluation protocol is not the protocol that was run, so the phrase
-"held-out 1,000-prompt benchmark" — which appears in the abstract, Section 4, and the
-conclusion — is not currently supported. Meta-review point 2 and Dok5 W5 were right, and
-neither reviewer knew how right.
+That is a separate measurement, and **F9 ran it: the answer is no.** What F0 *does* mean is
+that the paper's stated evaluation protocol is not the protocol that was run, so
+"held-out 1,000-prompt benchmark" — in the abstract, Section 4, and the conclusion — is not
+currently supported.
 
-**Implication:** every headline number (48.5% single-shot, 89.7% best-of-4, and the base-vs-GRPO
-deltas) is measured on seen prompts and needs re-running on a genuinely disjoint pool before
-it can be defended. This dominates the rest of the triage.
+**Implication:** the Methods description must be corrected and the benchmark re-run on a
+disjoint pool (M2.0) for the claim to be literally true. Per F9, expect the rates to move
+little.
 
 ### F1 — Appendix A.1 is a literal `% TODO` block. **CONFIRMED.**
 `main.tex:640-650` in `~/Projects/PhD/plasmidlm-paper` is a commented-out outline
@@ -212,6 +226,46 @@ conditional models that happen to be called "PlasmidGPT" in their model cards
 checks would treat that as misrepresentation. They are legitimate as an *additional internal
 baseline* if we want one.
 
+### F9 — ✅ The model is **not** regurgitating training plasmids. **MEASURED — best rebuttal asset we have.**
+
+Ran the analysis the AC actually asked for ("quantify train–test similarity at plasmid and
+backbone levels"), and the one that beats the sourmash objection. BLASTN of each generation
+against all 20,644 training plasmids; for each query take the single best subject by
+**union-of-HSP query coverage** (summing raw HSP lengths double-counts overlaps and repeats).
+
+**The control is what makes this interpretable.** Generated plasmids share long stretches
+with training plasmids because plasmids are assembled from a shared parts catalogue — a raw
+coverage number means nothing alone. Real Addgene plasmids **not** in the training corpus
+(418 of the 500-plasmid reference panel; the other 82 are in training and were excluded)
+give the reference for how similar a genuinely novel plasmid looks.
+
+| Panel | n | median best-match coverage | near-dup (cov≥90%, id≥99%) | derivative (cov≥75%, id≥95%) |
+|---|---|---|---|---|
+| **Generated (all)** | 997 | 0.528 | **6.9%** | 19.5% |
+| **Generated (viable only)** | 596 | 0.639 | **10.7%** | 31.2% |
+| **Real held-out Addgene** | 418 | 0.789 | **21.1%** | 56.2% |
+
+**Generations are roughly half as likely to be near-duplicates of the training corpus as
+genuine held-out Addgene deposits are**, and the gap holds on the strictest comparison
+(viable-only, which removes the objection that short/degenerate failures deflate the
+generated numbers — the 154 no-hit generations are shorter, median 4.9 kb vs 9.0 kb).
+
+This directly rebuts meta-review point 2 ("Substantial overlap would undermine both the
+held-out rates and the claim of de novo generation") and Dok5 W2 (BLAST-stitched-mosaic
+hypothesis). The mosaic hypothesis predicts generations should look *more* training-derived
+than real plasmids; they look considerably less.
+
+Script: [`eval/scripts/train_similarity_blast.py`](../../eval/scripts/train_similarity_blast.py)
+(reproduces the whole table; `blastn` only, ~1 min on 8 threads).
+
+**Caveats to state honestly in the rebuttal:**
+- This is nucleotide-identity novelty, **not** functional novelty. It shows the model is not
+  copying; it does not show the constructs work.
+- Best-*single*-subject coverage does not exclude a mosaic stitched from *several* training
+  plasmids. A multi-subject tiling version would close that gap and is worth adding (M2.2b).
+- Run on the current (F0-contaminated) benchmark. Re-run on the M2.0 outputs — though if
+  anything a disjoint pool should push generated similarity *lower*.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
@@ -225,11 +279,11 @@ any clustering number in the rebuttal.**
 | # | Question | Why it's load-bearing | Status |
 |---|---|---|---|
 | ~~C1~~ | ~~Is the 22,400-pair holdout disjoint at plasmid level?~~ | Superseded by **F0** — the holdout was never used for the benchmark at all. | **RESOLVED (badly)** |
-| **C1′** | **Can a genuinely disjoint prompt pool be built at all?** Requires locating `holdout_full_prompts.parquet` (Anyscale bucket, per `infra/anyscale/run_anyscale.py:102`) **and** verifying its plasmid IDs are disjoint from the 20,644 in `training_pairs_v4.parquet`. Fallback: construct one ourselves by holding out plasmid IDs and re-deriving prompts. | Decides whether the honest re-run is even available, and therefore whether we rebut or withdraw. **Now the single most load-bearing unknown.** | Not started. Needs Anyscale creds, or copies on g6-big/p4 at `/opt/dlami/nvme/data/` |
+| **C1′** | **Can a genuinely disjoint prompt pool be built at all?** Requires locating `holdout_full_prompts.parquet` (Anyscale bucket, per `infra/anyscale/run_anyscale.py:102`) **and** verifying its plasmid IDs are disjoint from the 20,644 in `training_pairs_v4.parquet`. Fallback: construct one ourselves by holding out plasmid IDs and re-deriving prompts. | Decides whether the honest re-run is available in-window. **The main remaining unknown**, though F9 means it is no longer existential. | Not started. Needs Anyscale creds, or copies on g6-big/p4 at `/opt/dlami/nvme/data/` |
 | ~~C2~~ | ~~Eval-prompt ∩ GRPO-rollout-prompt overlap?~~ | **Answered: 100%.** All 1,000 eval prompts are in `training_pairs_v4.parquet`, over which GRPO rolled out. | **RESOLVED** |
 | **C3** | Are `hmmer` + Pfam, or AMRFinderPlus, installable/available on g6-big or p4 in-window? | Gates whether the orthogonal-annotator answer (Dok5 Q3, meta M1) is deliverable. | Not checked |
 | **C4** | Which paper source is the NeurIPS submission? | `~/Projects/PhD/plasmidlm-paper` is on branch **`icml-workshop`** with 65 uncommitted insertions to `main.tex` and untracked `icml2026.sty`. The tree is being repurposed for an ICML workshop submission. Editing `main.tex` here risks clobbering that work. | **Needs your call** — see §5 |
-| **C5** | **Given F0 — rebut or withdraw?** | F0 is not a presentation problem. If the re-run is not feasible in-window, the rebuttal cannot honestly defend the headline numbers, and a response that stays quiet about F0 would be a misrepresentation. | **Needs your call** — see §5 |
+| **C5** | Given F0+F9, confirm the rebuttal strategy: concede process errors fully, contest the memorisation inference with F9. | F0 must be disclosed either way; F9 means disclosure is survivable rather than fatal. | **Needs your sign-off** — see §5 |
 
 ---
 
@@ -257,7 +311,8 @@ critique). Plan is to *measure* it.
 |---|---|---|---|---|
 | **M2.0** | 🚨 **Re-run the benchmark on a genuinely plasmid-ID-disjoint prompt pool.** Regenerate n=1,000 for base and GRPO, re-annotate, recompute useful-plasmid rate and best-of-K. Report the new numbers whatever they are. | 🔴🔴 | **WINDOW**, blocked on C1′ | Consequence of F0. Generation is ~46 min/1,000 per the eval log; pLannotate ~35 min at 8 workers. The compute is the easy part — **C1′ is the blocker.** Nothing else in M2 matters until this is settled. |
 | M2.1 | **Correct the benchmark description in §3.1** and every "held-out" claim (abstract, §4, conclusion). Also state that the 95/5 train/val split is pair-level (F3). | 🔴 | **NOW** | Required regardless of rebuttal outcome. This is a correction, not a rebuttal tactic. |
-| M2.2 | **BLASTN every generation against the 20,644 training plasmids**; report max identity × coverage distribution, and the fraction of each generation covered by its single best training match. | 🔴 | **WINDOW** | This is what the AC actually means by "quantify train–test similarity" and what beats the sourmash objection ("does not resolve near-duplicate or sub-plasmid reuse"). `blastn` is available locally; `full_sequences.parquet` (420 MB) is on S3. **Strongest single answer to M2.** |
+| M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, with real held-out Addgene as control. Generations are ~half as likely to be near-duplicates as genuine held-out deposits. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
+| M2.2b | **Multi-subject mosaic version:** greedily tile each generation with HSPs from *any* number of training plasmids; report fraction explained. | 🟠 | **WINDOW** | Closes the one gap F9 leaves — Dok5's "BLAST-stitched mosaic of training fragments" is a multi-plasmid hypothesis and F9 tests only the best single plasmid. Same BLAST output, more analysis. |
 | M2.3 | **Nearest-neighbour retrieval baseline.** For each eval prompt, return the training plasmid with max prompt-token-set Jaccard; score it through the identical viability/faithfulness pipeline. | 🔴 | **WINDOW** | Dok5 W2 + pSXh W4 + meta M3 in one number. No model inference needed — pure retrieval + existing annotation pipeline. If PlasmidLM beats retrieval, that is the paper's missing keystone. **If it doesn't, we need to know now, not in the camera-ready.** |
 | M2.4 | **Backbone/cluster analysis.** MMseqs2 or CD-HIT at 90% nt identity over the 20,644; report cluster-size distribution and BB_* class distribution. | 🟠 | **WINDOW**, blocked on C3/F8 | Dok5 Q1/Q2. Needs a tool install. |
 | M2.5 | Disclose eval-prompt ∩ GRPO-rollout-prompt overlap. | 🟠 | **NOW** | **Answered: 100%** (F0/F5). Number in hand; needs stating, not computing. |
@@ -293,7 +348,7 @@ Ordered by (value × feasibility) ÷ time, and by what unblocks decisions.
 1. **C1′** — locate `holdout_full_prompts.parquet` and verify plasmid-ID disjointness, or
    build a disjoint pool ourselves. *This gates M2.0, and M2.0 gates whether a rebuttal is
    possible at all.* Everything else is secondary.
-2. **C5** — decide rebut vs withdraw once C1′ is known.
+2. **C5** — sign off on the concede-process / contest-memorisation strategy.
 3. **C3** — check hmmer/Pfam/AMRFinderPlus availability on g6-big/p4.
 4. **C4** — decide the paper-source question (§5).
 
@@ -308,18 +363,19 @@ correction · 9. M2.5 prompt-overlap disclosure · 10. M3.1 reframing pass ·
 11. M1.5 viability recalibration · 12. M3.2 supported-vocabulary table · 13. M3.4/M3.5 prose answers.
 
 **Phase 3 — new analyses on existing artifacts.**
-14. **M1.1 precision/specificity** (highest value-per-hour) · 15. M2.2 BLASTN train-similarity ·
-16. M2.3 retrieval baseline.
-⚠️ M1.1 and M2.2 should be **re-run on the M2.0 outputs** once those exist; running them on the
-current generations characterises a benchmark we are about to retire.
+14. **M1.1 precision/specificity** (highest value-per-hour) · 15. M2.2b mosaic tiling ·
+16. M2.3 retrieval baseline.  (M2.2 ✅ done — F9.)
+⚠️ M1.1, M2.2 and M2.2b should be **re-run on the M2.0 outputs** once those exist; the current
+runs characterise a benchmark we are about to retire.
 
 **Phase 4 — needs setup.**
 17. M1.2 orthogonal annotator · 18. M3.3 PlasmidGPT comparison · 19. M2.4 clustering.
 
 **Phase 5 — assemble.** Draft per-reviewer responses; global revision; PDF diff.
 
-> **Run before you promise.** M2.0, M1.1, M2.2, and M2.3 can each come back *against* us —
-> M2.0 most of all. Get the numbers before committing to any language in the response.
+> **Run before you promise.** M2.0, M1.1, M2.2b and M2.3 can each come back *against* us. Get
+> the numbers before committing to any language in the response. (This rule already paid for
+> itself once: it caught that F0's severity was overstated before the withdraw framing reached you.)
 
 ---
 
