@@ -17,6 +17,12 @@
 > and in all three run configs behind the paper's numbers. **This is a factual error in the
 > Methods and must be corrected regardless of what happens with this submission.**
 >
+> **F0b:** and the designated 22,400-pair holdout **would not have helped** — it is *also*
+> not plasmid-disjoint. All 22,392 of its distinct sequences appear in
+> `training_pairs_v4.parquet`; 20,562 of the 20,588 plasmids behind it were in pretraining.
+> It is a pair-level reshuffle of the same plasmids. **No plasmid-level holdout ever existed
+> in the pipeline.**
+>
 > **F9:** but the model is *not* regurgitating. Pooling *all* 20,644 training plasmids and
 > allowing arbitrary fragment stitching, the median generation has only **43%** of its length
 > explained by the training corpus — versus **81%** for a genuinely held-out real Addgene
@@ -122,6 +128,60 @@ currently supported.
 **Implication:** the Methods description must be corrected and the benchmark re-run on a
 disjoint pool (M2.0) for the claim to be literally true. Per F9, expect the rates to move
 little.
+
+### F0b — 🚨 The 22,400-pair holdout is not plasmid-disjoint either. **CONFIRMED. C1′ RESOLVED.**
+
+Retrieved `holdout_full_prompts.parquet` from the Anyscale bucket
+(`s3://anyscale-production-data-vm-us-east-1-f7164253/org_.../plasmid_llm/data/`; our AWS
+creds do reach it). 22,400 rows — matches the paper. Schema is
+`prompt, sequence, has_hard_tokens, reward_motifs, n_tokens`; **no `plasmid_id`**, so
+disjointness was tested on sequence identity and via a join back to `full_sequences.parquet`.
+
+| check | result |
+|---|---|
+| distinct sequences in holdout | 22,392 |
+| …that also appear in `training_pairs_v4.parquet` | **22,392 (100%)** |
+| distinct plasmid IDs behind the holdout | 20,588 |
+| …that were also in pretraining | **20,562 (99.9%)** |
+
+The "holdout" is the **same plasmid set with different annotation-subset prompts** — a
+pair-level reshuffle. So the paper's "disjoint from pretraining" (`main.tex:202`) is wrong
+about the holdout file itself, independently of F0.
+
+**This answers Dok5's Q1 exactly** ("Is the 22,400-pair held-out pool disjoint at the
+plasmid-ID level, Addgene-deposit level, or only the pair index?"). Answer: **only the pair
+index.** They guessed the worst case and the worst case is what happened.
+
+**Consequence:** no plasmid-level holdout has ever existed in this project, so M2.0 means
+*building* one, not *finding* one. Which is feasible — see F10.
+
+### F10 — ✅ A genuinely disjoint benchmark is constructible. **CONFIRMED.**
+
+`full_sequences.parquet` holds **141,093 distinct plasmids**; pretraining used **20,644**.
+That leaves **120,449 plasmids the model has never seen**, 123,967 rows of them in the
+2–20 kb range (median 7.0 kb). Source split: 115,120 addgene, 38,546 user.
+
+So M2.0 is a construction job, and the compute exists: **`g6-big2` (g6.4xlarge, L4 23 GB) is
+already running** and configured — `plannotate` conda env present, and
+`/opt/dlami/nvme/plasmid_venv/bin/python` has torch 2.9.1+cu128 / transformers 4.57.6 with
+CUDA live. Reachable as `ssh g6-big` (52.54.249.131). Marginal cost of using it ≈ £0.
+
+⚠️ **Prompt derivation needs a fresh pLannotate run, not `annotations.parquet`.** I tried
+deriving prompts directly from the existing annotation dump using the repo's own
+`feature_to_category_token()` (`scripts/build_motif_registry.py:136`) with its documented
+filters (`percmatch ≥ 95`, exclude fragments). Validated against training plasmids whose
+prompts we know:
+
+| filter | n | exact set match | recall | precision |
+|---|---|---|---|---|
+| percmatch ≥95, excl. fragments | 14,593 | 1.4% | **76.4%** | **99.9%** |
+
+Precision 99.9% means the mapping is *sound* — every derived token is real. But recall 76.4%
+means `annotations.parquet` is an incomplete dump (it covers only 14,606 of the 20,644
+training plasmids). Deriving prompts from it would systematically **under-request** tokens,
+making the new benchmark easier and not comparable to the old one. So the honest path is to
+run pLannotate fresh on the sampled held-out plasmids — same pipeline as the paper's
+detection-ceiling measurement.
 
 ### F1 — Appendix A.1 is a literal `% TODO` block. **CONFIRMED.**
 `main.tex:640-650` in `~/Projects/PhD/plasmidlm-paper` is a commented-out outline
@@ -312,7 +372,8 @@ any clustering number in the rebuttal.**
 | # | Question | Why it's load-bearing | Status |
 |---|---|---|---|
 | ~~C1~~ | ~~Is the 22,400-pair holdout disjoint at plasmid level?~~ | Superseded by **F0** — the holdout was never used for the benchmark at all. | **RESOLVED (badly)** |
-| **C1′** | **Can a genuinely disjoint prompt pool be built at all?** Requires locating `holdout_full_prompts.parquet` (Anyscale bucket, per `infra/anyscale/run_anyscale.py:102`) **and** verifying its plasmid IDs are disjoint from the 20,644 in `training_pairs_v4.parquet`. Fallback: construct one ourselves by holding out plasmid IDs and re-deriving prompts. | Decides whether the honest re-run is available in-window. **The main remaining unknown**, though F9 means it is no longer existential. | Not started. Needs Anyscale creds, or copies on g6-big/p4 at `/opt/dlami/nvme/data/` |
+| ~~C1′~~ | ~~Can a genuinely disjoint prompt pool be built?~~ | **RESOLVED — yes, but it must be built.** The existing holdout is not disjoint (F0b); 120,449 unseen plasmids are available (F10); compute is already running. | **RESOLVED** |
+| **C6** | Deadline is **27 Jul** (3 days), response is **text-only — no paper revisions, no external links** (supervision meeting, 24 Jul). Does M2.0 fit? | Generation ~90 min + pLannotate ~30 min on g6-big2. Fits comfortably *if* started now. | Feasible; needs your go-ahead |
 | ~~C2~~ | ~~Eval-prompt ∩ GRPO-rollout-prompt overlap?~~ | **Answered: 100%.** All 1,000 eval prompts are in `training_pairs_v4.parquet`, over which GRPO rolled out. | **RESOLVED** |
 | **C3** | Are `hmmer` + Pfam, or AMRFinderPlus, installable/available on g6-big or p4 in-window? | Gates whether the orthogonal-annotator answer (Dok5 Q3, meta M1) is deliverable. | Not checked |
 | **C4** | Which paper source is the NeurIPS submission? | `~/Projects/PhD/plasmidlm-paper` is on branch **`icml-workshop`** with 65 uncommitted insertions to `main.tex` and untracked `icml2026.sty`. The tree is being repurposed for an ICML workshop submission. Editing `main.tex` here risks clobbering that work. | **Needs your call** — see §5 |
