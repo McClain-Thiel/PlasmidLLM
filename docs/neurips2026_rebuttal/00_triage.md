@@ -408,6 +408,52 @@ failure, and can explain it from the reward's functional form." That is a much b
 than being shown it in a later review round, and it pairs naturally with the reframing SeFq
 recommended (lead with the failure analysis).
 
+### F12 — ⚠️ Under an independent annotator the GRPO gain is **not statistically significant**. **MEASURED.**
+
+pSXh Q1 asks directly: "How much of the GRPO improvement remains when evaluated with an
+independent annotation pipeline?" Dok5 Q3 asks for AMRFinderPlus specifically. Ran it.
+
+NCBI **AMRFinderPlus 4.2.5** (DB 2025-12-03.1) on the already-archived
+`prodigal_proteins.faa` for the paired base and post-GRPO runs. It shares nothing with the
+reward path — not the 660-entry registry, not pLannotate, not the databases, not the method
+(curated HMMs + reference gene catalogue over translated ORFs, vs BLAST over nucleotide
+motifs).
+
+| AMR recovery, token-pooled | base | post-GRPO | Δ |
+|---|---|---|---|
+| paper's registry/pLannotate (Table 2) | 26.1% | 29.1% | **+3.0 pp** |
+| **AMRFinderPlus (independent)** | **13.5%** | **14.6%** | **+1.0 pp** |
+
+Paired bootstrap over 959 prompts / 1,373 requested AMR tokens, 10k resamples:
+**95% CI on the delta = [−1.17, +3.27] pp**, p(Δ≤0) = 0.19. McNemar on "≥1 requested AMR
+recovered": discordant 98 base-only vs 114 GRPO-only, exact two-sided **p = 0.30**.
+
+**Two distinct findings, and the second is easy to overstate:**
+
+1. **Absolute recovery roughly halves** under the independent annotator (26.1% → 13.5%).
+   AMRFinderPlus requires an intact translatable ORF matching a curated reference;
+   registry BLAST credits nucleotide similarity even for truncated or frame-broken copies.
+   This *quantifies* the annotatable-vs-functional gap that Dok5 W3 asserts qualitatively —
+   about half of "recovered" resistance markers do not survive a functional-grade check.
+
+2. **The GRPO delta has the same sign but is not statistically significant.** ⚠️ **This is
+   "not independently confirmed", NOT "shown to be zero."** The CI's upper bound (+3.27 pp)
+   comfortably contains the registry-measured +3.0 pp, so the data are entirely consistent
+   with the paper's effect — the test simply lacks power. AMR is the *worst* category for
+   this: it has the smallest registry-measured gain (+3.0 pp) and few tokens. Do not write
+   "GRPO does not generalise"; write that the independent check is directionally consistent
+   but underpowered.
+
+**Structural limit worth stating plainly in the response.** An orthogonal annotator can only
+independently verify *protein-coding* categories — AMR (1,373 requested tokens) and REPORTER
+(350). PROM (2,828) and ELEM (3,991), the two largest, are non-coding and have no
+independent protein-level checker. So **~70% of requested hard tokens cannot be verified by
+any annotator independent of the registry**, with the tools available. That is a real
+limitation of the evaluation design, it is the honest core of meta-review point 1, and
+conceding it is stronger than pretending AMRFinderPlus settles the question.
+
+Script: [`eval/scripts/orthogonal_amr.py`](../../eval/scripts/orthogonal_amr.py).
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
@@ -443,7 +489,7 @@ critique). Plan is to *measure* it.
 | # | Action | Sev | Feas | Notes |
 |---|---|---|---|---|
 | M1.1 | **Precision / specificity metric.** For each generation, count detected components **not** requested by the prompt; report extra ORIs / AMRs / promoters / reporters per plasmid, base vs GRPO, single-shot and best-of-4. | 🔴 | **NOW** | Directly answers pSXh Q2 + meta M1. Recomputable from `plannotate_results.json` in the bucket. **Highest value-per-hour item in the whole rebuttal.** ⚠️ Run this *before* promising a number — if GRPO makes specificity *worse*, that is important for us to know first. |
-| M1.2 | **Orthogonal annotator re-score.** Pfam/HMMER on the existing `prodigal_proteins.faa`; AMRFinderPlus for AMR calls. Report base-vs-GRPO delta under the independent annotator. | 🔴 | **WINDOW** (blocked on C3) | Dok5 Q3 verbatim; the AC's "independent annotator" ask. Proteins already extracted (F6) so no regeneration. If the GRPO delta survives, this substantially rescues M1. |
+| M1.2 | ✅ **DONE — see F12.** AMRFinderPlus on archived prodigal proteins. Absolute recovery halves (26.1%→13.5%); GRPO delta +1.0 pp, **not significant** (95% CI [−1.17,+3.27], McNemar p=0.30). | 🔴 | **COMPLETE** | Answers pSXh Q1 / Dok5 Q3. Does **not** rescue M1 — underpowered, and only ~30% of requested tokens are protein-coding and thus independently checkable at all. |
 | M1.3 | **Held-out registry split.** Hold out a subset of the 660 registry entries from the reward, evaluate faithfulness only on held-out entries. | 🟠 | **NO** for the rebuttal | Requires GRPO retraining (~17 h + Ray setup) *and* re-eval. Propose as camera-ready/future work; do not promise. |
 | M1.4 | **Fill Appendix A.1** from `plannotate.py:456-520`. | 🟡 | **NOW** | Named explicitly by the AC. Trivial. Do it first. |
 | M1.5 | **Recalibrate biological claims.** Systematic pass replacing "viable" → "annotatable under our rule"; state plainly that viability = origin + marker + (promoter or CDS) **detected**, and does not check ORF integrity, reading-frame coherence, or origin completeness. | 🟠 | **NOW** | Dok5 W3 is correct and we partially concede it already. Owning it fully is cheaper than defending. |
