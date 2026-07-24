@@ -31,6 +31,35 @@
 > answers the memorisation half of meta-review point 2 outright.
 > ⚠️ The *retrieval* half (M2.3) is still untested and is the bigger risk — run it early.
 
+### Findings at a glance
+
+Measured today, against code and artifacts. ✅ helps us · ⚠️ hurts us · 🚨 must disclose.
+
+| # | Finding | Verdict |
+|---|---|---|
+| 🚨 **F0** | The 1,000-prompt benchmark was sampled from the **pretraining corpus**, not a holdout. `generate.py` does no filtering; all three run configs confirm. | Methods error. Must correct. |
+| 🚨 **F0b** | The designated 22,400-pair holdout is **also not plasmid-disjoint** — 22,392/22,392 sequences and 20,562/20,588 plasmids are in pretraining. | No plasmid-level holdout ever existed. Answers Dok5 Q1 with the worst case. |
+| ✅ **F9** | Model is **not regurgitating**: median generation is 43% explained by the *entire* training corpus vs **81%** for a real held-out Addgene deposit. Holds in every length bin. | Rejects the mosaic hypothesis. Best asset. |
+| 🚨 **F13** | **Retrieval saturates the metric**: nearest-neighbour lookup scores ~**95%** useful rate through the same detector. 760/1000 prompts have a training plasmid with an identical component set. | The useful-plasmid rate cannot distinguish design from lookup. |
+| ⚠️ **F11** | GRPO **worsens specificity**: unrequested components 1.96 → 2.92/seq; extra origins 18.3% → 29.8%, extra AMR 20.1% → 30.6%. | Predicted by pSXh; follows from the recall-only reward (F2). |
+| ⚠️ **F12** | Under **AMRFinderPlus** (independent), absolute AMR recovery halves (26.1% → 13.5%) and the GRPO delta is **not significant** (+1.0 pp, 95% CI [−1.17, +3.27]). | Directionally consistent but underpowered. Not "shown to be zero". |
+| ✅ **F4** | 16,384 vs 4,096 resolves: k-mer **stride 3** → 16,384 = architectural (~49 kb); training window 4,096 tok ≈ **12.3 kb**; generation cap 2,500 tok ≈ **7.5 kb**. | Clean answer to pSXh Q4, SeFq Q2/Q3. |
+| ✅ **F1** | Appendix A.1 is a literal `% TODO`; reward fully recoverable from `plannotate.py:456-520`. | Free fix (camera-ready — response is text-only). |
+| ⚠️ **F2** | Reward is **recall-only**: `geo_mean(found quality) × (0.5 + 0.5·recall)`. No precision term. | pSXh W2 correct, not arguable. |
+| ⚠️ **F3** | 95/5 train/val split is pair-level random. | Taints only the val-loss table entry. |
+| ✅ **F10** | A disjoint benchmark **is** constructible: 120,449 unseen plasmids; built and running. | Enables M2.0. |
+| ⏳ **M2.0** | Model's own useful rate on the disjoint benchmark. | **PENDING — the keystone number.** |
+
+**The spine of the response**, if the pending number supports it:
+
+> Concede F0/F0b/F11 without hedging. Contest the memorisation inference with F9. Then make
+> F13 the contribution rather than the wound: *the useful-plasmid rate is saturated by a
+> trivial retrieval baseline, so it needs a novelty axis* — retrieval scores ~95% and returns
+> nothing new; the model produces sequences that are 43% training-explained against 81% for a
+> real novel deposit.
+
+---
+
 The meta-review is the decision function, and it is *not* a summary of the three reviews —
 it is a sharper argument than any of them. It reduces to one claim:
 
@@ -499,8 +528,25 @@ term. That is a critique of the metric, and it is correct.
 > baseline — it needs a novelty axis to mean anything.**
 
 That is a real scientific contribution (the metric, honestly characterised) and it aligns
-with SeFq's advice to lead with the failure analysis. It is also, bluntly, the most that can
-be salvaged: the paper's headline framing does not survive this baseline.
+with SeFq's advice to lead with the failure analysis.
+
+⚠️ **Still unmeasured: the model's own number on this benchmark.** Generation is running.
+Until it lands, "retrieval beats the model" is an inference from a comparison this finding
+itself says is invalid — treat it as pending, not established.
+
+**When it lands, decompose `useful = viable × faithful` rather than reporting one number.**
+Retrieval's 95% is ~100% faithful × 95% viable — it inherits real-plasmid viability free.
+Generated sequences ran ~59.6% viable in the original eval, and possibly lower here since
+these prompts carry no `VEC_*`/soft tokens. If so the model is capped near ~60% useful
+*however good faithfulness gets*, which would mean **the gap to retrieval is mostly a
+viability gap, not a faithfulness gap** — a sharper and more defensible diagnosis than a raw
+delta, and the true content of the saturation story. Score the model through the identical
+path used for retrieval (pLannotate Feature + `percmatch≥95` + repo token map + the
+origin/marker/(promoter|CDS) rule); do not cross detectors or splice in the paper's numbers.
+
+**Structural caveat on the eventual gap.** This benchmark's ~100% detection ceiling favours
+retrieval: real components clear `percmatch≥95` trivially, generated ones may not. So
+whatever gap emerges is an **upper bound** on retrieval's true advantage.
 
 Scripts: [`eval/scripts/retrieval_baseline.py`](../../eval/scripts/retrieval_baseline.py)
 (fast, annotation-free) plus the same-detector rescoring described above.
@@ -552,7 +598,7 @@ critique). Plan is to *measure* it.
 | **M2.0** | 🚨 **Re-run the benchmark on a genuinely plasmid-ID-disjoint prompt pool.** Regenerate n=1,000 for base and GRPO, re-annotate, recompute useful-plasmid rate and best-of-K. Report the new numbers whatever they are. | 🔴🔴 | **WINDOW**, blocked on C1′ | Consequence of F0. Generation is ~46 min/1,000 per the eval log; pLannotate ~35 min at 8 workers. The compute is the easy part — **C1′ is the blocker.** Nothing else in M2 matters until this is settled. |
 | M2.1 | **Correct the benchmark description in §3.1** and every "held-out" claim (abstract, §4, conclusion). Also state that the 95/5 train/val split is pair-level (F3). | 🔴 | **NOW** | Required regardless of rebuttal outcome. This is a correction, not a rebuttal tactic. |
 | M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, mosaic (multi-subject) coverage, real held-out Addgene control, length-stratified. Median generation 43% explained vs 81% for real held-out. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to the memorisation half of M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
-| M2.3 | ✅ **DONE — see F13.** Retrieval reaches **95.0%** implied useful rate on the disjoint benchmark, scored through the same detector. **It does not beat retrieval.** | 🔴🔴 | **COMPLETE** | We needed to know now, and now we know. Forces the reframing in F13: report novelty alongside useful rate, or the metric is saturated by lookup. |
+| M2.3 | ⏳ **Retrieval measured (95.0%); model side PENDING M2.0.** Retrieval reaches 95.0% implied useful rate on the disjoint benchmark through the same detector. **Whether the model beats it is NOT yet measured** — the model's number on this benchmark is still generating. | 🔴🔴 | **HALF DONE** | The gap's magnitude changes the verdict: ~60-vs-95 is "reframe", ~30-vs-95 is "withdraw". Do not state a conclusion until M2.0 lands. |
 | M2.4 | **Backbone/cluster analysis.** MMseqs2 or CD-HIT at 90% nt identity over the 20,644; report cluster-size distribution and BB_* class distribution. | 🟠 | **WINDOW**, blocked on C3/F8 | Dok5 Q1/Q2. Needs a tool install. |
 | M2.5 | Disclose eval-prompt ∩ GRPO-rollout-prompt overlap. | 🟠 | **NOW** | **Answered: 100%** (F0/F5). Number in hand; needs stating, not computing. |
 
