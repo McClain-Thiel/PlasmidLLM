@@ -359,6 +359,55 @@ slightly between runs; nothing load-bearing moves.
 - Run on the current (F0-contaminated) benchmark; re-run on M2.0 outputs, though a disjoint
   pool should if anything push generated similarity lower.
 
+### F11 — ⚠️ GRPO **worsens** specificity: it adds unrequested components. **MEASURED — goes against us.**
+
+pSXh W2/Q2 and meta-review point 1 asked for a precision-aware metric. Computed it from the
+existing `plannotate_results.json` for the paired base and post-GRPO runs (n=996 prompts with
+≥1 hard token, identical procedure both sides). Detected components are mapped to the same
+token vocabulary as requested ones via the repo's `feature_to_category_token`.
+
+| metric | base | post-GRPO | Δ |
+|---|---|---|---|
+| mean recall (= paper's faithfulness) | 22.6% | **26.8%** | **+4.2 pp** ✅ |
+| mean precision (never reported) | 50.6% | **47.8%** | **−2.8 pp** ❌ |
+| mean unrequested components / sequence | 1.96 | **2.92** | **+0.96** ❌ |
+| generations with ≥1 unrequested component | 62.4% | **70.8%** | **+8.4 pp** ❌ |
+
+Per category, share of generations carrying an **unrequested** component:
+
+| | ORI | AMR | PROM | REPORTER | ELEM | TAG |
+|---|---|---|---|---|---|---|
+| base | 18.3% | 20.1% | 38.2% | 21.3% | 36.7% | 5.7% |
+| post-GRPO | **29.8%** | **30.6%** | **49.3%** | **29.8%** | **46.6%** | 6.3% |
+
+**Unrequested origins and resistance markers each rise by ~10 pp** — precisely the components
+pSXh singled out as "undesirable even if requested components are present."
+
+Robustness: without the quality filter (`percmatch ≥95`, non-fragment) the same direction
+holds — extras rise 3.85 → 4.91 per sequence and 86.1% → 87.3% of generations — though
+precision is flat (36.1% → 36.4%) rather than declining. **The defensible claim is therefore:
+GRPO raises recall and raises unrequested-component count; precision is flat-to-slightly-worse.**
+Do not claim a precision collapse; the strict-filter number alone does not support it.
+
+**This is textbook reward misspecification and follows directly from F2** — the reward is
+`geo_mean(quality of found tokens) × recall_penalty` with no precision term, so adding
+components is never punished and sometimes helps. It is the same mechanism as the epitope-tag
+regression already in the paper (§5.3), and it is the honest answer to meta point 1.
+
+⚠️ **Absolute values are not comparable to the paper's per-category hit rates** (e.g. ORI
+44.1%/51.9%). The paper detects via BLAST against the 660-entry registry; this uses
+pLannotate's own Feature calls plus the repo token map. Different detectors, different
+absolute levels. The **base-vs-GRPO contrast is apples-to-apples** because both sides use one
+identical procedure — report the contrast, not the levels.
+
+Script: [`eval/scripts/prompt_precision.py`](../../eval/scripts/prompt_precision.py).
+
+**Framing recommendation.** Don't bury this. Reporting it unprompted — with the mechanism —
+converts the AC's "you never measured specificity" into "we measured it, found the predicted
+failure, and can explain it from the reward's functional form." That is a much better position
+than being shown it in a later review round, and it pairs naturally with the reframing SeFq
+recommended (lead with the failure analysis).
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
