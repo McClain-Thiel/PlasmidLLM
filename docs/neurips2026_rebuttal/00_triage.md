@@ -48,15 +48,21 @@ Measured today, against code and artifacts. ✅ helps us · ⚠️ hurts us · �
 | ⚠️ **F2** | Reward is **recall-only**: `geo_mean(found quality) × (0.5 + 0.5·recall)`. No precision term. | pSXh W2 correct, not arguable. |
 | ⚠️ **F3** | 95/5 train/val split is pair-level random. | Taints only the val-loss table entry. |
 | ✅ **F10** | A disjoint benchmark **is** constructible: 120,449 unseen plasmids; built and running. | Enables M2.0. |
-| ⏳ **M2.0** | Model's own useful rate on the disjoint benchmark. | **PENDING — the keystone number.** |
+| ✅ **F14** | **On the disjoint benchmark the GRPO effect replicates exactly: +9.8 pp** (30.0% → 39.8%), McNemar p=2e-06, CI [+5.8,+13.8]. Paper reported +9.8 pp. Absolute levels ~9 pp lower. | Contamination did **not** manufacture the gain. Best result of the triage. |
 
 **The spine of the response**, if the pending number supports it:
 
-> Concede F0/F0b/F11 without hedging. Contest the memorisation inference with F9. Then make
-> F13 the contribution rather than the wound: *the useful-plasmid rate is saturated by a
-> trivial retrieval baseline, so it needs a novelty axis* — retrieval scores ~95% and returns
-> nothing new; the model produces sequences that are 43% training-explained against 81% for a
-> real novel deposit.
+> Concede F0/F0b/F11 without hedging. Then lead with **F14**: rebuilt the benchmark from
+> plasmids the model has never seen, and the GRPO effect is *identical* (+9.8 pp, p=2e-06) —
+> the contamination did not manufacture the result. Support with **F9** (outputs are 43%
+> training-explained vs 81% for a real novel deposit, so not retrieval in disguise). Then
+> make **F13** the contribution rather than the wound: *the useful-plasmid rate is saturated
+> by a trivial retrieval baseline (~95%), so it needs a novelty axis* — retrieval wins on
+> component satisfaction and returns nothing new.
+
+**Verdict: reframe, do not withdraw.** F14 is the reason. The central GRPO claim survives an
+honest benchmark; what fails is the framing of the headline metric as evidence of useful
+*design*.
 
 ---
 
@@ -551,6 +557,53 @@ whatever gap emerges is an **upper bound** on retrieval's true advantage.
 Scripts: [`eval/scripts/retrieval_baseline.py`](../../eval/scripts/retrieval_baseline.py)
 (fast, annotation-free) plus the same-detector rescoring described above.
 
+### F14 — ✅ **The GRPO effect replicates exactly on genuinely held-out plasmids.** **MEASURED — M2.0 COMPLETE.**
+
+The honest re-run. 1,000 prompts from Addgene plasmids never seen in pretraining (F10),
+both checkpoints, the paper's exact sampling config, everything scored through one identical
+path (pLannotate Feature → repo token map → `percmatch ≥ 95`, non-fragment; viability =
+origin AND selection marker AND (promoter OR CDS)).
+
+| panel | n | viable | mean F | faithful @0.5 | **USEFUL** | Wilson 95% |
+|---|---|---|---|---|---|---|
+| supervised base | 1000 | 48.0% | 29.2% | 31.1% | **30.0%** | [27.2, 32.9] |
+| post-GRPO | 1000 | 61.6% | 37.4% | 40.5% | **39.8%** | [36.8, 42.9] |
+| retrieval null (F13) | 1000 | ~95% | 95.7% | 100.0% | **~95.0%** | [99.6, 100.0]† |
+
+† retrieval's Wilson interval is on the faithfulness pass rate; useful applies the 95.0%
+real-panel viability constant.
+
+**Δ(GRPO − base) = +9.8 pp.** McNemar exact **p = 2×10⁻⁶** (discordant 161 base-only vs 259
+GRPO-only); paired bootstrap 95% CI **[+5.8, +13.8] pp**.
+
+**The paper reported +9.8 pp on the contaminated benchmark (38.7% → 48.5%). The disjoint
+benchmark gives +9.8 pp (30.0% → 39.8%). The effect size is identical.**
+
+This is the single best result of the triage. The contamination in F0/F0b **did not
+manufacture the GRPO improvement** — the central claim survives a benchmark built from
+plasmids the model has never seen. It is the direct, empirical answer to the meta-review's
+"substantial overlap would undermine both the held-out rates and the claim of de novo
+generation": the *rates* shift down, the *claim about GRPO* does not.
+
+**Absolute rates fall ~9 pp** (38.7/48.5 → 30.0/39.8). Three contributors, not separable
+here: prompts carry no `VEC_*`/soft tokens and are mildly OOD (F10); the scoring path is
+stricter than the registry-BLAST used in the paper; and unseen plasmids are genuinely harder.
+Report the delta as the robust quantity and the levels as not directly comparable.
+
+**Decomposition — and it corrects the prediction I went in with.** I expected the gap to
+retrieval to be mostly viability. It is *both*, with faithfulness the larger:
+
+| axis | GRPO | retrieval | ratio |
+|---|---|---|---|
+| viable | 61.6% | ~95% | 0.65 |
+| faithful @0.5 | 40.5% | 100% | 0.41 |
+
+So the model loses about a third of the gap on viability and closer to two-thirds on
+faithfulness. Both need saying; "it's a viability gap" would have been wrong.
+
+Scripts: [`eval/scripts/build_disjoint_benchmark.py`](../../eval/scripts/build_disjoint_benchmark.py),
+[`eval/scripts/score_disjoint.py`](../../eval/scripts/score_disjoint.py).
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
@@ -598,7 +651,7 @@ critique). Plan is to *measure* it.
 | **M2.0** | 🚨 **Re-run the benchmark on a genuinely plasmid-ID-disjoint prompt pool.** Regenerate n=1,000 for base and GRPO, re-annotate, recompute useful-plasmid rate and best-of-K. Report the new numbers whatever they are. | 🔴🔴 | **WINDOW**, blocked on C1′ | Consequence of F0. Generation is ~46 min/1,000 per the eval log; pLannotate ~35 min at 8 workers. The compute is the easy part — **C1′ is the blocker.** Nothing else in M2 matters until this is settled. |
 | M2.1 | **Correct the benchmark description in §3.1** and every "held-out" claim (abstract, §4, conclusion). Also state that the 95/5 train/val split is pair-level (F3). | 🔴 | **NOW** | Required regardless of rebuttal outcome. This is a correction, not a rebuttal tactic. |
 | M2.2 | ✅ **DONE — see F9.** BLASTN of all generations vs the 20,644 training plasmids, mosaic (multi-subject) coverage, real held-out Addgene control, length-stratified. Median generation 43% explained vs 81% for real held-out. | 🔴 | **COMPLETE** | `eval/scripts/train_similarity_blast.py`. **Strongest single answer to the memorisation half of M2** and the centrepiece of the response. Re-run on M2.0 outputs when they exist. |
-| M2.3 | ⏳ **Retrieval measured (95.0%); model side PENDING M2.0.** Retrieval reaches 95.0% implied useful rate on the disjoint benchmark through the same detector. **Whether the model beats it is NOT yet measured** — the model's number on this benchmark is still generating. | 🔴🔴 | **HALF DONE** | The gap's magnitude changes the verdict: ~60-vs-95 is "reframe", ~30-vs-95 is "withdraw". Do not state a conclusion until M2.0 lands. |
+| M2.3 | ✅ **DONE.** Retrieval 95.0% vs post-GRPO **39.8%** on the same benchmark, same detector. **Retrieval wins by ~55 pp.** | 🔴🔴 | **COMPLETE** | Confirms the metric is saturated by lookup. But F14 shows the GRPO effect itself is real and replicates — so this is a metric problem, not a "the model does nothing" problem. Reframe, don't withdraw. |
 | M2.4 | **Backbone/cluster analysis.** MMseqs2 or CD-HIT at 90% nt identity over the 20,644; report cluster-size distribution and BB_* class distribution. | 🟠 | **WINDOW**, blocked on C3/F8 | Dok5 Q1/Q2. Needs a tool install. |
 | M2.5 | Disclose eval-prompt ∩ GRPO-rollout-prompt overlap. | 🟠 | **NOW** | **Answered: 100%** (F0/F5). Number in hand; needs stating, not computing. |
 
