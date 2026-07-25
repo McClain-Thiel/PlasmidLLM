@@ -741,6 +741,45 @@ together — it is a more accurate account of what GRPO does than the submission
 
 Scripts: `experiments/neurips_rebuttal/control_lift.py`, `baselines.py completion`.
 
+### F19 — ❌ The F16 fix failed: GRPO on novel combinations does not teach composition. **MEASURED.**
+
+Attempt 2 (400-step GRPO from the released checkpoint on a 50%-novel-combination rollout set;
+attempt 1, CFG, also failed). Reward climbed during training (0.48 → 0.6) — but on the
+decisive metric it did nothing.
+
+| | orig GRPO | after fix |
+|---|---|---|
+| **novel: substituted-in recovery** | 4.4% | **3.2%** (base rate 6.2%) |
+| novel: full-spec (F=1.0) | 0.0% | **0.0%** |
+| novel: reverts to removed component | 40.6% | 36.6% |
+| disjoint: useful | 39.8% | **36.2%** |
+| disjoint: viable | 61.6% | **51.2%** |
+| disjoint: mean lift | +7.8 pp | **+6.7 pp** |
+
+Composition did not improve (substituted-in recovery stayed at/below base rate, full-spec 0%),
+and in-distribution performance mildly **regressed** (viability −10 pp, useful −3.6 pp, lift
+−1.1 pp) — 400 steps on a harder prompt mix pushed the model slightly off its pretrained
+distribution without buying composition.
+
+**Why it likely failed** (and why this is informative, not just a dead end): the reward is
+recall-based, and a novel-combination prompt of ~9 tokens has ~8 common tokens present in any
+typical plasmid. The model already earns ~8/9 recall by generating a normal plasmid, so the
+marginal reward for the *one* hard substitute is tiny and swamped — the same
+reward-misspecification as F11/F2. So we have ruled out the two cheap hypotheses (decode-time
+steering, prompt-distribution retraining), and narrowed the cause to either (a) the
+recall reward gives negligible signal for the single hard token, or (b) a capacity limit of
+the 19.3M model. Distinguishing them needs attempt 3: a **substitution/precision-aware reward**
+that explicitly credits the requested substitute and penalises the reverted one. That is also
+the F11 fix. Not yet run.
+
+**Rebuttal consequence:** do **not** claim composition is fixed. F16 stands as a
+characterised limitation that resists the two obvious interventions. The honest contribution
+is F18 (prompt-conditional lift: real control for ~44% of components) with novel-combination
+composition as documented failure analysis — which is the headline SeFq asked for.
+
+Checkpoints/eval: `s3://.../neurips_rebuttal/artifacts/grpo_novel_ckpt/`,
+`fix_{novel,disjoint}/`. Scored with `score_novel.py`, `score.py`, `control_lift.py`.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
