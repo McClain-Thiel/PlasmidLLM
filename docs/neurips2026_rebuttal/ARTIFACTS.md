@@ -4,7 +4,7 @@ Everything produced for the NeurIPS 2026 rebuttal, where it lives durably, and w
 it. **The session scratchpad (`/private/tmp/...`) and g6-big's NVMe (`/opt/dlami/nvme/`) are
 both ephemeral — nothing here depends on them.** All artifacts are mirrored to S3.
 
-- **Findings & analysis:** [`00_triage.md`](00_triage.md) (git) — 16 findings F0–F16
+- **Findings & analysis:** [`00_triage.md`](00_triage.md) (git) — findings F0–F21
 - **Scripts:** [`experiments/neurips_rebuttal/`](../../experiments/neurips_rebuttal/) (git)
 - **Research log:** Notion Research Log, entry dated 2026-07-24 (id `3a7d0098-937c-81ed-beab-d05367dc27fd`)
 - **Durable data root:** `s3://phd-research-storage-1758274488/neurips_rebuttal/`
