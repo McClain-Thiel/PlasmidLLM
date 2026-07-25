@@ -45,7 +45,12 @@ Inputs (pre-existing, not re-uploaded): `databricks_export/{training_pairs_v4,fu
 | F14 | **GRPO +9.8pp on unseen plasmids, p=2e-6** | `score.py --paired` | `artifacts/{gen_base,gen_grpo}/` |
 | F15 | best-of-4 67.0% → 80.5% | `score_bestofk.py` | `artifacts/bok_*/` |
 | F16 | **model does not compose (0% full-spec)** | `novel_combination.py`, `score_novel.py` | `derived/novel_benchmark.parquet`, `artifacts/nov_*/` |
-| completion | Shao/Cunningham vs specs | `generate_completion.py`, `baselines.py completion` | `artifacts/comp_*/` (running) |
+| F17 | **unconditional gen matches useful rate** | `generate_completion.py`, `baselines.py completion` | `artifacts/comp_*/`, `derived/comp_*_plannotate_results.json` |
+| F18 | **prompt-conditional lift: real control, +7.8pp vs ~0 for baselines** | `control_lift.py` | `artifacts/{gen_grpo,comp_shao,comp_cunn}/` |
+| CFG fix | decode-time steering fails | `cfg_generate.py` | `artifacts/cfg_smoke/` |
+| GRPO fix | novel-combo rollouts (running) | `build_rollout_prompts.py`, `grpo_novel_aug_config.py` | `derived/rollout_novel_aug.parquet`, `artifacts/grpo_novel_ckpt/` |
+
+Setup for the F16 fix run and its torch-2.9 env patches: [`F16_FIX_SETUP.md`](F16_FIX_SETUP.md).
 
 ## Exact commands to reproduce the headline numbers
 
