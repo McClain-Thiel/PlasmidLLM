@@ -664,6 +664,63 @@ construct") is not supported for novel specs. Better we found this now.
 
 Scripts: `experiments/neurips_rebuttal/novel_combination.py`, `score_novel.py`.
 
+### F17 — ⚠️ Unconditional generation matches PlasmidLM on the useful rate. **MEASURED.**
+
+Completion-only comparison (SeFq's #1 ask). PlasmidGPT/Shao and PlasmidGPT-SFT/Cunningham have
+no interface to request components; scoring their *unconditional* samples against the specs
+gives the base rate an unsteerable generator hits. Shao (median 15 kb, so generous — longer
+sequences contain more components by chance) scored through the same pLannotate path:
+
+| panel | benchmark | viable | F≥0.5 | F=1.0 | useful |
+|---|---|---|---|---|---|
+| Shao (unconditional) | disjoint | 64.2% | 40.3% | 8.6% | **39.9%** |
+| PlasmidLM GRPO | disjoint | 61.6% | 40.5% | 5.3% | **39.8%** |
+| Shao (unconditional) | novel | 64.2% | 30.6% | 0.4% | **30.2%** |
+| PlasmidLM GRPO | novel | 61.0% | 26.4% | 0.0% | **26.4%** |
+
+**Unconditional generation matches (or slightly beats) PlasmidLM on the useful-plasmid rate on
+both benchmarks.** Same lesson as retrieval (F13): the useful rate is dominated by common
+components that any plausible plasmid contains, so it does not measure prompt control. And on
+novel combinations, PlasmidLM produces the requested substitute **4.6%** of the time — *below*
+Shao's unconditional base rate of **6.2%**. By the useful rate, prompting buys nothing.
+
+### F18 — ✅ …but prompt-conditional lift shows PlasmidLM has real control for ~44% of components. **MEASURED — the metric the paper should have led with.**
+
+The useful rate can't separate control from base rate. This can: for each component, does
+requesting it make it appear more than when it is *not* requested?
+
+    lift(t) = P(t detected | t requested) − P(t detected | t NOT requested)
+
+PlasmidLM GRPO, disjoint benchmark, 41 components with enough support:
+
+| component | requested→present | not-requested→present | lift |
+|---|---|---|---|
+| AMR_ZEOCIN | 38% | 4% | **+34** |
+| PROM_CMV | 31% | 11% | **+21** |
+| ORI_F1 | 58% | 38% | **+20** |
+| ORI_COLE1 | 63% | 45% | **+18** |
+| ELEM_CMV_ENHANCER | 33% | 16% | **+17** |
+| AMR_NEOMYCIN | 18% | 2% | **+16** |
+| … | | | |
+| AMR_CHLORAMPHENICOL | 0% | 0% | −0 |
+| ELEM_MCS | 0% | 8% | −8 |
+
+**Mean lift +7.8 pp; 18 of 41 components show lift > +10 pp**, up to +34. The model genuinely
+responds to the prompt for a substantial fraction of the vocabulary; the near-zero-lift
+components are exactly the known rare tail (§5.3). Prompting works, measurably — it is just
+invisible in the useful rate because common components are common regardless.
+
+**This is the honest, defensible spine for the paper.** Replace the saturated useful rate with
+prompt-conditional lift as the primary controllability metric. It: (a) is not matched by
+retrieval or unconditional generation (both have lift ≈ 0 by construction — their output is
+independent of the prompt); (b) shows real control for ~44% of components; (c) maps exactly
+where control fails (the tail, and novel combinations, F16). It converts the reviewers' central
+objection — "the useful rate doesn't establish control" — into a metric that does, and it is
+strictly more informative than what was submitted.
+
+Scripts: `experiments/neurips_rebuttal/baselines.py completion`; lift computed inline
+(to be added as `control_lift.py`).
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
