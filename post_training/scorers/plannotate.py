@@ -253,7 +253,18 @@ class PlannotateScorer(Scorer):
         db_dir: str | None = None,
         evalue: float = 1e-5,
         filter_db: bool = True,
+        token_weights_path: str | None = None,
     ):
+        # Optional per-token recall weights (rarity-weighted reward). When present, the
+        # recall term weights each requested token by its weight instead of counting
+        # equally, so a rare requested component dominates the reward — giving a specific
+        # gradient for producing it (the signal a uniform recall reward lacks; F21).
+        # None → uniform (original behaviour).
+        self.token_weights: dict[str, float] | None = None
+        if token_weights_path is not None:
+            import json
+            with open(token_weights_path) as _f:
+                self.token_weights = json.load(_f)
         if plannotate_df is not None:
             plannotate_full = plannotate_df
         elif plannotate_db_path is not None:
@@ -462,6 +473,7 @@ class PlannotateScorer(Scorer):
         norm_score_cap: float = 1.5,
         sharpness: float = 2.0,
         recall_floor: float = 0.5,
+        token_weights: dict[str, float] | None = None,
     ) -> dict[str, Any]:
         token_scores = {}
         found_scores = []
@@ -494,7 +506,13 @@ class PlannotateScorer(Scorer):
 
         n_expected = len(expected_tokens)
         n_found = len(found_scores)
-        recall = n_found / n_expected if n_expected > 0 else 0.0
+        if token_weights:
+            tot_w = sum(token_weights.get(t, 1.0) for t in expected_tokens)
+            found_w = sum(token_weights.get(t, 1.0)
+                          for t in expected_tokens if t in best_per_token)
+            recall = found_w / tot_w if tot_w > 0 else 0.0
+        else:
+            recall = n_found / n_expected if n_expected > 0 else 0.0
 
         if found_scores:
             log_scores = [math.log(max(s, 1e-6)) for s in found_scores]
@@ -570,6 +588,7 @@ class PlannotateScorer(Scorer):
             w_id=w_id, w_cov=w_cov, w_norm=w_norm,
             norm_score_cap=norm_score_cap,
             sharpness=sharpness, recall_floor=recall_floor,
+            token_weights=self.token_weights,
         )
 
     def score_batch(
@@ -614,6 +633,7 @@ class PlannotateScorer(Scorer):
                 w_id=w_id, w_cov=w_cov, w_norm=w_norm,
                 norm_score_cap=norm_score_cap,
                 sharpness=sharpness, recall_floor=recall_floor,
+                token_weights=self.token_weights,
             )
             rewards.append(result["reward"])
 
