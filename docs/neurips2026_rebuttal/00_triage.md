@@ -780,6 +780,41 @@ composition as documented failure analysis — which is the headline SeFq asked 
 Checkpoints/eval: `s3://.../neurips_rebuttal/artifacts/grpo_novel_ckpt/`,
 `fix_{novel,disjoint}/`. Scored with `score_novel.py`, `score.py`, `control_lift.py`.
 
+### F20 — 🔑 F16/F19 were confounded: composition is ~49%, not 0%, once you control for producibility. **MEASURED — reframes the whole F16 line.**
+
+Debugging why the fix failed exposed a flaw in my own novel benchmark. It substitutes
+"well-supported" components (≥100 training *plasmids*) — but plasmid-level support ≠ the model
+having learned to *generate* that component. Stratifying the 500 novel prompts by each
+substitute's natural-context lift (F18):
+
+- The benchmark is **dominated by unproducible components**: the top substitutes are
+  SPECTINOMYCIN (72), pSC101 (63), RSF (55), P15A (42), 2μ (29) — nearly all **zero natural
+  lift** (the model can't emit them even when they belong). So "4.6% substituted-in recovery"
+  mostly measured rare-origin generation, not composition.
+- Among the **18 producible (high-lift) components**, composition clearly partially works:
+
+  | | recovery |
+  |---|---|
+  | natural context (component belongs) | 25.7% |
+  | novel context (substituted in) | **12.7%** |
+  | **retained ability** | **49%** |
+
+**So the honest F16 is: for components the model can generate, it retains ~half its
+prompt-control when the component is moved to a novel combination — a real but tractable
+deficit, not a 0% wall.** And F19's failure is explained: the fix trained on *all* substitutes,
+so most training signal landed on unproducible targets (0% in rollout → no positive examples →
+no GRPO gradient), swamping the ~15% of prompts with producible substitutes. It was not a
+capacity limit and not "no reward signal" — it was a mis-targeted training distribution.
+
+**This makes the fix well-posed** (attempt 3): rebuild the rollout set and benchmark to
+substitute **only producible (high-lift) components**, so every training example has a target
+the model hits ~13–26% of the time (positive rollouts exist to reinforce). Then GRPO — ideally
+with larger group size G for exploration and more steps — has real signal. The reward function
+is adequate for these targets; a substitution-aware upweighting of the requested token would
+further concentrate the gradient (and doubles as the F11 fix). The 18 producible substitutes:
+NEOMYCIN, ZEOCIN, CMV/EF1A/LAC/RSV/SV40/U6 promoters, ORI_{COLE1,F1,SV40}, EGFP,
+CMV_ENHANCER, cPPT, LTR_5, POLYA_{BGH,SV40}, PSI.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
