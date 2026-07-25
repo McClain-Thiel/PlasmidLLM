@@ -43,6 +43,8 @@ def main() -> None:
     ap.add_argument("--n-novel", type=int, default=4000)
     ap.add_argument("--n-natural", type=int, default=4000)
     ap.add_argument("--min-support", type=int, default=100)
+    ap.add_argument("--allow-substitutes", type=Path, default=None,
+                    help="file of allowed substitute tokens, one per line (producible-only)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
@@ -60,9 +62,12 @@ def main() -> None:
         support.update(toks)
     train_sets = [frozenset(v) for v in index.values() if v]
 
+    allow = None
+    if args.allow_substitutes:
+        allow = set(args.allow_substitutes.read_text().split())
     by_cat: dict[str, list[str]] = collections.defaultdict(list)
     for t, c in support.items():
-        if c >= args.min_support and category_of(t) in SUBSTITUTABLE:
+        if c >= args.min_support and category_of(t) in SUBSTITUTABLE and (allow is None or t in allow):
             by_cat[category_of(t)].append(t)
 
     copy_of = {str(r.id): COPY_MAP.get(r.c) for r in duckdb.sql(

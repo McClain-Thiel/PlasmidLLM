@@ -41,7 +41,7 @@ import pandas as pd
 from build_benchmark import COPY_MAP, render
 from common import TOKEN_RE, category_of, detect, load_annotations
 
-SUBSTITUTABLE = ["AMR", "ORI", "REPORTER", "PROM"]
+SUBSTITUTABLE = ["AMR", "ORI", "REPORTER", "PROM", "ELEM"]
 
 
 def main() -> None:
@@ -52,6 +52,8 @@ def main() -> None:
     ap.add_argument("--pool", type=Path, required=True)
     ap.add_argument("--n", type=int, default=500)
     ap.add_argument("--min-support", type=int, default=100)
+    ap.add_argument("--allow-substitutes", type=Path, default=None,
+                    help="file of allowed substitute tokens, one per line (producible-only)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
@@ -70,9 +72,12 @@ def main() -> None:
     print(f"training plasmids: {len(train_sets):,}")
 
     well_supported = {t for t, c in support.items() if c >= args.min_support}
+    allow = None
+    if args.allow_substitutes:
+        allow = set(args.allow_substitutes.read_text().split())
     by_cat: dict[str, list[str]] = collections.defaultdict(list)
     for t in sorted(well_supported):
-        if category_of(t) in SUBSTITUTABLE:
+        if category_of(t) in SUBSTITUTABLE and (allow is None or t in allow):
             by_cat[category_of(t)].append(t)
     print(f"well-supported substitutes (>={args.min_support} plasmids): "
           + ", ".join(f"{c}:{len(v)}" for c, v in sorted(by_cat.items())))

@@ -815,6 +815,32 @@ further concentrate the gradient (and doubles as the F11 fix). The 18 producible
 NEOMYCIN, ZEOCIN, CMV/EF1A/LAC/RSV/SV40/U6 promoters, ORI_{COLE1,F1,SV40}, EGFP,
 CMV_ENHANCER, cPPT, LTR_5, POLYA_{BGH,SV40}, PSI.
 
+### F21 — Producible-targeted GRPO (attempt 3, step 100) weakens reversion but doesn't install the substitute → the reward is the bottleneck. **MEASURED.**
+
+Clean paired eval on the identical producible benchmark (n=500), original GRPO vs the
+producible-targeted G=16 run at step 100/250:
+
+| model | sub-IN | reverted | F=1.0 | viable |
+|---|---|---|---|---|
+| orig GRPO | 8.8% | 39.8% | 0% | 62.4% |
+| fix step 100 | 10.0% | **31.0%** | 0% | **47.0%** |
+
+The model learns to **stop reverting** to the co-occurring wrong marker (−8.8 pp) but does
+**not** produce the requested substitute instead (+1.2 pp, noise) — it installs *nothing*,
+so viability drops −15 pp. Mechanistically: the recall reward gives no *specific* pull toward
+the one requested substitute (it is 1 of ~9 tokens, ~6% marginal reward); once reversion is
+suppressed, the diffuse reward gives the model no reason to install the substitute rather than
+omit the marker. This is exactly McClain's hypothesis: **the reward, not exploration or
+capacity, is the binding constraint.**
+
+**Attempt 4 (the real fix): substitution/rarity-aware reward.** Weight the recall term by
+token rarity so a requested low-base-rate component dominates the reward
+(`recall_w = Σ w_t·found_t / Σ w_t`, `w_t = 1/base_rate(t)` capped). This gives a large,
+specific gradient for producing the hard substitute — the signal the current reward lacks.
+Also mitigates F11 (extras are unweighted). It is a change to
+`post_training/scorers/plannotate.py::_compute_composite` — flagged for McClain's sign-off
+before touching the scorer.
+
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
 Clustering and orthogonal-annotator work needs g6-big / p4 (per CLAUDE.md, `plannotate`
