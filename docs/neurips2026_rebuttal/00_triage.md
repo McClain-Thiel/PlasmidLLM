@@ -718,6 +718,19 @@ where control fails (the tail, and novel combinations, F16). It converts the rev
 objection — "the useful rate doesn't establish control" — into a metric that does, and it is
 strictly more informative than what was submitted.
 
+**The head-to-head that proves lift is the right metric** (disjoint benchmark):
+
+| model | useful rate | **mean lift** | components lift>+10pp |
+|---|---|---|---|
+| PlasmidLM GRPO | 39.8% | **+7.8 pp** | 18/41 |
+| Shao (unconditional) | 39.9% | **−0.4 pp** | 1/41 |
+| Cunningham (unconditional) | **49.2%** | **−0.3 pp** | 0/41 |
+
+Cunningham (22 kb sequences) *beats* PlasmidLM on the useful rate (49 vs 40) yet has **zero
+lift** — its output is independent of the prompt. This is the sharpest statement of the whole
+rebuttal: the useful rate rewards long unconditional generation, lift does not. Lift separates
+PlasmidLM from both baselines by ~8 pp while the useful rate cannot separate them at all.
+
 **Nuance — the control is a pretraining property, not a GRPO gain.** Base and GRPO have
 nearly equal lift (base +8.6 pp, 19/41 above +10; GRPO +7.8 pp, 18/41), and GRPO has *more*
 zero-lift components (8 vs 3) — consistent with F11 (GRPO adds unrequested components, raising
