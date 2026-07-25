@@ -718,8 +718,15 @@ where control fails (the tail, and novel combinations, F16). It converts the rev
 objection — "the useful rate doesn't establish control" — into a metric that does, and it is
 strictly more informative than what was submitted.
 
-Scripts: `experiments/neurips_rebuttal/baselines.py completion`; lift computed inline
-(to be added as `control_lift.py`).
+**Nuance — the control is a pretraining property, not a GRPO gain.** Base and GRPO have
+nearly equal lift (base +8.6 pp, 19/41 above +10; GRPO +7.8 pp, 18/41), and GRPO has *more*
+zero-lift components (8 vs 3) — consistent with F11 (GRPO adds unrequested components, raising
+P(present|not requested) and eroding lift). So: prompting control comes from supervised
+pretraining; GRPO improves the useful *rate* (recall, +9.8 pp, F14) but does not add control
+and slightly reduces its precision. All three statements are true and should be stated
+together — it is a more accurate account of what GRPO does than the submission's.
+
+Scripts: `experiments/neurips_rebuttal/control_lift.py`, `baselines.py completion`.
 
 ### F8 — Tooling gap on this machine.
 `blastn` present. `mmseqs`, `cd-hit`, `hmmscan/hmmsearch`, `amrfinder` **absent**; no conda.
