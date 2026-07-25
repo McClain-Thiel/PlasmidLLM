@@ -44,3 +44,27 @@ training code. The proper repo fix is to change the two decorators to `no_grad` 
 Score the final checkpoint on the novel benchmark with `score_novel.py` (same path as F16),
 compare substituted-in recovery / full-spec satisfaction to the current GRPO model, and
 re-check the disjoint benchmark (F14) to confirm we did not regress in-distribution.
+
+## Attempt 3 — GRPO on producible-only novel combinations (FAILED, F21)
+
+After F20 showed F16 was confounded by unproducible substitutes, rebuilt rollout + benchmark
+to substitute only the 18 producible (high natural-lift) components, and raised group size to
+G=16 for exploration (prompt_batch_size=4 to fit the L4's 22GB).
+
+- config: `experiments/neurips_rebuttal/grpo_producible.py` (from the released GRPO ckpt)
+- producible substitute list: `s3://.../neurips_rebuttal/derived/producible_substitutes.txt`
+- rollout: `derived/rollout_producible.parquet` (6k novel + 4k natural)
+- eval benchmark: `derived/novel_producible_benchmark.parquet` (500, substitutes ZEOCIN,
+  NEOMYCIN, EF1A, RSV, U6, SV40, PSI, …)
+- clean paired eval at step 100 (`derived/{fix100,orig_prod}_plann.json`): the model stops
+  reverting to the wrong marker (39.8→31.0%) but does not install the requested substitute
+  (8.8→10.0%), so viability drops (62.4→47.0%). Run then diverged (~step 150: reward 0.40,
+  KL 0.29, grad-norm 26) and was stopped.
+- **Conclusion: the recall reward is the binding constraint** — no specific pull toward the
+  one requested substitute among ~9 tokens.
+- checkpoints: `s3://.../neurips_rebuttal/artifacts/grpo_producible_ckpt/step_{100,...}/`
+
+## Attempt 4 — rarity-weighted recall reward (IN PROGRESS)
+
+Weight the recall term by token rarity so a requested low-base-rate component dominates the
+reward. Changes `post_training/scorers/plannotate.py::_compute_composite`. Approved by McClain.

@@ -50,7 +50,11 @@ Inputs (pre-existing, not re-uploaded): `databricks_export/{training_pairs_v4,fu
 | CFG fix | decode-time steering fails | `cfg_generate.py` | `artifacts/cfg_smoke/` |
 | GRPO fix | novel-combo rollouts (running) | `build_rollout_prompts.py`, `grpo_novel_aug_config.py` | `derived/rollout_novel_aug.parquet`, `artifacts/grpo_novel_ckpt/` |
 
-Setup for the F16 fix run and its torch-2.9 env patches: [`F16_FIX_SETUP.md`](F16_FIX_SETUP.md).
+| F19 | GRPO-on-novel-combos fix failed | `grpo_novel_aug_config.py` | `artifacts/grpo_novel_ckpt/`, `fix_{novel,disjoint}/` |
+| F20 | F16 confounded; composition ~49% for producible components | (analysis) | `derived/novel_benchmark.parquet` |
+| F21 | producible-targeted GRPO: reward is the bottleneck | `grpo_producible.py`, `control_lift.py` | `derived/{novel_producible_benchmark,rollout_producible}.parquet`, `derived/{fix100,orig_prod}_plann.json`, `artifacts/grpo_producible_ckpt/` |
+
+Setup for the F16 fix runs and their torch-2.9 env patches: [`F16_FIX_SETUP.md`](F16_FIX_SETUP.md).
 
 ## Exact commands to reproduce the headline numbers
 
