@@ -14,6 +14,7 @@ import argparse
 import html
 import json
 import logging
+import os
 import re
 import subprocess
 import uuid
@@ -25,7 +26,13 @@ import pyarrow.parquet as pq
 
 logger = logging.getLogger(__name__)
 
-BASE = "/mnt/s3/phd-research-storage-1758274488/addgene_clean"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_BASE = Path(
+    os.environ.get(
+        "PLASMID_ANNOTATION_ROOT",
+        REPO_ROOT / "data" / "addgene_clean",
+    )
+)
 MOTIF_NAMESPACE = uuid.UUID("f47ac10b-58cc-4372-a567-0d02b2c3d479")
 
 MIN_PERCMATCH = 95.0
@@ -83,32 +90,83 @@ ELEM_TOKEN_MAP = {
     "<ELEM_CMV_ENHANCER>": ["CMV enhancer", "CMV IE enhancer", "hr5 enhancer"],
     "<ELEM_CMV_INTRON>": ["CMV intron", "CMV IE intron", "CMV intron A"],
     "<ELEM_CPPT>": ["cPPT", "central polypurine tract", "CPPT/CTS"],
-    "<ELEM_GRNA_SCAFFOLD>": ["gRNA scaffold", "sgRNA scaffold", "tracrRNA scaffold",
-                             "Nm gRNA scaffold", "Fn gRNA scaffold", "Sa gRNA scaffold"],
+    "<ELEM_GRNA_SCAFFOLD>": [
+        "gRNA scaffold",
+        "sgRNA scaffold",
+        "tracrRNA scaffold",
+        "Nm gRNA scaffold",
+        "Fn gRNA scaffold",
+        "Sa gRNA scaffold",
+    ],
     "<ELEM_IRES>": ["IRES", "internal ribosome entry site", "EMCV IRES"],
     "<ELEM_LTR_3>": ["3' LTR", "3' long terminal repeat", "LTR 3'", "3' LTR (\u0394U3)"],
     "<ELEM_LTR_5>": ["5' LTR", "5' long terminal repeat", "LTR 5'", "5' LTR (truncated)"],
     "<ELEM_MCS>": ["MCS", "multiple cloning site", "polylinker", "multiple cloning region"],
     "<ELEM_POLYA_BGH>": ["bGH poly(A)", "bovine growth hormone polyA", "BGH pA"],
-    "<ELEM_POLYA_SV40>": ["SV40 poly(A)", "SV40 late polyA", "SV40 pA signal", "SV40 poly(A) signal"],
-    "<ELEM_PSI>": ["psi", "\u03a8", "packaging signal", "HIV packaging signal",
-                   "HIV-1 \u03a8", "MESV \u03a8", "MMLV \u03a8", "Ad5 \u03a8"],
+    "<ELEM_POLYA_SV40>": [
+        "SV40 poly(A)",
+        "SV40 late polyA",
+        "SV40 pA signal",
+        "SV40 poly(A) signal",
+    ],
+    "<ELEM_PSI>": [
+        "psi",
+        "\u03a8",
+        "packaging signal",
+        "HIV packaging signal",
+        "HIV-1 \u03a8",
+        "MESV \u03a8",
+        "MMLV \u03a8",
+        "Ad5 \u03a8",
+    ],
     "<ELEM_TRACRRNA>": ["tracrRNA", "trans-activating crRNA", "tracr", "Nm tracrRNA"],
     "<ELEM_WPRE>": ["WPRE", "woodchuck hepatitis virus posttranscriptional regulatory element"],
 }
 
 REPORTER_TOKEN_MAP = {
-    "<REPORTER_EGFP>": ["EGFP", "enhanced GFP", "eGFP", "mEGFP", "yEGFP", "yeGFP",
-                        "rsEGFP2", "rsEGFP", "d1EGFP", "d2EGFP", "d4EGFP", "deGFP4",
-                        "cEGFP", "aceGFP"],
-    "<REPORTER_GFP>": ["GFP", "green fluorescent protein", "superfolder GFP",
-                       "GFP (S65T)", "GFPuv", "TurboGFP", "TagGFP", "EmGFP",
-                       "AcGFP1", "\u03b1GFP", "SGFP2", "roGFP2"],
+    "<REPORTER_EGFP>": [
+        "EGFP",
+        "enhanced GFP",
+        "eGFP",
+        "mEGFP",
+        "yEGFP",
+        "yeGFP",
+        "rsEGFP2",
+        "rsEGFP",
+        "d1EGFP",
+        "d2EGFP",
+        "d4EGFP",
+        "deGFP4",
+        "cEGFP",
+        "aceGFP",
+    ],
+    "<REPORTER_GFP>": [
+        "GFP",
+        "green fluorescent protein",
+        "superfolder GFP",
+        "GFP (S65T)",
+        "GFPuv",
+        "TurboGFP",
+        "TagGFP",
+        "EmGFP",
+        "AcGFP1",
+        "\u03b1GFP",
+        "SGFP2",
+        "roGFP2",
+    ],
     "<REPORTER_MCHERRY>": ["mCherry", "PAmCherry"],
     "<REPORTER_MEMERALD>": ["mEmerald"],
     "<REPORTER_NANOLUC>": ["NanoLuc", "nanoluciferase", "Nluc"],
-    "<REPORTER_YFP>": ["YFP", "yellow fluorescent protein", "Citrine", "EYFP",
-                       "LanYFP", "SYFP2", "TagYFP", "PhiYFP"],
+    "<REPORTER_YFP>": [
+        "YFP",
+        "yellow fluorescent protein",
+        "Citrine",
+        "EYFP",
+        "LanYFP",
+        "SYFP2",
+        "TagYFP",
+        "PhiYFP",
+    ],
 }
 
 TAG_TOKEN_MAP = {
@@ -132,6 +190,7 @@ ALL_TOKEN_MAPS = {
 
 
 # ── Feature → token mapping ─────────────────────────────────────────────────
+
 
 def feature_to_category_token(feature: str) -> tuple[str, str] | None:
     """Map a plannotate Feature name to (token, category) or None."""
@@ -164,9 +223,11 @@ def feature_to_category_token(feature: str) -> tuple[str, str] | None:
 
 # ── Plannotate metadata loading ──────────────────────────────────────────────
 
+
 def load_plannotate_metadata() -> pd.DataFrame:
     """Load metadata from plannotate's bundled CSVs."""
     import plannotate
+
     data_dir = Path(plannotate.__file__).parent / "data" / "data"
 
     frames = []
@@ -195,12 +256,16 @@ def load_plannotate_metadata() -> pd.DataFrame:
     meta = pd.concat(frames, ignore_index=True)
     logger.info(
         "Loaded metadata: %d snapgene, %d fpbase, %d swissprot (%d total)",
-        len(sg), len(fp), len(sp), len(meta),
+        len(sg),
+        len(fp),
+        len(sp),
+        len(meta),
     )
     return meta
 
 
 # ── Sequence extraction ──────────────────────────────────────────────────────
+
 
 def _parse_fasta(text: str, db_source: str = "") -> list[tuple[str, str]]:
     """Parse FASTA text into [(id, sequence), ...].
@@ -231,21 +296,26 @@ def _parse_fasta(text: str, db_source: str = "") -> list[tuple[str, str]]:
     return entries
 
 
-def _run_cmd(cmd: list[str], description: str) -> str | None:
-    """Run a shell command, return stdout or None on failure."""
+def _run_cmd(cmd: list[str], description: str) -> str:
+    """Run a sequence-extraction command and return its stdout."""
     logger.info("Running: %s", " ".join(cmd))
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if result.returncode != 0:
-            logger.warning("%s failed (rc=%d): %s", description, result.returncode, result.stderr[:500])
-            return None
-        return result.stdout
-    except FileNotFoundError:
-        logger.warning("%s: command not found (%s)", description, cmd[0])
-        return None
-    except subprocess.TimeoutExpired:
-        logger.warning("%s: timed out after 600s", description)
-        return None
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=600,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"{description}: required command not found: {cmd[0]}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"{description} failed with exit code {exc.returncode}: {exc.stderr[:500]}"
+        ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"{description} timed out after 600 seconds") from exc
+    return result.stdout
 
 
 def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
@@ -258,8 +328,12 @@ def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
         out = _run_cmd(["blastdbcmd", "-db", str(snapgene_db), "-entry", "all"], "snapgene")
         if out:
             for sid, seq in _parse_fasta(out, "snapgene"):
-                all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "dna", "db_source": "snapgene"})
-            logger.info("  snapgene: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "snapgene"))
+                all_seqs.append(
+                    {"sseqid": sid, "sequence": seq, "seq_type": "dna", "db_source": "snapgene"}
+                )
+            logger.info(
+                "  snapgene: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "snapgene")
+            )
     else:
         logger.warning("snapgene BLAST DB not found at %s", snapgene_db)
 
@@ -269,8 +343,12 @@ def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
         out = _run_cmd(["diamond", "getseq", "-d", str(fpbase_dmnd)], "fpbase")
         if out:
             for sid, seq in _parse_fasta(out, "fpbase"):
-                all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "fpbase"})
-            logger.info("  fpbase: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "fpbase"))
+                all_seqs.append(
+                    {"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "fpbase"}
+                )
+            logger.info(
+                "  fpbase: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "fpbase")
+            )
     else:
         logger.warning("fpbase Diamond DB not found at %s", fpbase_dmnd)
 
@@ -285,7 +363,14 @@ def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
                 n_total += 1
                 if sid in needed_sseqids:
                     n_kept += 1
-                    all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "protein", "db_source": "swissprot"})
+                    all_seqs.append(
+                        {
+                            "sseqid": sid,
+                            "sequence": seq,
+                            "seq_type": "protein",
+                            "db_source": "swissprot",
+                        }
+                    )
             logger.info("  swissprot: %d/%d sequences (filtered)", n_kept, n_total)
     else:
         logger.warning("swissprot Diamond DB not found at %s", swissprot_dmnd)
@@ -296,8 +381,17 @@ def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
         out = _run_cmd(["cmemit", "-c", str(rfam_cm)], "Rfam")
         if out:
             for sid, seq in _parse_fasta(out, "Rfam"):
-                all_seqs.append({"sseqid": sid, "sequence": seq, "seq_type": "rna_consensus", "db_source": "Rfam"})
-            logger.info("  Rfam: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "Rfam"))
+                all_seqs.append(
+                    {
+                        "sseqid": sid,
+                        "sequence": seq,
+                        "seq_type": "rna_consensus",
+                        "db_source": "Rfam",
+                    }
+                )
+            logger.info(
+                "  Rfam: %d sequences", sum(1 for s in all_seqs if s["db_source"] == "Rfam")
+            )
     else:
         logger.warning("Rfam CM not found at %s", rfam_cm)
 
@@ -310,6 +404,7 @@ def extract_sequences(db_dir: Path, needed_sseqids: set[str]) -> pd.DataFrame:
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -317,20 +412,19 @@ def main():
     )
     parser.add_argument(
         "--annotations",
-        default=f"{BASE}/annotations/plannotate_annotations.parquet",
+        default=DEFAULT_BASE / "annotations" / "plannotate_annotations.parquet",
     )
     parser.add_argument(
         "--vocab",
-        default=f"{BASE}/tokenization/token_vocabulary_v3.json",
+        default=DEFAULT_BASE / "tokenization" / "token_vocabulary_v3.json",
     )
     parser.add_argument(
         "--db-dir",
         default=str(Path.home() / ".cache" / "pLannotate" / "BLAST_dbs"),
         help="plannotate BLAST/Diamond DB directory",
     )
-    parser.add_argument("--output-dir", default=f"{BASE}/tokenization/")
-    parser.add_argument("--metadata-only", action="store_true",
-                        help="Skip sequence extraction")
+    parser.add_argument("--output-dir", default=DEFAULT_BASE / "tokenization")
+    parser.add_argument("--metadata-only", action="store_true", help="Skip sequence extraction")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -368,7 +462,9 @@ def main():
     n_unmapped = len(ann) - len(ann_mapped)
     logger.info(
         "  Mapped %d/%d annotations (%d unmapped)",
-        len(ann_mapped), len(ann), n_unmapped,
+        len(ann_mapped),
+        len(ann),
+        n_unmapped,
     )
 
     # Show unmapped features for debugging
@@ -463,18 +559,20 @@ def main():
 
             sequences.append(entry)
 
-            flat_rows.append({
-                "uuid": motif_uuid,
-                "token": token,
-                "category": category,
-                "features": ",".join(features),
-                "plasmid_count": plasmid_count,
-                "sseqid": sseqid,
-                "db_source": entry["db_source"],
-                "seq_type": entry.get("seq_type"),
-                "seq_len": entry.get("seq_len"),
-                "sequence": entry.get("sequence"),
-            })
+            flat_rows.append(
+                {
+                    "uuid": motif_uuid,
+                    "token": token,
+                    "category": category,
+                    "features": ",".join(features),
+                    "plasmid_count": plasmid_count,
+                    "sseqid": sseqid,
+                    "db_source": entry["db_source"],
+                    "seq_type": entry.get("seq_type"),
+                    "seq_len": entry.get("seq_len"),
+                    "sequence": entry.get("sequence"),
+                }
+            )
 
         # Pick best description (prefer snapgene)
         description = ""
@@ -498,8 +596,7 @@ def main():
         }
 
     n_with_seq = sum(
-        1 for m in motifs.values()
-        if any(s["sequence"] is not None for s in m["sequences"])
+        1 for m in motifs.values() if any(s["sequence"] is not None for s in m["sequences"])
     )
     logger.info("Registry: %d motifs (%d with sequences)", len(motifs), n_with_seq)
 
@@ -511,14 +608,18 @@ def main():
     parquet_path = output_dir / "motif_registry.parquet"
 
     with open(json_path, "w") as f:
-        json.dump({
-            "version": "2.0",
-            "namespace_uuid": str(MOTIF_NAMESPACE),
-            "n_motifs": len(motifs),
-            "n_with_sequences": n_with_seq,
-            "motifs": motifs,
-            "token_to_uuid": token_to_uuid,
-        }, f, indent=2)
+        json.dump(
+            {
+                "version": "2.0",
+                "namespace_uuid": str(MOTIF_NAMESPACE),
+                "n_motifs": len(motifs),
+                "n_with_sequences": n_with_seq,
+                "motifs": motifs,
+                "token_to_uuid": token_to_uuid,
+            },
+            f,
+            indent=2,
+        )
     logger.info("Written: %s (%.1f MB)", json_path, json_path.stat().st_size / 1e6)
 
     flat_df = pd.DataFrame(flat_rows)
@@ -543,7 +644,7 @@ def main():
         c = by_cat[cat]
         print(f"  {cat:10s}  {c['n']:3d} tokens  {c['with_seq']:3d} with sequences")
 
-    print(f"\nTop motifs by plasmid count:")
+    print("\nTop motifs by plasmid count:")
     for m in sorted(motifs.values(), key=lambda x: x["plasmid_count"], reverse=True)[:15]:
         n_seq = sum(1 for s in m["sequences"] if s["sequence"] is not None)
         print(
@@ -553,15 +654,18 @@ def main():
         )
 
     # Vocab coverage
-    seq_tokens_in_vocab = {t for t in vocab if any(t.startswith(f"<{p}_") for p in
-                           ["AMR", "PROM", "ORI", "ELEM", "REPORTER", "TAG"])}
+    seq_tokens_in_vocab = {
+        t
+        for t in vocab
+        if any(t.startswith(f"<{p}_") for p in ["AMR", "PROM", "ORI", "ELEM", "REPORTER", "TAG"])
+    }
     covered = seq_tokens_in_vocab & set(token_to_uuid.keys())
     print(f"\nVocab coverage: {len(covered)}/{len(seq_tokens_in_vocab)} sequence tokens")
     missing = seq_tokens_in_vocab - set(token_to_uuid.keys())
     if missing:
         print(f"  Not in registry (OTHER/rare): {sorted(missing)}")
 
-    print(f"\nOutputs:")
+    print("\nOutputs:")
     print(f"  {json_path}")
     print(f"  {parquet_path}")
     print("=" * 70)

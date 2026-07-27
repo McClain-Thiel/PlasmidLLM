@@ -1,7 +1,7 @@
-name: grpo-dense-motif
-cloud: helix-anyscale-cloud
+name: grpo-plannotate
+cloud: ${ANYSCALE_CLOUD}
 compute_config:
-  cloud: helix-anyscale-cloud
+  cloud: ${ANYSCALE_CLOUD}
   head_node:
     instance_type: g5.2xlarge
   worker_nodes: []
@@ -20,6 +20,9 @@ requirements:
 entrypoint: python infra/anyscale/run_anyscale.py
 max_retries: 0
 env_vars:
+  CONFIG: grpo_plannotate_anyscale
+  S3_DATA_PREFIX: "${S3_DATA_PREFIX}"
+  S3_CHECKPOINT_PREFIX: "${S3_CHECKPOINT_PREFIX}"
   WANDB_API_KEY: "${WANDB_API_KEY}"
   HF_TOKEN: "${HF_TOKEN}"
   PYTHONPATH: "."

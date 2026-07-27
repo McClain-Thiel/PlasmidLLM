@@ -116,7 +116,8 @@ See `pretraining/configs/` for ready-to-use examples covering baseline, k-mer, M
 
 2. **`special_tokens.txt`** — One token per line, defining the full vocabulary of categorical tokens plus control tokens (`<PAD>`, `<BOS>`, `<EOS>`, `<SEP>`, `<UNK>`).
 
-**Sample data** is included in `data/` for testing. Full production data lives in S3 — see `data/README.md`.
+Large datasets are external and gitignored. Download the artifact snapshot or
+place compatible inputs under `data/`; see `data/README.md`.
 
 ## Experiment tracking
 
@@ -125,8 +126,7 @@ Supports both MLflow and W&B. Each run automatically logs:
 - Input file paths + SHA256 hashes (for data lineage)
 - Full model architecture and hyperparameters
 - Training metrics (loss, token accuracy, perplexity)
-- Git commit hash
-- Checkpoints as artifacts
+- Checkpoints as MLflow artifacts when MLflow is enabled
 
 ## Output
 
@@ -142,3 +142,8 @@ The training script saves:
 |--------|-------------|
 | `p4_smoke_test.py` | 100-step pipeline test |
 | `p4_kmer6_s3.py` | 6-mer tokenizer, stride 3, dense FFN — the released base model |
+| `pretrain_g6big.py` | Single-GPU dense baseline with environment-configurable paths |
+
+All included configs default to the gitignored repository `data/` directory.
+Override `PLASMID_DATA_DIR` or the more specific path variables documented in
+each config when running elsewhere.

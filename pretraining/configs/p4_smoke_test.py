@@ -1,27 +1,27 @@
-"""Quick 100-step smoke test for p4 — verifies training pipeline end-to-end."""
+"""Quick 100-step smoke test for the pretraining pipeline."""
 
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
-from plasmid_llm.config import PretrainingConfig
+from plasmid_llm.config import PretrainingConfig  # noqa: E402
 
-DATA_DIR = Path("/opt/dlami/nvme/data")
-OUTPUT_ROOT = Path("/opt/dlami/nvme/output")
+DATA_DIR = Path(os.environ.get("PLASMID_DATA_DIR", REPO_ROOT / "data"))
+OUTPUT_ROOT = Path(os.environ.get("PLASMID_PRETRAIN_OUTPUT", "output"))
 
 config = PretrainingConfig(
     # Data
     training_pairs=DATA_DIR / "training_pairs_v4.parquet",
-    special_tokens=Path(__file__).resolve().parent.parent / "data" / "special_tokens.txt",
-
+    special_tokens=DATA_DIR / "special_tokens.txt",
     # Architecture — baseline
     hidden_size=384,
     num_hidden_layers=10,
     num_attention_heads=8,
     intermediate_size=1536,
     max_seq_len=4096,
-
     # Training — 100 steps only
     output_dir=OUTPUT_ROOT / "smoke_test",
     per_device_train_batch_size=32,
@@ -31,20 +31,17 @@ config = PretrainingConfig(
     warmup_steps=10,
     weight_decay=0.1,
     max_grad_norm=1.0,
-
     # Evaluation
     val_split=0.05,
     eval_steps=50,
     save_steps=50,
     logging_steps=10,
     early_stopping_patience=100,
-
     # System
     bf16=True,
     gradient_checkpointing=False,
     dataloader_num_workers=4,
     seed=42,
-
     # W&B
     wandb_project="PlasmidLLM",
     wandb_run_name="smoke_test_baseline_100steps",

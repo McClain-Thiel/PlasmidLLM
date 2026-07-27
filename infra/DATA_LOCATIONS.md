@@ -1,82 +1,66 @@
-# Data Locations
+# Data and artifact layout
 
-## S3 — Primary Training Data
+Large datasets, generated panels, and checkpoints are not stored in Git. The anonymized
+review branch uses placeholder namespaces; substitute the archive location supplied by the
+authors.
 
-**Bucket:** `s3://phd-research-storage-1758274488/databricks_export/`
+## Training inputs
 
-| File | Size | Description |
-|------|------|-------------|
-| `training_pairs_v4.parquet` | 689.9 MiB | Current training set (v4 vocabulary, 106 tokens) |
-| `training_pairs.parquet` | 679.8 MiB | Previous training set (v3 vocabulary) |
-| `full_sequences.parquet` | 401.0 MiB | Raw plasmid sequences from Addgene |
-| `annotations.parquet` | 233.0 MiB | Plannotate annotations for each plasmid |
-| `partial_sequences.parquet` | 47.3 MiB | Partial/incomplete sequences |
-| `metadata.parquet` | 24.5 MiB | Addgene metadata (species, vector type, etc.) |
-| `motif_registry_combined.parquet` | 137.6 KiB | Extended motif registry (multiple DB sources) |
-| `motif_registry.parquet` | 54.5 KiB | Original motif registry |
+| file | purpose |
+|---|---|
+| `training_pairs_v4.parquet` | Pretraining pairs in `<BOS><tokens><SEP>sequence<EOS>` format |
+| `full_sequences.parquet` | Larger source-plasmid table used to construct source-ID holdouts |
+| `metadata.parquet` | Copy number and other plasmid metadata |
+| `annotations.parquet` | Historical pLAnnotate export; incomplete and not suitable for rebuilding every prompt |
+| `motif_registry_combined.parquet` | Prompt-token to reference-sequence registry used by post-training |
 
-### Download
+The local convention is:
 
-```bash
-# Current training set + motif registry
-aws s3 cp s3://phd-research-storage-1758274488/databricks_export/training_pairs_v4.parquet data/
-aws s3 cp s3://phd-research-storage-1758274488/databricks_export/motif_registry_combined.parquet data/
-
-# Everything
-aws s3 cp s3://phd-research-storage-1758274488/databricks_export/ data/s3_export/ --recursive
+```text
+data/
+├── training_pairs_v4.parquet
+├── full_sequences.parquet
+├── metadata.parquet
+├── annotations.parquet
+└── motif_registry_combined.parquet
 ```
 
-### How Training Data Was Built
+Only `special_tokens.txt` and `token_vocabulary_v4.json` are tracked. All other files under
+`data/` are ignored.
 
-```
-full_sequences.parquet    raw DNA from Addgene
-        +
-annotations.parquet       plannotate feature calls (AMR, ORI, PROM, ...)
-        +
-metadata.parquet          species, vector type, copy number
-        ↓
-  (Databricks notebook; produced `training_pairs_v4.parquet` and is not in main)
-        ↓
-training_pairs_v4.parquet   <BOS><tokens><SEP>SEQUENCE<EOS> formatted pairs
+## Rebuttal archive
+
+The complete external snapshot is rooted at:
+
+```text
+hf://buckets/<org>/PlasmidLMEval/neurips_2026_rebuttal/
 ```
 
-Motif registries are built by `scripts/build_motif_registry.py` from plannotate's BLAST/Diamond databases.
+Its `README.md` and SHA-256 manifest index source bundles, inputs, generated sequences,
+annotations, logs, W&B lineage, and checkpoint binaries. Within the snapshot:
 
-## S3 — Anyscale Training
-
-**Bucket:** `s3://anyscale-production-data-vm-us-east-1-f7164253/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm/`
-
-```
-├── data/
-│   ├── motif_registry_combined.parquet
-│   └── training_pairs_v4.parquet
-└── checkpoints/
-    └── grpo_dense_motif/
-        ├── step_100/
-        └── final/
-```
-
-### Download Checkpoint
-
-```bash
-aws s3 sync \
-  s3://anyscale-production-data-vm-us-east-1-f7164253/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm/checkpoints/grpo_dense_motif/final/ \
-  ./checkpoints/grpo_dense_motif_anyscale/
+```text
+neurips_2026_rebuttal/
+├── README.md
+├── lineage/
+│   ├── SHA256SUMS
+│   └── local_file_manifest.json
+├── source/
+└── s3/neurips_rebuttal/
+    ├── artifacts/
+    ├── m13_blind_v2_g7e/
+    ├── grpo_m13_blind_v2_g7e_ckpt/
+    └── exhaustive_training_mosaic_20260727/
 ```
 
-## Local — This Machine
+The historical archive intentionally contains failed and superseded attempts. Use
+[`experiments/neurips_rebuttal/README.md`](../experiments/neurips_rebuttal/README.md) to
+identify the final analyses and their interpretation limits.
 
-- `/opt/dlami/nvme/PlasmidLLM/` — stale copy of repo (on `reorg` branch, older than `~/PlasmidLLM`)
-- `/opt/dlami/nvme/plasmid_data_0_raw/` — raw data
-- `/opt/dlami/nvme/plasmid_data_1_parsed/` — parsed data
-- `/opt/dlami/nvme/plasmidkit_addgene_annotations/` — AddGene annotations
-- `/opt/dlami/nvme/plasmidkit_annotations/` — additional annotations
+## Model repositories
 
-## HuggingFace Hub
+- `<org>/PlasmidLM-kmer6` — released dense base checkpoint
+- `<org>/PlasmidLM-kmer6-GRPO-plannotate` — released post-GRPO checkpoint
 
-- `<org>/PlasmidLM-kmer6` — 19.3M param dense transformer
-- `<org>/PlasmidLM-kmer6-MoE` — MoE variant
-
-## Monitoring
-
-- WandB: https://wandb.ai/<entity>/PlasmidLLM
+Training and evaluation runs log to the `PlasmidLLM` W&B project. Exact run links remain
+in the private research log during double-blind review.

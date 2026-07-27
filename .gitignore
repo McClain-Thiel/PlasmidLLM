@@ -1,5 +1,8 @@
 # Data & outputs
-data/
+data/*
+!data/README.md
+!data/special_tokens.txt
+!data/token_vocabulary_v4.json
 !eval/data/
 *.csv
 !eval/reference/*.csv
@@ -9,6 +12,9 @@ eval/scorers/cache/
 eval/runs/
 # eval/baselines FASTA files are generated locally, not tracked in git
 eval/baselines/
+eval/reference/addgene_500.fasta
+eval/reference/addgene_reference_500.csv
+eval/reference/training_sigs.zip
 
 # Python
 __pycache__/
@@ -66,6 +72,9 @@ checkpoints/
 
 # MLflow
 mlruns/
+
+# Weights & Biases local run cache
+wandb/
 
 # Local audit + tooling artifacts (not tracked)
 .paper-audit/

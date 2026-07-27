@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import argparse
 import gc
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -28,9 +30,10 @@ import pyarrow.parquet as pq
 import torch
 import torch.nn.functional as F
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.build_motif_registry import ALL_TOKEN_MAPS, feature_to_category_token
+from scripts.build_motif_registry import feature_to_category_token  # noqa: E402
 
 # Inline from post_training/reward.py to avoid parasail dependency
 HARD_PREFIXES = {"AMR_", "ORI_", "PROM_", "REPORTER_", "REP_", "TAG_", "ELEM_"}
@@ -38,14 +41,18 @@ EXCLUDE_TOKENS = {"<ELEM_IRES>", "<ELEM_TRACRRNA>"}
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-PLANNOTATE_BIN = "/opt/dlami/nvme/miniconda3/envs/plannotate/bin/plannotate"
-DEFAULT_PARQUET = "/mnt/s3/phd-research-storage-1758274488/databricks_export/training_pairs_v4.parquet"
-DEFAULT_MOTIF_REGISTRY = "data/motif_registry.parquet"
+PLANNOTATE_BIN = os.environ.get(
+    "PLANNOTATE_BIN",
+    shutil.which("plannotate") or "plannotate",
+)
+DEFAULT_PARQUET = str(REPO_ROOT / "data" / "training_pairs_v4.parquet")
+DEFAULT_MOTIF_REGISTRY = str(REPO_ROOT / "data" / "motif_registry.parquet")
 
 MIN_PERCMATCH = 95.0
 
 
 # ── Inlined from reward.py (avoids parasail dependency) ─────────────────────
+
 
 def load_motif_lookup(path: str) -> pd.DataFrame:
     """Load motif registry and index by token (lightweight, no alignment)."""
@@ -69,6 +76,7 @@ def parse_hard_tokens(prompt: str, lookup_df: pd.DataFrame) -> list[str]:
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def extract_dna(text: str) -> str:
     """Strip special tokens and non-DNA characters from generated text."""
@@ -138,6 +146,7 @@ def load_val_prompts(
 
 # ── MoE dense patch ──────────────────────────────────────────────────────────
 
+
 def patch_moe_dense(model):
     """Monkey-patch MoE layers for dense batched-matmul inference.
 
@@ -167,8 +176,10 @@ def patch_moe_dense(model):
                 top_weights = top_weights / top_weights.sum(dim=-1, keepdim=True)
 
                 expert_mask = torch.zeros(
-                    num_tokens, _moe.num_experts,
-                    device=flat.device, dtype=flat.dtype,
+                    num_tokens,
+                    _moe.num_experts,
+                    device=flat.device,
+                    dtype=flat.dtype,
                 )
                 expert_mask.scatter_(1, top_indices, top_weights)
 
@@ -188,6 +199,7 @@ def patch_moe_dense(model):
                 aux_loss = _moe.num_experts * (f_i * P).sum()
 
                 return output, aux_loss
+
             return forward_dense
 
         moe._original_forward = moe.forward
@@ -201,11 +213,9 @@ def patch_moe_dense(model):
 def is_moe_model(model_id: str) -> bool:
     """Check if a model is MoE by inspecting its config."""
     from transformers import AutoConfig
-    try:
-        config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-        return getattr(config, "use_moe", False)
-    except Exception:
-        return "moe" in model_id.lower()
+
+    config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    return getattr(config, "use_moe", False)
 
 
 def generate_with_hf(
@@ -227,7 +237,9 @@ def generate_with_hf(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model = AutoModelForCausalLM.from_pretrained(
-        model_id, trust_remote_code=True, dtype=torch.bfloat16,
+        model_id,
+        trust_remote_code=True,
+        dtype=torch.bfloat16,
     ).to(device)
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 
@@ -294,6 +306,7 @@ def generate_with_hf(
 
 # ── pLannotate ───────────────────────────────────────────────────────────────
 
+
 def write_fasta(sequences: dict[str, str], path: Path) -> None:
     """Write {name: sequence} dict as FASTA."""
     with open(path, "w") as f:
@@ -301,7 +314,7 @@ def write_fasta(sequences: dict[str, str], path: Path) -> None:
             f.write(f">{name}\n{seq}\n")
 
 
-def _annotate_one(args_tuple) -> pd.DataFrame | None:
+def _annotate_one(args_tuple) -> pd.DataFrame:
     """Annotate a single sequence with pLannotate. Used by thread pool."""
     name, seq, output_dir, plannotate_bin = args_tuple
     seq_fasta = output_dir / f"{name}.fasta"
@@ -315,24 +328,25 @@ def _annotate_one(args_tuple) -> pd.DataFrame | None:
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    except subprocess.TimeoutExpired:
-        return None
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"pLannotate binary not found: {plannotate_bin}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"pLannotate timed out for {name}") from exc
     if result.returncode != 0:
-        return None
+        raise RuntimeError(
+            f"pLannotate failed for {name} with exit code "
+            f"{result.returncode}: {result.stderr[:500]}"
+        )
 
     csv_files = list(seq_out.glob("*.csv"))
     if not csv_files:
-        return None
+        raise RuntimeError(f"pLannotate produced no CSV for {name}")
 
     csv_path = max(csv_files, key=lambda p: p.stat().st_size)
-    try:
-        df = pd.read_csv(csv_path)
-        if not df.empty:
-            df["sample_id"] = name
-            return df
-    except Exception:
-        pass
-    return None
+    df = pd.read_csv(csv_path)
+    if not df.empty:
+        df["sample_id"] = name
+    return df
 
 
 def run_plannotate(
@@ -340,7 +354,7 @@ def run_plannotate(
     output_dir: Path,
     plannotate_bin: str = PLANNOTATE_BIN,
     n_workers: int = 8,
-) -> pd.DataFrame | None:
+) -> pd.DataFrame:
     """Run pLannotate on each sequence in parallel and combine results."""
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -351,21 +365,24 @@ def run_plannotate(
     tasks = [(name, seq, output_dir, plannotate_bin) for name, seq in fasta_seqs.items()]
 
     all_frames = []
-    n_fail = 0
+    n_without_annotations = 0
 
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
         futures = {pool.submit(_annotate_one, t): t[0] for t in tasks}
         for fut in tqdm(as_completed(futures), total=len(futures), desc="  pLannotate", unit="seq"):
             result = fut.result()
-            if result is not None:
+            if not result.empty:
                 all_frames.append(result)
             else:
-                n_fail += 1
+                n_without_annotations += 1
 
-    print(f"  pLannotate: {len(all_frames)} succeeded, {n_fail} failed out of {len(fasta_seqs)}")
+    print(
+        f"  pLannotate: {len(all_frames)} annotated, "
+        f"{n_without_annotations} without annotations out of {len(fasta_seqs)}"
+    )
 
     if not all_frames:
-        return None
+        return pd.DataFrame()
 
     return pd.concat(all_frames, ignore_index=True)
 
@@ -387,7 +404,9 @@ def parse_plannotate_results(
             id_col = candidate
             break
     if id_col is None:
-        print(f"  Warning: no ID column found in pLannotate output. Columns: {list(ann_df.columns)}")
+        print(
+            f"  Warning: no ID column found in pLannotate output. Columns: {list(ann_df.columns)}"
+        )
         return results
 
     feat_col = "Feature" if "Feature" in ann_df.columns else None
@@ -418,6 +437,7 @@ def parse_plannotate_results(
 
 
 # ── Scoring ──────────────────────────────────────────────────────────────────
+
 
 def score_prompts(
     prompts: list[str],
@@ -471,6 +491,7 @@ def score_prompts(
 
 
 # ── Report ───────────────────────────────────────────────────────────────────
+
 
 def generate_report(
     model_results: dict[str, dict],
@@ -581,7 +602,9 @@ def generate_report(
                 lines.append(f"| {p['token']} | {p['dna_len']} | {status} | {ann_str} |")
 
             n_hit = sum(1 for p in probes if p["hit"])
-            lines.append(f"\n**Probe hit rate: {n_hit}/{len(probes)} ({n_hit/max(len(probes),1):.0%})**\n")
+            lines.append(
+                f"\n**Probe hit rate: {n_hit}/{len(probes)} ({n_hit / max(len(probes), 1):.0%})**\n"
+            )
 
     report = "\n".join(lines)
 
@@ -615,10 +638,12 @@ def print_summary(model_results: dict[str, dict]) -> None:
         perfect = sum(1 for s in scores if s["hit_rate"] == 1.0)
 
         print(f"\n  {name}")
-        print(f"    Hit rate:  {np.mean(hit_rates):.1%} (mean)  |  {total_found}/{total_req} components")
-        print(f"    Perfect:   {perfect}/{len(scores)} prompts ({perfect/len(scores):.0%})")
+        print(
+            f"    Hit rate:  {np.mean(hit_rates):.1%} (mean)  |  {total_found}/{total_req} components"
+        )
+        print(f"    Perfect:   {perfect}/{len(scores)} prompts ({perfect / len(scores):.0%})")
         print(f"    Seq len:   {np.mean(seq_lens):.0f} (mean)  {np.median(seq_lens):.0f} (median)")
-        print(f"    EOS rate:  {eos_count}/{len(scores)} ({eos_count/len(scores):.0%})")
+        print(f"    EOS rate:  {eos_count}/{len(scores)} ({eos_count / len(scores):.0%})")
         print(f"    Speed:     {tps:.0f} tok/s")
 
     print("\n" + "=" * 70)
@@ -627,12 +652,20 @@ def print_summary(model_results: dict[str, dict]) -> None:
 # ── Probe tests ──────────────────────────────────────────────────────────────
 
 DEFAULT_PROBE_TOKENS = [
-    "AMR_AMPICILLIN", "AMR_KANAMYCIN", "AMR_CHLORAMPHENICOL",
-    "ORI_COLE1", "ORI_F1",
-    "PROM_CMV", "PROM_T7", "PROM_LAC",
-    "REPORTER_EGFP", "REPORTER_MCHERRY",
-    "ELEM_WPRE", "ELEM_POLYA_BGH",
-    "TAG_HIS", "TAG_FLAG",
+    "AMR_AMPICILLIN",
+    "AMR_KANAMYCIN",
+    "AMR_CHLORAMPHENICOL",
+    "ORI_COLE1",
+    "ORI_F1",
+    "PROM_CMV",
+    "PROM_T7",
+    "PROM_LAC",
+    "REPORTER_EGFP",
+    "REPORTER_MCHERRY",
+    "ELEM_WPRE",
+    "ELEM_POLYA_BGH",
+    "TAG_HIS",
+    "TAG_FLAG",
 ]
 
 
@@ -654,9 +687,9 @@ def run_probe_tests(
     probe_tokens = [t.strip("<>") for t in probe_tokens]
     prompts = [f"<BOS> <{tok}>" for tok in probe_tokens]
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"PROBE TESTS: {len(probe_tokens)} single-token prompts")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     results: dict[str, list[dict]] = {}
 
@@ -694,7 +727,7 @@ def run_probe_tests(
         # Check each probe
         model_probe_results = []
         print(f"\n  {'Token':<30s} {'SeqLen':>7s} {'Found?':>7s} {'Annotations'}")
-        print(f"  {'-'*30} {'-'*7} {'-'*7} {'-'*30}")
+        print(f"  {'-' * 30} {'-' * 7} {'-' * 7} {'-' * 30}")
 
         for i, tok in enumerate(probe_tokens):
             target_token = f"<{tok}>"
@@ -714,10 +747,14 @@ def run_probe_tests(
             model_probe_results.append(result)
 
             status = "YES" if hit else "NO"
-            print(f"  {tok:<30s} {len(dna):>7d} {status:>7s} {', '.join(all_ann) if all_ann else '(none)'}")
+            print(
+                f"  {tok:<30s} {len(dna):>7d} {status:>7s} {', '.join(all_ann) if all_ann else '(none)'}"
+            )
 
         n_hit = sum(1 for r in model_probe_results if r["hit"])
-        print(f"\n  Probe hit rate: {n_hit}/{len(model_probe_results)} ({n_hit/max(len(model_probe_results),1):.0%})")
+        print(
+            f"\n  Probe hit rate: {n_hit}/{len(model_probe_results)} ({n_hit / max(len(model_probe_results), 1):.0%})"
+        )
         results[model_id] = model_probe_results
 
     return results
@@ -725,12 +762,15 @@ def run_probe_tests(
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluate PlasmidLLM models with pLannotate annotation scoring"
     )
     parser.add_argument(
-        "--models", nargs="+", required=True,
+        "--models",
+        nargs="+",
+        required=True,
         help="HuggingFace model IDs (e.g. <org>/PlasmidLM-kmer6)",
     )
     parser.add_argument("--n", type=int, default=100, help="Number of val prompts")
@@ -740,21 +780,29 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=str, default="eval_output")
     parser.add_argument(
-        "--parquet", type=str, default=DEFAULT_PARQUET,
+        "--parquet",
+        type=str,
+        default=DEFAULT_PARQUET,
         help="Training data parquet for val split",
     )
     parser.add_argument(
-        "--motif-registry", type=str, default=DEFAULT_MOTIF_REGISTRY,
+        "--motif-registry",
+        type=str,
+        default=DEFAULT_MOTIF_REGISTRY,
         help="Path to motif_registry.parquet",
     )
     parser.add_argument(
-        "--plannotate-bin", type=str, default=PLANNOTATE_BIN,
-        help="Path to plannotate binary in conda env",
+        "--plannotate-bin",
+        type=str,
+        default=PLANNOTATE_BIN,
+        help="pLannotate executable (defaults to PLANNOTATE_BIN or PATH)",
     )
     parser.add_argument(
-        "--probe-tokens", nargs="*", default=None,
+        "--probe-tokens",
+        nargs="*",
+        default=None,
         help="Run targeted single-token probe tests (e.g. AMR_AMPICILLIN ORI_COLE1). "
-             "If flag given with no args, uses a default set.",
+        "If flag given with no args, uses a default set.",
     )
     args = parser.parse_args()
 
@@ -780,9 +828,9 @@ def main():
 
     for model_id in args.models:
         model_name = model_id.split("/")[-1]
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"MODEL: {model_id}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
         model_dir = output_dir / model_name
         model_dir.mkdir(parents=True, exist_ok=True)
@@ -824,7 +872,9 @@ def main():
         # Step 4: Map annotations to tokens
         plannotate_tokens = parse_plannotate_results(ann_df, sseqid_lookup)
         n_mapped = sum(len(v) for v in plannotate_tokens.values())
-        print(f"  Mapped {n_mapped} annotations to tokens across {len(plannotate_tokens)} sequences")
+        print(
+            f"  Mapped {n_mapped} annotations to tokens across {len(plannotate_tokens)} sequences"
+        )
 
         # Step 5: Score
         scores = score_prompts(prompts, candidates_per_prompt, plannotate_tokens, lookup_df)

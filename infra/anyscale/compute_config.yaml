@@ -1,4 +1,4 @@
-cloud: helix-anyscale-cloud
+cloud: ${ANYSCALE_CLOUD}
 head_node:
   instance_type: m5.xlarge     # 4 vCPU, 16GB RAM (no GPU on head)
 worker_nodes:

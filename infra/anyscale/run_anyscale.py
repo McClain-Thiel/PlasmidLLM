@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # ── Ensure project root is on PYTHONPATH ──────────────────────────────────
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 logging.basicConfig(
@@ -17,18 +17,15 @@ logging.basicConfig(
 )
 log = logging.getLogger("anyscale_runner")
 
-S3_PREFIX = os.environ.get(
-    "S3_DATA_PREFIX",
-    "s3://anyscale-production-data-vm-us-east-1-f7164253"
-    "/org_wlxw8le5gjzi3dwtlu8qik7ngu/plasmid_llm",
-)
 DATA_DIR = ROOT / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-S3_CHECKPOINT_PREFIX = os.environ.get(
-    "S3_CHECKPOINT_PREFIX",
-    f"{S3_PREFIX}/checkpoints",
-)
+
+def required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"Required environment variable is not set: {name}")
+    return value.rstrip("/")
 
 
 def s3_download(s3_path: str, local_path: Path) -> None:
@@ -47,14 +44,41 @@ def install_blast():
     except (FileNotFoundError, subprocess.CalledProcessError):
         log.info("Installing BLAST+ via apt...")
         subprocess.check_call(["sudo", "apt-get", "update", "-qq"])
-        subprocess.check_call(
-            ["sudo", "apt-get", "install", "-y", "-qq", "ncbi-blast+"]
-        )
+        subprocess.check_call(["sudo", "apt-get", "install", "-y", "-qq", "ncbi-blast+"])
         log.info("BLAST+ installed")
+
+
+def required_data_paths(cfg) -> list[Path]:
+    """Return repository data files referenced by a post-training config."""
+    configured = [cfg.prompts_parquet, cfg.eval_parquet]
+    configured.extend(cfg.scorer_kwargs.values())
+
+    paths = []
+    for value in configured:
+        if not value:
+            continue
+        path = Path(value).resolve()
+        if path.parent != DATA_DIR.resolve():
+            continue
+        paths.append(path)
+    return sorted(set(paths))
 
 
 def main():
     config_name = os.environ.get("CONFIG", "grpo_plannotate_anyscale")
+    s3_prefix = required_env("S3_DATA_PREFIX")
+    checkpoint_prefix = os.environ.get(
+        "S3_CHECKPOINT_PREFIX",
+        f"{s3_prefix}/checkpoints",
+    ).rstrip("/")
+
+    from post_training.runners.run import load_config, run
+
+    config_path = ROOT / "post_training" / "configs" / f"{config_name}.py"
+    if not config_path.is_file():
+        raise FileNotFoundError(f"Post-training config not found: {config_path}")
+    log.info("Using config: %s", config_path)
+    cfg = load_config(config_path)
 
     # ── Install BLAST+ if BLAST-based scorer ──────────────────────────────
     if "plannotate" in config_name:
@@ -62,55 +86,9 @@ def main():
 
     # ── Download data ─────────────────────────────────────────────────────
     log.info("Downloading data from S3...")
-    s3_download(
-        f"{S3_PREFIX}/data/motif_registry_combined.parquet",
-        DATA_DIR / "motif_registry_combined.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_v4.parquet",
-        DATA_DIR / "training_pairs_v4.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/plannotate_db.parquet",
-        DATA_DIR / "plannotate_db.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_binary_motif_1tok.parquet",
-        DATA_DIR / "training_pairs_binary_motif_1tok.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_binary_motif_2tok.parquet",
-        DATA_DIR / "training_pairs_binary_motif_2tok.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_binary_motif_3tok.parquet",
-        DATA_DIR / "training_pairs_binary_motif_3tok.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_binary_motif_5tok.parquet",
-        DATA_DIR / "training_pairs_binary_motif_5tok.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_binary_motif_8tok.parquet",
-        DATA_DIR / "training_pairs_binary_motif_8tok.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/training_pairs_mixed_curriculum.parquet",
-        DATA_DIR / "training_pairs_mixed_curriculum.parquet",
-    )
-    s3_download(
-        f"{S3_PREFIX}/data/holdout_full_prompts.parquet",
-        DATA_DIR / "holdout_full_prompts.parquet",
-    )
+    for local_path in required_data_paths(cfg):
+        s3_download(f"{s3_prefix}/data/{local_path.name}", local_path)
     log.info("Data download complete.")
-
-    # ── Load config ───────────────────────────────────────────────────────
-    from post_training.runners.run import load_config, run
-
-    config_name = os.environ.get("CONFIG", "grpo_plannotate_anyscale")
-    config_path = ROOT / "post_training" / "configs" / f"{config_name}.py"
-    log.info("Using config: %s", config_path)
-    cfg = load_config(config_path)
 
     # ── Resume from S3 checkpoint ────────────────────────────────────────
     # Pass S3 path directly — ModelActor downloads on the worker node.
@@ -121,7 +99,7 @@ def main():
 
     # ── Set S3 checkpoint sync (runs on worker via ModelActor) ───────────
     run_name = config_name.replace("_anyscale", "")
-    cfg.s3_checkpoint_prefix = f"{S3_CHECKPOINT_PREFIX}/{run_name}"
+    cfg.s3_checkpoint_prefix = f"{checkpoint_prefix}/{run_name}"
 
     # ── Run post-training ─────────────────────────────────────────────────
     run(cfg)

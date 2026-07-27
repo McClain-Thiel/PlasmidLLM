@@ -8,11 +8,10 @@ Language models for synthetic plasmid DNA sequence generation with reinforcement
 > artifacts — HuggingFace model repos (`<org>/PlasmidLM-*`), Weights & Biases
 > projects, and Databricks MLflow experiments — point at namespaces controlled
 > by the original authors. These URLs will not resolve as written; reviewers
-> should treat them as opaque identifiers. Code paths that load these
-> checkpoints (e.g. `from_pretrained("<org>/PlasmidLM-kmer6")`) require
-> substituting a real namespace before running. Everything else (training,
-> eval, scorers, tests) is self-contained and runs on the data shipped under
-> `data/`.
+> should treat them as opaque identifiers. Code paths that load a checkpoint
+> require substituting a real namespace. Source code, tracked reference panels,
+> and unit tests are self-contained; large training datasets, generated panels,
+> and checkpoints are intentionally stored outside Git.
 
 ## Goal
 
@@ -57,9 +56,12 @@ PlasmidLLM/
 │   ├── scripts/                  Generation, metrics, figures
 │   └── plasmidspace/             Visualization UI
 │
+├── experiments/              Self-contained analyses tied to specific studies
+│   └── neurips_rebuttal/         Corrected holdout, registry-blind, and reuse checks
+│
 ├── scripts/                  Utilities (generation, motif registry, HF upload)
 ├── notebooks/                Analysis notebooks (marimo)
-├── data/                     Vocabulary + special tokens (see data/README.md)
+├── data/                     Tracked vocabulary files; large datasets are external
 └── tests/                    Unit and integration tests
 ```
 
@@ -67,6 +69,7 @@ Each stage has its own README with detailed documentation:
 - **[pretraining/README.md](pretraining/README.md)** — Model architecture, tokenization, config reference
 - **[post_training/README.md](post_training/README.md)** — Actor/algorithm design, scorers, multi-actor training
 - **[eval/README.md](eval/README.md)** — Evaluation axes, metrics, scorer pass criteria
+- **[experiments/neurips_rebuttal/README.md](experiments/neurips_rebuttal/README.md)** — Corrected rebuttal analyses and interpretation limits
 
 ## Model
 
@@ -75,10 +78,13 @@ Transformer decoder with RoPE, RMSNorm, and optional Mixture-of-Experts. Support
 ## Install
 
 ```bash
-pip install -e .
+uv sync
 
 # For RL post-training (Ray, parasail, biopython)
-pip install -e ".[rl]"
+uv sync --extra rl
+
+# For the rebuttal analyses
+uv sync --extra rebuttal
 ```
 
 ## Quick start
@@ -106,3 +112,7 @@ python scripts/generate.py \
 | Dev | pytest, ruff |
 
 See `pyproject.toml` for the full list.
+
+Large inputs and outputs are not committed. Experiment READMEs specify the required
+artifact layout; the anonymized review branch deliberately uses placeholder namespaces
+for externally hosted artifacts.

@@ -49,7 +49,8 @@ post_training/
 ├── scorers/
 │   ├── base.py          # Scorer ABC (score_sequence / score_batch)
 │   ├── alignment.py     # AlignmentScorer — Smith-Waterman score-ratio
-│   └── motif.py         # MotifScorer — CIGAR-based parasail alignment
+│   ├── motif.py         # MotifScorer — CIGAR-based parasail alignment
+│   └── plannotate.py    # Batched BLAST scorer used by the released GRPO run
 └── runners/
     ├── run.py           # Config-driven runner (main entrypoint)
     └── run_grpo.py      # CLI wrapper for quick GRPO experiments
@@ -58,14 +59,11 @@ post_training/
 ## Quick start
 
 ```bash
-# Smoke test — 20 steps, gpt2, CPU, no dependencies beyond torch
-python -m post_training.runners.run post_training/configs/smoke_test.py
-
-# Real training — GRPO + motif scorer on PlasmidLM
-python -m post_training.runners.run post_training/configs/grpo_motif.py
-
-# CLI shortcut (builds config from flags, toy scorer only)
+# Local smoke test (builds a temporary config from flags, toy scorer only)
 python -m post_training.runners.run_grpo --model gpt2 --steps 10
+
+# Reproducible pLAnnotate runs use a checked-in config and the Anyscale launcher.
+CONFIG=grpo_plannotate_anyscale bash infra/anyscale/submit.sh
 ```
 
 ## Configuration
@@ -136,7 +134,7 @@ python -m post_training.runners.run post_training/configs/my_run.py
 | | `entropy_coeff` | `0.01` | Entropy bonus (PPO) |
 | | `ppo_epochs` | `4` | Epochs per batch (PPO) |
 | | `micro_batch_size` | `64` | Micro-batch size for gradient accumulation |
-| **Scorer** | `scorer` | `"substring"` | `"substring"`, `"alignment"`, or `"motif"` |
+| **Scorer** | `scorer` | `"substring"` | Registered scorer name; see `scorers/__init__.py` |
 | | `scorer_kwargs` | `{}` | Kwargs passed to scorer constructor |
 | **Generation** | `max_new_tokens` | `64` | Max tokens per completion |
 | | `temperature` | `1.0` | Sampling temperature |
@@ -211,6 +209,9 @@ Scorers are independent of the training infrastructure. They implement `score_se
 |-------------|-------------------|-------------|
 | `alignment` | `AlignmentScorer` | Smith-Waterman score-ratio using parasail. Scores DNA and protein (6-frame translation). Per-component scores capped at 1.0, optional EOS bonus. |
 | `motif`     | `MotifScorer`     | CIGAR-based semi-global alignment via parasail. Three-pass: k-mer pre-filter, score-only alignment, full trace. Composite score = quality x recall penalty. |
+| `plannotate` | `PlannotateScorer` | Batched nucleotide/protein BLAST against the pLAnnotate feature database through the motif-registry token bridge. |
+| `binary_motif` / `fractional_motif` | Curriculum scorers | Exact or partial motif placement rewards used in ablations. |
+| `valid` | `ValidPlasmidScorer` | Sequence-level validity checks. |
 
 ```python
 from post_training.scorers import build_scorer
@@ -218,7 +219,8 @@ from post_training.scorers import build_scorer
 scorer = build_scorer("motif", motif_db_path="data/motif_registry.parquet")
 ```
 
-The `Scorer` protocol expected by algorithms is minimal — just `score(prompts, completions) -> torch.Tensor`. The scorer ABC in `scorers/base.py` uses `score_sequence` / `score_batch` instead. To bridge the two, wrap your scorer or add a `score` method that calls `score_batch` and converts to a tensor.
+The `Scorer` base class exposes `score_sequence`, `score_batch`, and the
+tensor-returning `score` method expected by the training algorithms.
 
 ## Multi-actor training
 
@@ -346,7 +348,9 @@ All config fields are logged to `wandb.config` at init. Each training step autom
 | `mean_completion_len` | Mean completion length in characters |
 | `time_generation`, `time_scoring`, `time_train`, `time_total` | Phase timings in seconds |
 
-If wandb is not installed or no project is set, all logging calls are silent no-ops.
+If no W&B project is configured, W&B logging is disabled. If a project is
+configured, the runner requires the W&B dependency and initializes the run
+before allocating Ray actors.
 
 ## Combinatorics
 

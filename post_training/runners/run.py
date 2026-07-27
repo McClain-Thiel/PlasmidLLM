@@ -4,8 +4,7 @@ Loads a PostTrainingConfig from a Python config file and runs the
 specified (algorithm, model, scorer) combination.
 
 Usage:
-    python -m post_training.runners.run post_training/configs/smoke_test.py
-    python -m post_training.runners.run post_training/configs/grpo_motif.py
+    python -m post_training.runners.run post_training/configs/grpo_plannotate_anyscale.py
 """
 
 from __future__ import annotations
@@ -50,9 +49,7 @@ def load_config(config_path: str | Path) -> PostTrainingConfig:
         raise ValueError(f"Config file must define 'config' variable: {config_path}")
     cfg = module.config
     if not isinstance(cfg, PostTrainingConfig):
-        raise TypeError(
-            f"Expected PostTrainingConfig, got {type(cfg).__name__} in {config_path}"
-        )
+        raise TypeError(f"Expected PostTrainingConfig, got {type(cfg).__name__} in {config_path}")
     return cfg
 
 
@@ -95,6 +92,7 @@ def _load_prompts(cfg: PostTrainingConfig) -> list[str]:
 
     if cfg.prompts_parquet:
         from plasmid_llm.utils import load_prompts_from_parquet
+
         prompts = load_prompts_from_parquet(
             cfg.prompts_parquet,
             filter_hard_tokens=cfg.filter_hard_tokens,
@@ -146,8 +144,11 @@ def _run_eval(
 
     log.info(
         "EVAL step=%d  reward=%.3f±%.3f  best=%.3f  len=%.0f  (%d prompts)",
-        step, metrics["mean_reward"], metrics["reward_std"],
-        metrics["reward_best"], metrics["mean_completion_len"],
+        step,
+        metrics["mean_reward"],
+        metrics["reward_std"],
+        metrics["reward_best"],
+        metrics["mean_completion_len"],
         len(eval_prompts),
     )
     return metrics
@@ -157,28 +158,25 @@ def run(cfg: PostTrainingConfig) -> None:
     """Execute a full post-training run from a config."""
 
     # ── wandb ──────────────────────────────────────────────────────────────
+    wandb_run = None
     if cfg.wandb_enabled:
-        try:
-            import wandb
-            wandb.init(
-                project=cfg.wandb_project,
-                name=cfg.wandb_run_name,
-                entity=cfg.wandb_entity,
-                config=cfg.to_wandb_config(),
-            )
-            log.info("wandb run: %s/%s", wandb.run.project, wandb.run.name)
-        except ImportError:
-            log.warning("wandb_project set but wandb is not installed; continuing without it")
+        import wandb
+
+        wandb_run = wandb.init(
+            project=cfg.wandb_project,
+            name=cfg.wandb_run_name,
+            entity=cfg.wandb_entity,
+            config=cfg.to_wandb_config(),
+        )
+        log.info("wandb run: %s/%s", wandb_run.project, wandb_run.name)
 
     ray.init(ignore_reinit_error=True)
 
     # ── Actors ─────────────────────────────────────────────────────────────
-    actors = [
-        ModelActor.remote(cfg.model, **cfg.actor_kwargs())
-        for _ in range(cfg.num_actors)
-    ]
+    actors = [ModelActor.remote(cfg.model, **cfg.actor_kwargs()) for _ in range(cfg.num_actors)]
     if cfg.num_actors > 1:
         from post_training.algorithms.base import Algorithm
+
         Algorithm.sync_actors(actors)
 
     # ── Algorithm + scorer ─────────────────────────────────────────────────
@@ -190,8 +188,10 @@ def run(cfg: PostTrainingConfig) -> None:
     eval_prompts: list[str] | None = None
     if cfg.eval_parquet:
         from plasmid_llm.utils import load_prompts_from_parquet
+
         all_eval = load_prompts_from_parquet(
-            cfg.eval_parquet, filter_hard_tokens=cfg.filter_hard_tokens,
+            cfg.eval_parquet,
+            filter_hard_tokens=cfg.filter_hard_tokens,
         )
         log.info("Loaded %d eval prompts from %s", len(all_eval), cfg.eval_parquet)
         eval_rng = random.Random(cfg.seed)
@@ -199,7 +199,11 @@ def run(cfg: PostTrainingConfig) -> None:
 
     log.info(
         "Starting %s: model=%s, actors=%d, steps=%d, scorer=%s",
-        cfg.algorithm.upper(), cfg.model, cfg.num_actors, cfg.steps, cfg.scorer,
+        cfg.algorithm.upper(),
+        cfg.model,
+        cfg.num_actors,
+        cfg.steps,
+        cfg.scorer,
     )
 
     # ── Prompt batching ────────────────────────────────────────────────────
@@ -207,8 +211,11 @@ def run(cfg: PostTrainingConfig) -> None:
         prompt_iter = iter(lambda: all_prompts, None)
     else:
         from plasmid_llm.utils import cycling_batch_iterator
+
         prompt_iter = cycling_batch_iterator(
-            all_prompts, cfg.prompt_batch_size, seed=cfg.seed,
+            all_prompts,
+            cfg.prompt_batch_size,
+            seed=cfg.seed,
         )
 
     # ── Training loop ──────────────────────────────────────────────────────
@@ -217,8 +224,7 @@ def run(cfg: PostTrainingConfig) -> None:
         metrics = algo.step(actors, batch, scorer)
 
         log.info(
-            "step=%d  loss=%.4f  reward=%.3f  kl=%.4f  "
-            "grad_norm=%.4f  lr=%.2e  [total=%.1fs]",
+            "step=%d  loss=%.4f  reward=%.3f  kl=%.4f  grad_norm=%.4f  lr=%.2e  [total=%.1fs]",
             step,
             metrics["loss"],
             metrics["mean_reward"],
@@ -236,8 +242,7 @@ def run(cfg: PostTrainingConfig) -> None:
 
         if eval_prompts and cfg.eval_every and step % cfg.eval_every == 0:
             batch = eval_rng.sample(eval_prompts, min(cfg.eval_batch_size, len(eval_prompts)))
-            _run_eval(actors, batch, scorer, cfg.generation_kwargs(),
-                      algo.num_generations, step)
+            _run_eval(actors, batch, scorer, cfg.generation_kwargs(), algo.num_generations, step)
 
     # ── Final checkpoint ───────────────────────────────────────────────────
     final = f"{cfg.checkpoint_dir}/final"
@@ -246,12 +251,10 @@ def run(cfg: PostTrainingConfig) -> None:
     log.info("Training complete. Final model → %s", final)
 
     # ── Cleanup ────────────────────────────────────────────────────────────
-    try:
+    if wandb_run is not None:
         import wandb
-        if wandb.run is not None:
-            wandb.finish()
-    except ImportError:
-        pass
+
+        wandb.finish()
 
     ray.shutdown()
 
