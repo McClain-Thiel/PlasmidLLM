@@ -5,7 +5,7 @@ The actor is a GPU worker; the algorithm is the application logic.
 
 Usage::
 
-    actor = ModelActor.remote("<org>/PlasmidLM-kmer6-MoE")
+    actor = ModelActor.remote("McClain/PlasmidLM-kmer6-MoE")
     algo = GRPOAlgorithm(kl_coef=0.3, cliprange=0.2, num_generations=4)
 
     for prompts in dataloader:

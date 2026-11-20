@@ -13,7 +13,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Fixtures
 # ---------------------------------------------------------------------------
 
-MODEL_ID = "<org>/PlasmidLM-kmer6-GRPO-plannotate"
+MODEL_ID = "McClain/PlasmidLM-kmer6-GRPO-plannotate"
 
 
 @pytest.fixture(scope="session")

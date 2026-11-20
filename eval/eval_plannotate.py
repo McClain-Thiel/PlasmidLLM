@@ -6,8 +6,8 @@ pLannotate (the biological ground truth), and scores how well requested
 functional elements appear in the generated sequences.
 
 Usage:
-    python scripts/eval_plannotate.py \
-        --models <org>/PlasmidLM-kmer6-MoE <org>/PlasmidLM-kmer6 \
+    python eval/eval_plannotate.py \
+        --models McClain/PlasmidLM-kmer6-MoE McClain/PlasmidLM-kmer6 \
         --n 100 --best-of 3 --output-dir eval_output
 """
 
@@ -771,7 +771,7 @@ def main():
         "--models",
         nargs="+",
         required=True,
-        help="HuggingFace model IDs (e.g. <org>/PlasmidLM-kmer6)",
+        help="HuggingFace model IDs (e.g. McClain/PlasmidLM-kmer6)",
     )
     parser.add_argument("--n", type=int, default=100, help="Number of val prompts")
     parser.add_argument("--best-of", type=int, default=3, help="Candidates per prompt")

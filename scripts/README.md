@@ -35,7 +35,7 @@ Queries plannotate's BLAST/Diamond/Infernal databases to find representative seq
 Upload a trained checkpoint to HuggingFace Hub.
 
 ```bash
-python scripts/upload_to_hf.py /path/to/checkpoint --repo <org>/PlasmidLM
+python scripts/upload_to_hf.py /path/to/checkpoint --repo McClain/PlasmidLM
 ```
 
 Packages the model weights, config, tokenizer, and a generated model card into a HuggingFace repository. Handles vocab file copying and README generation automatically.

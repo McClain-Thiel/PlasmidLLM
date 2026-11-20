@@ -9,7 +9,6 @@ Improvements over v1 (1000-step run):
     CONFIG=grpo_plannotate_v3_anyscale python anyscale/run_anyscale.py
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -21,7 +20,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 config = PostTrainingConfig(
     # Model — overridden by RESUME_FROM_S3 in entrypoint
-    model="<org>/PlasmidLM-kmer6",
+    model="McClain/PlasmidLM-kmer6",
     bf16=True,
     num_actors=1,
 
@@ -37,6 +36,7 @@ config = PostTrainingConfig(
     scorer_kwargs={
         "plannotate_db_path": str(DATA_DIR / "plannotate_db.parquet"),
         "motif_registry_path": str(DATA_DIR / "motif_registry_combined.parquet"),
+        "norm_score_cap": 1.5,
     },
 
     # Length penalty — starts at 6k (very gentle), ramps up for bloated seqs

@@ -146,14 +146,18 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         self.register_buffer("rope_sin", None, persistent=False)
 
         self.gradient_checkpointing = False
+        self.right_padded_causal = False
         self.post_init()
 
     def _init_rope(self, device: torch.device) -> None:
         """Compute and cache RoPE cos/sin on the given device."""
         head_dim = self.config.hidden_size // self.config.num_attention_heads
-        cos, sin = _rope_freqs(head_dim, self.config.max_position_embeddings, self.config.rope_theta)
-        self.register_buffer("rope_cos", cos.to(device), persistent=False)
-        self.register_buffer("rope_sin", sin.to(device), persistent=False)
+        # Generation may initialize these buffers before an RL training step.
+        # Autograd must be able to save them even when their first use is inference.
+        with torch.inference_mode(False):
+            cos, sin = _rope_freqs(head_dim, self.config.max_position_embeddings, self.config.rope_theta)
+            self.register_buffer("rope_cos", cos.to(device), persistent=False)
+            self.register_buffer("rope_sin", sin.to(device), persistent=False)
 
     def get_input_embeddings(self):
         return self.embed_tokens
@@ -219,8 +223,13 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         hidden_states = self.embed_tokens(input_ids)
 
         past_seq_len = past_key_values[0][0].shape[2] if past_key_values else 0
+        effective_mask = (
+            None
+            if (self.right_padded_causal and past_seq_len == 0 and not self.config.use_moe)
+            else attention_mask
+        )
         mask_4d = self._build_4d_attention_mask(
-            attention_mask, input_ids.shape[1], past_seq_len,
+            effective_mask, input_ids.shape[1], past_seq_len,
             input_ids.device, hidden_states.dtype,
         )
 
@@ -255,29 +264,39 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
         k_caches: list[torch.Tensor],
         v_caches: list[torch.Tensor],
         cache_pos: torch.Tensor,
-        rope_cos_slice: torch.Tensor,
-        rope_sin_slice: torch.Tensor,
-        attn_mask: torch.Tensor,
+        rope_cos_slice: Optional[torch.Tensor] = None,
+        rope_sin_slice: Optional[torch.Tensor] = None,
+        attn_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Decode a single token for CUDA graph capture.
+        """Decode a single token for CUDA graph capture or static KV cache replay.
 
         All arguments are tensors (no Python objects) to enable graph capture.
-        The KV cache is updated in-place via scatter.
+        The KV cache and attention mask are updated in-place via scatter.
 
         Args:
             token_ids: (B, 1) token IDs.
             k_caches: List of (B, H, max_seq_len, D) pre-allocated key caches.
             v_caches: List of (B, H, max_seq_len, D) pre-allocated value caches.
-            cache_pos: Scalar tensor — current write position in cache.
-            rope_cos_slice: (1, 1, 1, D//2) RoPE cos for current position.
-            rope_sin_slice: (1, 1, 1, D//2) RoPE sin for current position.
-            attn_mask: (1, 1, 1, max_seq_len) mask with 0=attend, large-negative=ignore.
+            cache_pos: (1,) or scalar tensor — current write position in cache.
+            rope_cos_slice: Optional (1, 1, 1, D//2) RoPE cos for current position.
+            rope_sin_slice: Optional (1, 1, 1, D//2) RoPE sin for current position.
+            attn_mask: (B, 1, 1, max_seq_len) or (1, 1, 1, max_seq_len) mask with
+                0=attend, large-negative=ignore.
 
         Returns:
             hidden_states: (B, 1, H) output hidden states.
         """
         hidden_states = self.embed_tokens(token_ids)
         B = hidden_states.shape[0]
+        pos_idx = cache_pos.reshape(1)
+
+        if rope_cos_slice is None or rope_sin_slice is None:
+            rope_cos_slice = self.rope_cos.index_select(0, pos_idx).view(1, 1, 1, -1)
+            rope_sin_slice = self.rope_sin.index_select(0, pos_idx).view(1, 1, 1, -1)
+
+        if attn_mask is not None:
+            mask_pos = pos_idx.view(1, 1, 1, 1).expand(attn_mask.shape[0], 1, 1, 1)
+            attn_mask.scatter_(3, mask_pos, 0.0)
 
         for i, layer in enumerate(self.layers):
             residual = hidden_states
@@ -288,7 +307,6 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
             v = layer.self_attn.v_proj(hidden_states).view(B, 1, layer.self_attn.num_heads, layer.self_attn.head_dim).transpose(1, 2)
 
             dtype = q.dtype
-            # Apply RoPE using pre-sliced cos/sin (avoids dynamic indexing)
             q1, q2 = q[..., ::2], q[..., 1::2]
             q = torch.stack([q1 * rope_cos_slice - q2 * rope_sin_slice,
                              q1 * rope_sin_slice + q2 * rope_cos_slice], dim=-1).flatten(-2).to(dtype)
@@ -297,12 +315,11 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
                              k1 * rope_sin_slice + k2 * rope_cos_slice], dim=-1).flatten(-2).to(dtype)
 
             # Write new K/V into static cache at cache_pos (in-place)
-            pos = cache_pos.unsqueeze(0).unsqueeze(0).unsqueeze(0)  # (1,1,1,1)
-            pos = pos.expand(B, layer.self_attn.num_heads, 1, layer.self_attn.head_dim)
+            pos = pos_idx.view(1, 1, 1, 1).expand(B, layer.self_attn.num_heads, 1, layer.self_attn.head_dim)
             k_caches[i].scatter_(2, pos, k)
             v_caches[i].scatter_(2, pos, v)
 
-            # Attend with mask to avoid attending to unused cache positions
+            # Attend with mask to avoid attending to left-padding or unused cache positions
             attn = F.scaled_dot_product_attention(q, k_caches[i], v_caches[i], attn_mask=attn_mask)
             attn_out = layer.self_attn.o_proj(attn.transpose(1, 2).reshape(B, 1, -1))
             hidden_states = residual + attn_out
@@ -320,6 +337,8 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
 
 class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
     _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
+    # The loss is a microbatch mean; Trainer must divide during accumulation.
+    accepts_loss_kwargs = False
 
     def __init__(self, config: PlasmidLMConfig):
         super().__init__(config)
@@ -422,6 +441,29 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
             past_key_values=new_cache,
         )
 
+    @staticmethod
+    def _sample_next_token(
+        logits: torch.Tensor,
+        temperature: float,
+        top_k: int,
+        top_p: float,
+    ) -> torch.Tensor:
+        """Sample next token from raw logits with optional top-k and top-p filtering."""
+        scaled = logits / max(temperature, 1e-7)
+        if top_k > 0:
+            k = min(top_k, scaled.size(-1))
+            topk_vals, _ = torch.topk(scaled, k)
+            scaled = scaled.masked_fill(scaled < topk_vals[:, [-1]], float("-inf"))
+        if top_p > 0.0:
+            sorted_logits, sorted_indices = torch.sort(scaled, descending=True)
+            probs_sorted = F.softmax(sorted_logits, dim=-1)
+            cumulative_probs = torch.cumsum(probs_sorted, dim=-1)
+            sorted_mask = cumulative_probs - probs_sorted >= top_p
+            sorted_logits = sorted_logits.masked_fill(sorted_mask, float("-inf"))
+            scaled = sorted_logits.scatter(1, sorted_indices, sorted_logits)
+        probs = F.softmax(scaled, dim=-1)
+        return torch.multinomial(probs, 1)
+
     @torch.inference_mode()
     def generate_simple(
         self,
@@ -433,11 +475,9 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         attention_mask: Optional[torch.Tensor] = None,
         eos_token_id: Optional[int] = None,
         pad_token_id: Optional[int] = None,
+        use_static_cache: bool = True,
     ) -> torch.Tensor:
-        """Fast autoregressive generation with KV cache, top-p/top-k, and EOS stopping.
-
-        Bypasses HF GenerationMixin overhead for significantly faster decoding
-        on small models where Python/kernel-launch overhead dominates.
+        """Fast autoregressive generation with static KV cache, CUDA graphs, and left-padding support.
 
         Args:
             input_ids: (B, S) token IDs, left-padded if batched.
@@ -448,61 +488,164 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
             attention_mask: (B, S) mask with 1=real, 0=pad. Required for left-padded inputs.
             eos_token_id: If set, stop each sequence when this token is generated.
             pad_token_id: Token to fill finished sequences with. Defaults to eos_token_id.
+            use_static_cache: Use pre-allocated static KV cache and CUDA graph replay when on CUDA.
         """
+        if max_new_tokens <= 0:
+            return input_ids
+
         B = input_ids.shape[0]
         device = input_ids.device
 
         if pad_token_id is None:
             pad_token_id = eos_token_id if eos_token_id is not None else 0
 
-        # Prefill — pass attention_mask so left-padding is handled correctly
-        hidden_states, kv_caches, _ = self.model(
-            input_ids, attention_mask=attention_mask,
-        )
-        logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)  # (B, V)
-        cur_len = input_ids.shape[1]
-
-        # Track which sequences have finished
-        finished = torch.zeros(B, dtype=torch.bool, device=device)
-
-        generated_tokens = []
-        for _ in range(max_new_tokens):
-            # Skip .float() cast — stay in model dtype to reduce overhead
-            scaled = logits / max(temperature, 1e-7)
-
-            # Top-k filtering
-            if top_k > 0:
-                k = min(top_k, scaled.size(-1))
-                topk_vals, _ = torch.topk(scaled, k)
-                scaled[scaled < topk_vals[:, [-1]]] = float("-inf")
-
-            # Top-p (nucleus) filtering
-            if top_p > 0.0:
-                sorted_logits, sorted_indices = torch.sort(scaled, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_mask = cumulative_probs - F.softmax(sorted_logits, dim=-1) >= top_p
-                sorted_logits[sorted_mask] = float("-inf")
-                scaled = sorted_logits.scatter(1, sorted_indices, sorted_logits)
-
-            probs = F.softmax(scaled, dim=-1)
-            next_token = torch.multinomial(probs, 1)  # (B, 1)
-
-            # Replace tokens for finished sequences with pad
-            next_token = torch.where(
-                finished.unsqueeze(1), pad_token_id, next_token,
+        if not use_static_cache:
+            hidden_states, kv_caches, _ = self.model(
+                input_ids, attention_mask=attention_mask,
             )
+            logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)
+            cur_len = input_ids.shape[1]
+            finished = torch.zeros(B, dtype=torch.bool, device=device)
+            generated_tokens = []
+            for _ in range(max_new_tokens):
+                next_token = self._sample_next_token(logits, temperature, top_k, top_p)
+                next_token = torch.where(finished.unsqueeze(1), pad_token_id, next_token)
+                generated_tokens.append(next_token)
+                if eos_token_id is not None:
+                    finished = finished | (next_token.squeeze(1) == eos_token_id)
+                    if finished.all():
+                        break
+                if attention_mask is not None:
+                    attention_mask = torch.cat([
+                        attention_mask,
+                        torch.ones((B, 1), dtype=attention_mask.dtype, device=device),
+                    ], dim=1)
+                hidden_states, kv_caches, _ = self.model(
+                    next_token, kv_caches, cur_len, attention_mask=attention_mask,
+                )
+                logits = self.lm_head(hidden_states).squeeze(1)
+                cur_len += 1
+            if generated_tokens:
+                return torch.cat([input_ids, torch.cat(generated_tokens, dim=1)], dim=1)
+            return input_ids
+
+        prefill_len = input_ids.shape[1]
+        max_seq_len = prefill_len + max_new_tokens
+        head_dim = self.config.hidden_size // self.config.num_attention_heads
+        if self.model.rope_cos is None or self.model.rope_cos.shape[0] < max_seq_len:
+            with torch.inference_mode(False):
+                rope_len = max(max_seq_len, self.config.max_position_embeddings)
+                cos, sin = _rope_freqs(head_dim, rope_len, self.config.rope_theta)
+                self.model.register_buffer("rope_cos", cos.to(device), persistent=False)
+                self.model.register_buffer("rope_sin", sin.to(device), persistent=False)
+
+        # Prefill with full left-padding mask support.
+        hidden_states, kv_list, _ = self.model(input_ids, attention_mask=attention_mask)
+        logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)
+
+        cache_dtype = kv_list[0][0].dtype
+        num_heads = self.config.num_attention_heads
+        num_layers = self.config.num_hidden_layers
+
+        k_caches = [
+            torch.zeros(B, num_heads, max_seq_len, head_dim, device=device, dtype=cache_dtype)
+            for _ in range(num_layers)
+        ]
+        v_caches = [
+            torch.zeros(B, num_heads, max_seq_len, head_dim, device=device, dtype=cache_dtype)
+            for _ in range(num_layers)
+        ]
+        for i, (k, v) in enumerate(kv_list):
+            k_caches[i][:, :, :prefill_len, :] = k
+            v_caches[i][:, :, :prefill_len, :] = v
+
+        mask_val = torch.finfo(cache_dtype).min
+        static_attn_mask = torch.full(
+            (B, 1, 1, max_seq_len), mask_val, device=device, dtype=cache_dtype,
+        )
+        if attention_mask is not None:
+            static_attn_mask[:, 0, 0, :prefill_len] = torch.where(
+                attention_mask.bool(), 0.0, mask_val,
+            )
+        else:
+            static_attn_mask[:, :, :, :prefill_len] = 0.0
+
+        use_cuda_graph = (
+            input_ids.is_cuda
+            and not self.config.use_moe
+            and not self.lm_head._forward_hooks
+        )
+        if use_cuda_graph:
+            static_token = torch.zeros((B, 1), dtype=torch.long, device=device)
+            static_cache_pos = torch.full((1,), prefill_len, dtype=torch.long, device=device)
+            static_logits_out = torch.zeros((B, logits.shape[-1]), device=device, dtype=logits.dtype)
+            ac_enabled = torch.is_autocast_enabled("cuda")
+            ac_dtype = torch.get_autocast_dtype("cuda")
+
+            s = torch.cuda.Stream()
+            s.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(s), torch.amp.autocast("cuda", enabled=ac_enabled, dtype=ac_dtype):
+                for _ in range(3):
+                    static_cache_pos.fill_(prefill_len)
+                    h = self.model.decode_one_token(
+                        static_token, k_caches, v_caches, static_cache_pos,
+                        attn_mask=static_attn_mask,
+                    )
+                    static_logits_out.copy_(self.lm_head(h).squeeze(1))
+                    static_cache_pos.add_(1)
+            torch.cuda.current_stream().wait_stream(s)
+
+            # Capture one-step decode graph; keep prefill_len.. clean for real decode.
+            static_attn_mask[:, :, :, prefill_len:] = mask_val
+            static_cache_pos.fill_(prefill_len)
+            graph = torch.cuda.CUDAGraph()
+            with torch.cuda.graph(graph, stream=s), torch.amp.autocast("cuda", enabled=ac_enabled, dtype=ac_dtype):
+                h = self.model.decode_one_token(
+                    static_token, k_caches, v_caches, static_cache_pos,
+                    attn_mask=static_attn_mask,
+                )
+                static_logits_out.copy_(self.lm_head(h).squeeze(1))
+                static_cache_pos.add_(1)
+            torch.cuda.current_stream().wait_stream(s)
+            static_attn_mask[:, :, :, prefill_len:] = mask_val
+            static_cache_pos.fill_(prefill_len)
+
+        finished = torch.zeros(B, dtype=torch.bool, device=device)
+        generated_tokens = []
+        active_flags = []
+        has_hooks = bool(self.lm_head._forward_hooks)
+
+        for step in range(max_new_tokens):
+            next_token = self._sample_next_token(logits, temperature, top_k, top_p)
+            next_token = torch.where(finished.unsqueeze(1), pad_token_id, next_token)
             generated_tokens.append(next_token)
 
-            # Check for EOS
             if eos_token_id is not None:
+                active_flags.append(~finished.all())
                 finished = finished | (next_token.squeeze(1) == eos_token_id)
-                if finished.all():
+                if use_cuda_graph:
+                    if (step + 1) % 64 == 0 and bool(finished.all()):
+                        break
+                elif bool(finished.all()):
                     break
 
-            # Decode step — single token, no attention mask needed (KV cache has full context)
-            hidden_states, kv_caches, _ = self.model(next_token, kv_caches, cur_len)
-            logits = self.lm_head(hidden_states).squeeze(1)
-            cur_len += 1
+            if step == max_new_tokens - 1 and not has_hooks:
+                break
+
+            if use_cuda_graph:
+                static_token.copy_(next_token)
+                graph.replay()
+                logits = static_logits_out
+            else:
+                cache_pos = torch.tensor([prefill_len + step], dtype=torch.long, device=device)
+                h = self.model.decode_one_token(
+                    next_token, k_caches, v_caches, cache_pos, attn_mask=static_attn_mask,
+                )
+                logits = self.lm_head(h).squeeze(1)
+
+        if eos_token_id is not None and active_flags:
+            n_keep = int(torch.stack(active_flags).long().sum().item())
+            generated_tokens = generated_tokens[:n_keep]
 
         if generated_tokens:
             return torch.cat([input_ids, torch.cat(generated_tokens, dim=1)], dim=1)
@@ -515,123 +658,20 @@ class PlasmidLMForCausalLM(PlasmidLMPreTrainedModel, GenerationMixin):
         max_new_tokens: int = 512,
         temperature: float = 0.8,
         top_k: int = 50,
+        top_p: float = 0.0,
         attention_mask: Optional[torch.Tensor] = None,
         eos_token_id: Optional[int] = None,
         pad_token_id: Optional[int] = None,
     ) -> torch.Tensor:
-        """Generation with manual CUDA graph capture for maximum throughput.
-
-        Pre-allocates a static KV cache and captures the decode step as a CUDA
-        graph, eliminating per-step kernel launch overhead. Typically 2-5x faster
-        than generate_simple for small models on modern GPUs.
-        """
-        B = input_ids.shape[0]
-        device = input_ids.device
-        dtype = self.lm_head.weight.dtype
-        config = self.config
-        num_heads = config.num_attention_heads
-        head_dim = config.hidden_size // num_heads
-        num_layers = config.num_hidden_layers
-        max_seq_len = input_ids.shape[1] + max_new_tokens
-
-        if pad_token_id is None:
-            pad_token_id = eos_token_id if eos_token_id is not None else 0
-
-        # Ensure RoPE is initialized
-        if self.model.rope_cos is None:
-            self.model._init_rope(device)
-
-        # Pre-allocate static KV cache: (B, H, max_seq_len, D) per layer
-        k_caches = [torch.zeros(B, num_heads, max_seq_len, head_dim, device=device, dtype=dtype) for _ in range(num_layers)]
-        v_caches = [torch.zeros(B, num_heads, max_seq_len, head_dim, device=device, dtype=dtype) for _ in range(num_layers)]
-
-        # Prefill using standard forward
-        hidden_states, kv_list, _ = self.model(input_ids, attention_mask=attention_mask)
-        logits = self.lm_head(hidden_states[:, -1:, :]).squeeze(1)
-
-        # Copy prefill KV into static cache
-        prefill_len = input_ids.shape[1]
-        for i, (k, v) in enumerate(kv_list):
-            k_caches[i][:, :, :prefill_len, :] = k
-            v_caches[i][:, :, :prefill_len, :] = v
-
-        # Static attention mask: (1, 1, 1, max_seq_len) — 0=attend, -large=ignore
-        # Use finfo.min instead of -inf to avoid NaN from softmax([-inf,...])
-        mask_val = torch.finfo(dtype).min
-        static_attn_mask = torch.full(
-            (1, 1, 1, max_seq_len), mask_val, device=device, dtype=dtype,
+        """Delegate to static-KV-cache / CUDA-graph generate_simple()."""
+        return self.generate_simple(
+            input_ids=input_ids,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
+            attention_mask=attention_mask,
+            eos_token_id=eos_token_id,
+            pad_token_id=pad_token_id,
+            use_static_cache=True,
         )
-        static_attn_mask[:, :, :, :prefill_len] = 0.0
-
-        # Static input buffers for CUDA graph
-        static_token = torch.zeros(B, 1, dtype=torch.long, device=device)
-        static_cache_pos = torch.zeros(1, dtype=torch.long, device=device)
-        static_rope_cos = torch.zeros(1, 1, 1, head_dim // 2, device=device, dtype=torch.float32)
-        static_rope_sin = torch.zeros(1, 1, 1, head_dim // 2, device=device, dtype=torch.float32)
-        static_logits_out = torch.zeros(B, config.vocab_size, device=device, dtype=dtype)
-
-        # Warm up the decode path (needed before graph capture)
-        static_token.copy_(torch.zeros_like(static_token))
-        static_cache_pos.fill_(prefill_len)
-        static_rope_cos.copy_(self.model.rope_cos[prefill_len].view(1, 1, 1, -1))
-        static_rope_sin.copy_(self.model.rope_sin[prefill_len].view(1, 1, 1, -1))
-
-        # Run once eagerly to warm up
-        s = torch.cuda.Stream()
-        s.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(s):
-            h = self.model.decode_one_token(
-                static_token, k_caches, v_caches,
-                static_cache_pos, static_rope_cos, static_rope_sin,
-                static_attn_mask,
-            )
-            static_logits_out.copy_(self.lm_head(h).squeeze(1))
-        torch.cuda.current_stream().wait_stream(s)
-
-        # Capture CUDA graph
-        graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(graph, stream=s):
-            h = self.model.decode_one_token(
-                static_token, k_caches, v_caches,
-                static_cache_pos, static_rope_cos, static_rope_sin,
-                static_attn_mask,
-            )
-            static_logits_out.copy_(self.lm_head(h).squeeze(1))
-
-        finished = torch.zeros(B, dtype=torch.bool, device=device)
-        generated_tokens = []
-        cur_pos = prefill_len
-
-        for _ in range(max_new_tokens):
-            scaled = logits / max(temperature, 1e-7)
-
-            if top_k > 0:
-                k = min(top_k, scaled.size(-1))
-                topk_vals, _ = torch.topk(scaled, k)
-                scaled[scaled < topk_vals[:, [-1]]] = float("-inf")
-
-            probs = F.softmax(scaled, dim=-1)
-            next_token = torch.multinomial(probs, 1)
-
-            next_token = torch.where(finished.unsqueeze(1), pad_token_id, next_token)
-            generated_tokens.append(next_token)
-
-            if eos_token_id is not None:
-                finished = finished | (next_token.squeeze(1) == eos_token_id)
-                if finished.all():
-                    break
-
-            # Unmask current position and update static inputs
-            static_attn_mask[:, :, :, cur_pos] = 0.0
-            static_token.copy_(next_token)
-            static_cache_pos.fill_(cur_pos)
-            static_rope_cos.copy_(self.model.rope_cos[cur_pos].view(1, 1, 1, -1))
-            static_rope_sin.copy_(self.model.rope_sin[cur_pos].view(1, 1, 1, -1))
-
-            graph.replay()
-            logits = static_logits_out
-            cur_pos += 1
-
-        if generated_tokens:
-            return torch.cat([input_ids, torch.cat(generated_tokens, dim=1)], dim=1)
-        return input_ids

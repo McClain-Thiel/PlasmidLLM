@@ -16,7 +16,7 @@ The source panel and Sourmash index are external binary artifacts:
 They are stored under:
 
 ```text
-hf://buckets/<org>/PlasmidLMEval/neurips_2026_rebuttal/
+hf://buckets/McClain/PlasmidLMEval/neurips_2026_rebuttal/
   s3/neurips_rebuttal/repo_release/reference/
 ```
 

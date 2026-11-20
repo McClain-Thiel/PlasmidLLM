@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.2"]
+pretrain = ["accelerate>=0.26", "biopython>=1.80", "wandb>=0.19"]
 rl = [
     "ray[default]>=2.9",     # Distributed post-training
     "parasail>=1.3.0",       # Smith-Waterman sequence alignment

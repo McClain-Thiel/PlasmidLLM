@@ -108,7 +108,9 @@ class PlasmidKmerTokenizer(PreTrainedTokenizer):
     @staticmethod
     def _clean_dna(seq: str) -> str:
         """Uppercase, strip whitespace, replace N with deterministic base."""
-        seq = re.sub(r"\s+", "", seq).upper()
+        seq = "".join(seq.split()).upper()
+        if "N" not in seq:
+            return seq
         result = []
         for i, c in enumerate(seq):
             if c == "N":
@@ -118,6 +120,12 @@ class PlasmidKmerTokenizer(PreTrainedTokenizer):
             else:
                 result.append(c)
         return "".join(result)
+
+    def encode_fast(self, text: str) -> list[int]:
+        """Fast token-ID lookup avoiding HuggingFace PreTrainedTokenizer wrapper overhead."""
+        vocab = self._vocab
+        unk_id = vocab.get("<UNK>", 0)
+        return [vocab.get(tok, unk_id) for tok in self._tokenize(text)]
 
     def _kmerize(self, dna: str) -> list[str]:
         """Split DNA into overlapping k-mers with self.stride."""

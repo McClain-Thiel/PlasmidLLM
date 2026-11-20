@@ -49,12 +49,18 @@ uv sync --extra rebuttal
 # Also required on PATH: blastn, makeblastdb, pLAnnotate, Prodigal, AMRFinderPlus.
 ```
 
-Set `REBUTTAL_ROOT` to the downloaded artifact snapshot. The private author archive and
-the anonymized review copy use the same relative layout:
+Set `REBUTTAL_ROOT` to the downloaded `neurips_2026_rebuttal` snapshot (`hf://buckets/McClain/PlasmidLMEval/neurips_2026_rebuttal/`):
 
 ```bash
 export REBUTTAL_ROOT=/path/to/neurips_2026_rebuttal/s3/neurips_rebuttal
 ```
+
+For the three-seed sequence-cluster-disjoint rigor study (`frozen_panel_v3`), see:
+- `pretraining/build_cluster_split.py`, `pretraining/refine_cluster_split.py`, `pretraining/verify_cluster_split.py`
+- `pretraining/configs/cluster_disjoint_v2.py`
+- `post_training/scorers/plannotate_v2.py` and `post_training/configs/grpo_reward_ablation.py`
+- `experiments/neurips_rebuttal/summarize_rigor_evaluation.py` and `experiments/neurips_rebuttal/orthogonal.py`
+- Archived outputs: `hf://buckets/McClain/PlasmidLMEval/rigor_20261116/`
 
 The canonical blind-registry inputs and results are under
 `$REBUTTAL_ROOT/m13_blind_v2_g7e/`; checkpoints are under the sibling

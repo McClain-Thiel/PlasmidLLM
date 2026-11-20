@@ -75,6 +75,7 @@ class ModelActor:
         max_grad_norm: float = 1.0,
         bf16: bool = True,
         seed: int = 42,
+        model_revision: str | None = None,
     ):
         torch.manual_seed(seed)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -96,22 +97,24 @@ class ModelActor:
         # If model_id is an S3 path, download it locally first
         if model_id.startswith("s3://"):
             import subprocess
-            local_path = Path("/tmp/model_checkpoint")
-            if not local_path.exists():
-                log.info("Downloading model from %s", model_id)
-                subprocess.check_call(["aws", "s3", "sync", model_id, str(local_path)])
+            import tempfile
+            local_path = Path(tempfile.mkdtemp(prefix="plasmid_model_"))
+            log.info("Downloading model from %s", model_id)
+            subprocess.check_call(["aws", "s3", "sync", model_id, str(local_path)])
             model_id = str(local_path)
 
         log.info("Loading %s on %s (bf16=%s, fp16=%s)", model_id, self.device,
                  self.bf16, self._use_fp16)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
+            revision=model_revision,
             torch_dtype=torch.float32,
             device_map={"": self.device},
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id, trust_remote_code=True,  # tokenizer still needs remote code
+            revision=model_revision,
         )
         self.tokenizer.padding_side = "left"
         if self.tokenizer.pad_token is None:
@@ -122,12 +125,12 @@ class ModelActor:
         for p in self.ref_model.parameters():
             p.requires_grad = False
 
-        # torch.compile with reduce-overhead mode uses CUDA graphs to
-        # eliminate Python/kernel-launch overhead — major win for small models.
+        # Policy/reference forwards and micro-batch backward calls have different
+        # tensor lifetimes; CUDA graph replay can overwrite saved activations.
         try:
-            self.model = torch.compile(self.model, mode="reduce-overhead")
-            self.ref_model = torch.compile(self.ref_model, mode="reduce-overhead")
-            log.info("torch.compile(mode='reduce-overhead') applied to policy and ref models")
+            self.model = torch.compile(self.model, options={"triton.cudagraphs": False})
+            self.ref_model = torch.compile(self.ref_model, options={"triton.cudagraphs": False})
+            log.info("torch.compile(CUDA graphs disabled) applied to policy and ref models")
         except Exception as e:
             log.warning("torch.compile failed, falling back to eager mode: %s", e)
 
@@ -536,7 +539,7 @@ class ModelActor:
 
     def save_checkpoint(self, path: str, s3_dest: str | None = None) -> None:
         out = Path(path)
-        out.mkdir(parents=True, exist_ok=True)
+        out.mkdir(parents=True, exist_ok=False)
         self.model.save_pretrained(str(out))
         self.tokenizer.save_pretrained(str(out))
         torch.save(self.optimizer.state_dict(), out / "optimizer.pt")

@@ -122,6 +122,49 @@ class TestMoEModel:
         out = model.generate_simple(input_ids, max_new_tokens=10)
         assert out.shape == (1, 18)  # 8 prompt + 10 generated
 
+    @pytest.mark.parametrize("config_name", ["dense_config", "moe_config"])
+    def test_cached_generation_preserves_padding_mask(self, config_name, request):
+        torch.manual_seed(42)
+        model = PlasmidLMForCausalLM(request.getfixturevalue(config_name)).eval()
+        short = torch.tensor([[11, 12, 13]])
+        batched = torch.tensor([[0, 0, 11, 12, 13], [21, 22, 23, 24, 25]])
+        mask = torch.tensor([[0, 0, 1, 1, 1], [1, 1, 1, 1, 1]])
+        logits = []
+        hook = model.lm_head.register_forward_hook(
+            lambda module, inputs, output: logits.append(output.detach().clone())
+        )
+        try:
+            single = model.generate_simple(short, max_new_tokens=4, top_k=1)
+            single_logits = logits.copy()
+            logits.clear()
+            batch = model.generate_simple(
+                batched, attention_mask=mask, max_new_tokens=4, top_k=1,
+            )
+        finally:
+            hook.remove()
+        assert len(logits) == len(single_logits)
+        for actual, expected in zip(logits, single_logits):
+            torch.testing.assert_close(actual[:1], expected, rtol=1e-5, atol=1e-6)
+        torch.testing.assert_close(batch[:1, 5:], single[:, 3:])
+
+    @pytest.mark.parametrize("config_name", ["dense_config", "moe_config"])
+    def test_training_after_generation(self, config_name, request):
+        model = PlasmidLMForCausalLM(request.getfixturevalue(config_name))
+        input_ids = torch.randint(0, 128, (2, 8))
+        for _ in range(2):
+            model.eval()
+            # Copy outside inference mode, as the GPU actor does when returning
+            # generated IDs to the CPU; this isolates persistent model buffers.
+            generated = model.generate_simple(input_ids, max_new_tokens=3).clone()
+            model.train()
+            model.zero_grad()
+            loss = model(input_ids=generated, labels=generated).loss
+            loss.backward()
+            gradient = model.model.embed_tokens.weight.grad
+            assert torch.isfinite(loss)
+            assert gradient is not None and torch.isfinite(gradient).all()
+            assert torch.count_nonzero(gradient) > 0
+
     def test_moe_param_count(self, moe_config):
         """MoE model should have more params than dense with same config."""
         dense_cfg = PlasmidLMConfig(

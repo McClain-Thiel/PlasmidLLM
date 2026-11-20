@@ -76,7 +76,7 @@ from post_training.config import PostTrainingConfig
 
 config = PostTrainingConfig(
     # Model
-    model="<org>/PlasmidLM-kmer6-MoE",
+    model="McClain/PlasmidLM-kmer6-MoE",
     bf16=True,
     num_actors=2,
 
@@ -154,9 +154,13 @@ python -m post_training.runners.run post_training/configs/my_run.py
 
 | Config | Algorithm | Scorer | Model | Purpose |
 |--------|-----------|--------|-------|---------|
-| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`<org>/PlasmidLM-kmer6-GRPO-plannotate`) |
+| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) |
 | `grpo_plannotate_v3_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Adds length penalty to discourage sequence drift |
 | `grpo_plannotate_curriculum_anyscale.py` | GRPO | plannotate | binary_motif checkpoint | Motif→plannotate curriculum variant (ablation) |
+
+The released step-800 checkpoint used `norm_score_cap=5.0` and no length penalty.
+`grpo_plannotate_anyscale.py` pins that historical value explicitly; later exploratory
+configs use a `1.5` cap and may add a length penalty.
 
 ## Actor API surface
 
@@ -228,7 +232,7 @@ Multiple actors train in parallel with gradient averaging:
 
 ```python
 config = PostTrainingConfig(
-    model="<org>/PlasmidLM-kmer6-MoE",
+    model="McClain/PlasmidLM-kmer6-MoE",
     num_actors=4,
     ...
 )
@@ -359,7 +363,7 @@ The point of this design is combinatorial flexibility. Once you trust your score
 ```python
 config = PostTrainingConfig(
     algorithm="grpo",                    # ← swap algorithm
-    model="<org>/PlasmidLM-kmer6-MoE", # ← swap model
+    model="McClain/PlasmidLM-kmer6-MoE", # ← swap model
     scorer="motif",                       # ← swap scorer
     ...
 )
@@ -376,7 +380,7 @@ for algo in ["grpo", "ppo"]:
         cfg = PostTrainingConfig(
             algorithm=algo,
             scorer=scorer,
-            model="<org>/PlasmidLM-kmer6-MoE",
+            model="McClain/PlasmidLM-kmer6-MoE",
             wandb_project="PlasmidLLM",
             wandb_run_name=f"{algo}_{scorer}",
             ...

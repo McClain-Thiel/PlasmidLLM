@@ -79,6 +79,9 @@ wandb/
 # Local audit + tooling artifacts (not tracked)
 .paper-audit/
 .claude/
+.licenses/
+infra/anyscale/eval_plans/
+infra/anyscale/workflow_*.json
 notebooks/__marimo__/
 claims.yaml
 research.toml

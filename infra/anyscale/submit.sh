@@ -19,6 +19,15 @@ set +a
 
 cd "$PROJECT_DIR"
 
+EXPERIMENT_ENV=()
+for key in PLASMID_RUN_ID PLASMID_REWARD_VERSION PLASMID_SEED PLASMID_BASE_MODEL \
+    PLASMID_BASE_REVISION PLASMID_TRAIN_PROMPTS PLASMID_VALIDATION_PROMPTS PLASMID_STEPS \
+    PLASMID_CHECKPOINT_EVERY; do
+    if [[ -n "${!key:-}" ]]; then
+        EXPERIMENT_ENV+=(--env "$key=${!key}")
+    fi
+done
+
 anyscale job submit \
     --name "${ANYSCALE_JOB_NAME:-grpo-plannotate}" \
     --cloud "$ANYSCALE_CLOUD" \
@@ -30,16 +39,28 @@ anyscale job submit \
     --exclude "__pycache__" \
     --exclude ".venv" \
     --exclude ".git" \
+    --exclude ".env" \
+    --exclude ".paper-audit" \
+    --exclude ".licenses" \
+    --exclude "checkpoints" \
+    --exclude "wandb" \
+    --exclude "output" \
+    --exclude "outputs" \
     --exclude "notebooks" \
     --exclude "docs" \
     --exclude "*.egg-info" \
     --exclude "data/*.parquet" \
     --exclude "data/test" \
+    --exclude "data/cluster*" \
+    --exclude "eval" \
     --env "WANDB_API_KEY=$WANDB_API_KEY" \
     --env "HF_TOKEN=$HF_TOKEN" \
     --env "S3_DATA_PREFIX=$S3_DATA_PREFIX" \
     --env "S3_CHECKPOINT_PREFIX=${S3_CHECKPOINT_PREFIX:-$S3_DATA_PREFIX/checkpoints}" \
     --env "CONFIG=${CONFIG:-grpo_plannotate_anyscale}" \
     --env "PYTHONPATH=." \
+    "${EXPERIMENT_ENV[@]}" \
+    --max-retries 0 \
+    --timeout-s "${ANYSCALE_JOB_TIMEOUT_SECONDS:-7200}" \
     --wait \
     -- python infra/anyscale/run_anyscale.py

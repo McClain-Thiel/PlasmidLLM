@@ -1,7 +1,7 @@
 """Upload pretrained PlasmidLM checkpoint to HuggingFace Hub.
 
 Usage:
-    python scripts/upload_to_hf.py /path/to/checkpoint --repo <org>/PlasmidLM
+    python scripts/upload_to_hf.py /path/to/checkpoint --repo McClain/PlasmidLM
 """
 
 from __future__ import annotations
@@ -90,8 +90,8 @@ This is a **base pretrained model**. It has learned the statistical patterns of 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-model = AutoModelForCausalLM.from_pretrained("<org>/PlasmidLM", trust_remote_code=True)
-tokenizer = AutoTokenizer.from_pretrained("<org>/PlasmidLM", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("McClain/PlasmidLM", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("McClain/PlasmidLM", trust_remote_code=True)
 
 # Generate a plasmid with kanamycin resistance and ColE1 origin
 prompt = "<BOS><AMR_KANAMYCIN><ORI_COLE1><SEP>"
@@ -151,11 +151,11 @@ We are actively running REINFORCE with KL penalty to improve motif placement acc
 ## Citation
 
 ```bibtex
-@misc{anonymous2026plasmidlm,
-  title={PlasmidLM: Language Models for Conditional Plasmid DNA Generation},
-  author={Anonymous},
+@misc{thiel2026plasmidlm,
+  title={PlasmidLM: A Promptable DNA Language Model via Verifiable-Reward Post-Training},
+  author={Thiel, McClain and Barnes, Chris P.},
   year={2026},
-  url={https://huggingface.co/<org>/PlasmidLM}
+  url={https://huggingface.co/McClain/PlasmidLM}
 }
 ```
 """

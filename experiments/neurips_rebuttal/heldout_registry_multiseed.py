@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 
-TOKEN_RE = re.compile(r"<(?:AMR|PROM|ORI|ELEM|REPORTER|TAG|REP)_[A-Z0-9_]+>")
+TOKEN_RE = re.compile(r"<(?:AMR|PROM|ORI|ELEM|REPORTER|TAG)_[A-Z0-9_]+>")
 MIN_PERCMATCH = 95.0
 
 

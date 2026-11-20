@@ -2,16 +2,15 @@
 
 Language models for synthetic plasmid DNA sequence generation with reinforcement learning.
 
-> **Anonymized for double-blind review.** Author names, institutional
-> affiliations, and personal identifiers have been removed or replaced with
-> placeholders (`<org>`, `<entity>`). Some references to externally-hosted
-> artifacts — HuggingFace model repos (`<org>/PlasmidLM-*`), Weights & Biases
-> projects, and Databricks MLflow experiments — point at namespaces controlled
-> by the original authors. These URLs will not resolve as written; reviewers
-> should treat them as opaque identifiers. Code paths that load a checkpoint
-> require substituting a real namespace. Source code, tracked reference panels,
-> and unit tests are self-contained; large training datasets, generated panels,
-> and checkpoints are intentionally stored outside Git.
+## Released Models & Artifacts
+
+- **Base model (`v2.0` cluster-disjoint / `v1.0` source-ID):** [`McClain/PlasmidLM-kmer6`](https://huggingface.co/McClain/PlasmidLM-kmer6)
+- **GRPO post-trained (`v2.0` best seed / `v1.0` / all 9 ablation & seed branches):** [`McClain/PlasmidLM-kmer6-GRPO-plannotate`](https://huggingface.co/McClain/PlasmidLM-kmer6-GRPO-plannotate)
+- **Evaluation & Reproducibility Archive:** [`hf://buckets/McClain/PlasmidLMEval`](https://huggingface.co/buckets/McClain/PlasmidLMEval) (`rigor_20261116/` & `neurips_2026_rebuttal/`)
+- **Datasets & Certified Cluster Split:** [`hf://buckets/McClain/PlasmidRL`](https://huggingface.co/buckets/McClain/PlasmidRL) (`datasets/cluster_v3/` & `datasets/v4/`)
+- **Training Runs:** [Weights & Biases (`mcclain/PlasmidLLM`)](https://wandb.ai/mcclain/PlasmidLLM)
+
+Source code, vocabulary files, reference summaries, and unit tests live in Git; model weights, datasets, generated FASTA/Parquets, and annotation archives are hosted on Hugging Face.
 
 ## Goal
 
@@ -69,7 +68,8 @@ Each stage has its own README with detailed documentation:
 - **[pretraining/README.md](pretraining/README.md)** — Model architecture, tokenization, config reference
 - **[post_training/README.md](post_training/README.md)** — Actor/algorithm design, scorers, multi-actor training
 - **[eval/README.md](eval/README.md)** — Evaluation axes, metrics, scorer pass criteria
-- **[experiments/neurips_rebuttal/README.md](experiments/neurips_rebuttal/README.md)** — Corrected rebuttal analyses and interpretation limits
+- **[data/README.md](data/README.md)** — Vocabulary files and external dataset layout
+- **[experiments/neurips_rebuttal/README.md](experiments/neurips_rebuttal/README.md)** — Cluster-disjoint rigor evaluation, rebuttal analyses, and interpretation limits
 
 ## Model
 
@@ -113,6 +113,4 @@ python scripts/generate.py \
 
 See `pyproject.toml` for the full list.
 
-Large inputs and outputs are not committed. Experiment READMEs specify the required
-artifact layout; the anonymized review branch deliberately uses placeholder namespaces
-for externally hosted artifacts.
+Large inputs and outputs are not committed; see [`infra/DATA_LOCATIONS.md`](infra/DATA_LOCATIONS.md) for Hugging Face bucket locations (`hf://buckets/McClain/PlasmidLMEval` and `hf://buckets/McClain/PlasmidRL`).

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -76,25 +77,87 @@ def run_plannotate_single(fasta_path: str, output_dir: str, seq_id: str) -> dict
     }
 
 
-def run_prodigal(fasta_path: str, output_dir: str) -> Path:
-    """Run Prodigal in meta mode on the entire FASTA."""
+def select_circular_proteins(proteins: Path, lengths: dict[str, int], output: Path) -> dict:
+    """Keep one coordinate copy of each ORF and reject spans longer than a circle."""
+    seen = set()
+    counts = dict(input_orfs=0, retained_orfs=0, duplicate_or_outside_first_copy=0,
+                  longer_than_circle=0)
+    with output.open("x") as destination:
+        for record in SeqIO.parse(proteins, "fasta"):
+            counts["input_orfs"] += 1
+            seq_id = record.id.rsplit("_", 1)[0]
+            length = lengths[seq_id]
+            match = re.search(r" # (\d+) # (\d+) # (-?1) # ", record.description)
+            if match is None:
+                raise ValueError(f"Unrecognized Prodigal coordinates: {record.id}")
+            start, end, strand = map(int, match.groups())
+            if not 1 <= start <= end <= 2 * length:
+                raise ValueError(f"Prodigal coordinates outside doubled sequence: {record.id}")
+            if end - start + 1 > length:
+                counts["longer_than_circle"] += 1
+                continue
+            key = (seq_id, (start - 1) % length, (end - 1) % length, strand)
+            if start > length or key in seen:
+                counts["duplicate_or_outside_first_copy"] += 1
+                continue
+            seen.add(key)
+            SeqIO.write(record, destination, "fasta")
+            counts["retained_orfs"] += 1
+    return counts
+
+
+def run_prodigal(fasta_path: str, output_dir: str, circular: bool = False) -> Path:
+    """Run Prodigal in meta mode, optionally covering circular boundary ORFs."""
     out = Path(output_dir) / "orfs"
     out.mkdir(parents=True, exist_ok=True)
-    gff_path = out / "prodigal.gff"
+    gff_path = out / ("prodigal_doubled.gff" if circular else "prodigal.gff")
     protein_path = out / "prodigal_proteins.faa"
+    if gff_path.exists() or protein_path.exists():
+        raise FileExistsError(f"Prodigal output already exists: {out}")
+    lengths = {}
+    counts = {}
+    if circular:
+        from Bio.SeqRecord import SeqRecord
+
+        doubled = out / "input_doubled.fasta"
+        counts = dict(input_sequences=0, shorter_than_20bp=0)
+        with doubled.open("x") as destination:
+            for record in SeqIO.parse(fasta_path, "fasta"):
+                if record.id in lengths:
+                    raise ValueError(f"Duplicate input sequence identifier: {record.id}")
+                lengths[record.id] = len(record.seq)
+                counts["input_sequences"] += 1
+                if len(record.seq) < 20:
+                    counts["shorter_than_20bp"] += 1
+                    continue
+                SeqIO.write(SeqRecord(record.seq + record.seq, id=record.id, description=""),
+                            destination, "fasta")
+        fasta_path = str(doubled)
+        raw_proteins = out / "prodigal_proteins_doubled.faa"
+    else:
+        raw_proteins = protein_path
 
     cmd = [
         "prodigal",
         "-i", fasta_path,
         "-o", str(gff_path),
-        "-a", str(protein_path),
+        "-a", str(raw_proteins),
         "-p", "meta",
         "-f", "gff",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"Prodigal error: {result.stderr[:500]}", file=sys.stderr)
-        raise RuntimeError(f"Prodigal failed: {result.stderr[:200]}")
+    if circular and counts["input_sequences"] == counts["shorter_than_20bp"]:
+        print("Prodigal: all input sequences are shorter than 20 bp; recording zero ORFs")
+        gff_path.write_text("##gff-version 3\n")
+        raw_proteins.touch(exist_ok=False)
+    else:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Prodigal failed: {result.stderr[:500]}")
+        (out / "prodigal.log").write_text(result.stderr)
+    if circular:
+        counts.update(select_circular_proteins(raw_proteins, lengths, protein_path))
+        (out / "circular_filter.json").write_text(json.dumps(counts, indent=2) + "\n")
+        print(f"Circular Prodigal filtering: {counts}")
 
     print(f"Prodigal: {gff_path}")
     return gff_path
@@ -146,6 +209,8 @@ def main():
                         help="Parallel workers for pLannotate")
     parser.add_argument("--skip-plannotate", action="store_true")
     parser.add_argument("--skip-prodigal", action="store_true")
+    parser.add_argument("--circular-prodigal", action="store_true",
+                        help="Use doubled input and retain one coordinate copy per ORF")
     parser.add_argument("--skip-dustmasker", action="store_true")
     args = parser.parse_args()
 
@@ -208,7 +273,7 @@ def main():
     if not args.skip_prodigal:
         print("\nRunning Prodigal...")
         t0 = time.time()
-        run_prodigal(fasta_path, str(out))
+        run_prodigal(fasta_path, str(out), circular=args.circular_prodigal)
         print(f"Prodigal: {time.time()-t0:.1f}s")
 
     # 3. dustmasker

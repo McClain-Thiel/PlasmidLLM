@@ -243,6 +243,8 @@ class GRPOAlgorithm(Algorithm):
 
         # Merge GPU hardware metrics
         metrics.update(gpu_metrics)
+        metrics.update({f"reward/{k}": v
+                        for k, v in getattr(scorer, "last_diagnostics", {}).items()})
 
         wandb_log(metrics, step=self._global_step, prefix="grpo/")
 

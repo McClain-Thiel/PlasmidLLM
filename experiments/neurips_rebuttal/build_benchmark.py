@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a source-plasmid-ID-disjoint benchmark from Addgene plasmids.
+"""Build source-ID benchmarks or freeze an independently audited cluster test panel.
 
 Written for the NeurIPS 2026 rebuttal (meta-review point 2; Dok5 W5/Q1; pSXh W6).
 
@@ -32,13 +32,14 @@ backbone-slug rule for BB_* matches 8.8%). Guessing them would put wrong tokens 
 prompt, which is worse than leaving them out.
 
 Consequence to report honestly: ~86.7% of training prompts carry a VEC_* token, so these
-prompts are mildly out-of-distribution and absolute rates should be read as a LOWER BOUND.
-Both checkpoints receive identical prompts, so the base-vs-GRPO delta — the paper's actual
-claim — is unaffected. Faithfulness is defined over hard tokens only in any case, so the
-omitted classes are outside the metric by construction.
+prompts change the conditioning distribution. The direction of that effect is unknown.
+Identical prompts support a matched checkpoint comparison on this panel; neither absolute
+rates nor the delta necessarily transfer to the original conditioning distribution.
+Faithfulness is defined over hard tokens, which excludes the omitted classes.
 
-This excludes exact source plasmid IDs, not close sequence relatives. The resulting panel
-must not be called sequence-cluster-disjoint.
+The source-ID mode excludes exact plasmid IDs, not close sequence relatives. It must not
+be called sequence-cluster-disjoint. The separate --cluster-split mode requires an audit
+matching all three partition checksums, and uses only the test partition.
 
 Usage:
   python build_benchmark.py \\
@@ -52,12 +53,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import re
 from pathlib import Path
 
 import duckdb
 import pandas as pd
 
-from common import detect, load_annotations
+try:
+    from experiments.neurips_rebuttal.common import TOKEN_RE, detect, load_annotations
+except ImportError:
+    from common import TOKEN_RE, detect, load_annotations
 
 # Order tokens the way training prompts do, so the prompt string is in-distribution.
 CATEGORY_ORDER = ["VEC", "SP", "COPY", "AMR", "ORI", "PROM", "ELEM", "REPORTER", "TAG"]
@@ -79,26 +86,113 @@ def render(tokens: set[str]) -> str:
     return "<BOS>" + "".join(ordered) + "<SEQ>"
 
 
+def build_cluster_panel(
+    split_dir: Path, output: Path, n: int = 1000, minority_n: int = 100, seed: int = 42,
+) -> dict:
+    """Freeze separate overall/minority panels without selecting on model outcomes."""
+    from pretraining.build_cluster_split import MINORITY_TOKENS, sha256_file
+
+    if min(n, minority_n) < 1:
+        raise ValueError("Panel limits must be positive")
+    report_path = output.with_suffix(".manifest.json")
+    if output.exists() or report_path.exists():
+        raise FileExistsError(f"Panel output already exists: {output} or {report_path}")
+    audit_path = split_dir / "audit/report.json"
+    audit = json.loads(audit_path.read_text())
+    if audit["passed"] is not True:
+        raise ValueError("Cluster partition audit did not pass")
+    for partition in ("train", "validation", "test"):
+        if sha256_file(split_dir / f"{partition}.parquet") != audit["partition_sha256"][partition]:
+            raise ValueError(f"Audit does not match {partition} data")
+    rows = pd.read_parquet(split_dir / "test.parquet")
+    required = {"cluster_id", "sequence_id", "plasmid_id", "prompt", "sequence"}
+    if not required <= set(rows):
+        raise ValueError(f"Test partition lacks columns: {sorted(required - set(rows))}")
+    if rows[list(required)].isna().any().any():
+        raise ValueError("Test partition contains missing identifiers, prompts or sequences")
+    rows["n_hard_tokens"] = rows.prompt.map(lambda p: len(set(TOKEN_RE.findall(p))))
+    rows = rows[rows.n_hard_tokens > 0].copy()
+    if rows.empty:
+        raise ValueError("No hard-token requests in the test partition")
+    rows["plasmid_id"] = rows.plasmid_id.astype(str)
+    rows["n_prompt_tokens"] = rows.prompt.map(lambda p: len(set(re.findall(r"<[^>]+>", p))))
+    # Multiple prompt subsets must not turn the same source into extra evaluation units.
+    rows = rows.sort_values(
+        ["sequence_id", "n_hard_tokens", "n_prompt_tokens", "prompt", "plasmid_id"],
+        ascending=[True, False, False, True, True],
+    ).drop_duplicates("sequence_id")
+    rows["sample_id"] = [hashlib.sha256(f"{r.sequence_id}:{r.prompt}".encode()).hexdigest()
+                         for r in rows.itertuples()]
+    rows["cluster_rank"] = rows.cluster_id.map(
+        lambda c: hashlib.sha256(f"{seed}:{c}".encode()).hexdigest())
+    rows["sample_rank"] = rows.sample_id.map(
+        lambda s: hashlib.sha256(f"{seed}:{s}".encode()).hexdigest())
+    rows = rows.sort_values(["cluster_rank", "sample_rank"])
+    main = rows.drop_duplicates("cluster_id").head(n)
+    selected = set(main.sample_id)
+    minority_members = {}
+    counts = {}
+    for token in MINORITY_TOKENS:
+        eligible = rows[rows.prompt.str.contains(token, regex=False)].drop_duplicates("cluster_id")
+        panel = eligible.head(minority_n)
+        minority_members[token] = set(panel.sample_id)
+        selected.update(panel.sample_id)
+        counts[token] = dict(eligible_clusters=len(eligible), selected_clusters=len(panel),
+                             requested_clusters=minority_n, below_target=len(panel) < minority_n)
+    panel = rows[rows.sample_id.isin(selected)].copy()
+    panel["panel_main"] = panel.sample_id.isin(set(main.sample_id))
+    panel["minority_panels"] = panel.sample_id.map(
+        lambda s: [token for token, members in minority_members.items() if s in members])
+    panel = panel.rename(columns={"sequence": "source_sequence"})
+    panel["source_length"] = panel.source_sequence.str.len()
+    panel = panel.drop(columns=["cluster_rank", "sample_rank", "n_prompt_tokens"])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("xb") as f:
+        panel.to_parquet(f, index=False)
+    report = dict(
+        seed=seed, rows=len(panel), source_clusters=panel.cluster_id.nunique(),
+        main_clusters=len(main), main_requested_clusters=n, minority_panels=counts,
+        selection="One full prompt per sequence; hash-selected example per cluster in each panel",
+        aggregation="Report main and minority panels separately; bootstrap source clusters",
+        partition_sha256=audit["partition_sha256"], audit_sha256=sha256_file(audit_path),
+        panel_sha256=sha256_file(output),
+    )
+    with report_path.open("x") as f:
+        f.write(json.dumps(report, indent=2) + "\n")
+    return report
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--plannotate", type=Path, required=True)
-    ap.add_argument("--metadata", type=Path, required=True)
+    ap.add_argument("--cluster-split", type=Path, help="Audited split; use its test partition")
+    ap.add_argument("--minority-n", type=int, default=100)
+    ap.add_argument("--plannotate", type=Path)
+    ap.add_argument("--metadata", type=Path)
     ap.add_argument(
         "--train-pairs",
         type=Path,
-        required=True,
         help="Pretraining pairs used to verify that every source plasmid ID is absent",
     )
     ap.add_argument(
         "--pool",
         type=Path,
-        required=True,
         help="CSV of the annotated plasmids: plasmid_id, sequence, sequence_length",
     )
     ap.add_argument("--n", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
+
+    legacy_inputs = (args.plannotate, args.metadata, args.train_pairs, args.pool)
+    if args.cluster_split:
+        if any(path is not None for path in legacy_inputs):
+            ap.error("--cluster-split cannot be combined with source-ID benchmark inputs")
+        print(json.dumps(build_cluster_panel(
+            args.cluster_split, args.out, args.n, args.minority_n, args.seed,
+        ), indent=2))
+        return
+    if any(path is None for path in legacy_inputs):
+        ap.error("Provide --cluster-split or all of --plannotate, --metadata, --train-pairs, --pool")
 
     annotations = load_annotations(args.plannotate)
     print(f"annotated sequences: {len(annotations)}")

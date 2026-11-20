@@ -62,24 +62,43 @@ def cmd_retrieval(args) -> None:
     prompts = [r[0] for r in duckdb.sql(f"select prompt from '{args.benchmark}'").fetchall()]
     ann = load_annotations(args.annotations) if args.annotations else None
 
-    faiths, full, picks, direct_viability = [], 0, [], []
-    for q in prompts:
+    picks: list[int]
+    if args.retrieved_ids:
+        raw_ids = [
+            line.strip()
+            for line in args.retrieved_ids.read_text().splitlines()
+            if line.strip()
+        ]
+        if len(raw_ids) != len(prompts):
+            raise ValueError(
+                f"Retrieved IDs ({len(raw_ids)}) != prompts ({len(prompts)})"
+            )
+        picks = [int(pid) for pid in raw_ids]
+    else:
+        picks = []
+        for q in prompts:
+            req = set(TOKEN_RE.findall(q))
+            if not req:
+                raise ValueError("Every benchmark prompt must contain at least one hard token")
+            candidates: set[int] = set()
+            for t in req:
+                candidates |= postings.get(t, set())
+            if not candidates:
+                raise ValueError(f"No retrieval candidate for requested tokens: {sorted(req)}")
+            best_pid = max(
+                candidates,
+                key=lambda pid: (
+                    len(req & index[pid]) / len(req | index[pid]),
+                    -pid,
+                ),
+            )
+            picks.append(best_pid)
+
+    faiths, full, direct_viability = [], 0, []
+    for q, best_pid in zip(prompts, picks):
         req = set(TOKEN_RE.findall(q))
         if not req:
             raise ValueError("Every benchmark prompt must contain at least one hard token")
-        candidates: set[int] = set()
-        for t in req:
-            candidates |= postings.get(t, set())
-        if not candidates:
-            raise ValueError(f"No retrieval candidate for requested tokens: {sorted(req)}")
-        best_pid = max(
-            candidates,
-            key=lambda pid: (
-                len(req & index[pid]) / len(req | index[pid]),
-                -pid,
-            ),
-        )
-        picks.append(best_pid)
         if ann is not None:
             if str(best_pid) not in ann:
                 raise ValueError(f"Missing direct annotation for retrieved plasmid {best_pid}")
@@ -170,6 +189,11 @@ def main() -> None:
     r.add_argument("--train-pairs", type=Path, required=True)
     r.add_argument("--benchmark", type=Path, required=True)
     r.add_argument("--annotations", type=Path)
+    r.add_argument(
+        "--retrieved-ids",
+        type=Path,
+        help="use pre-selected plasmid IDs (one per prompt) instead of recomputing tie-broken Jaccard picks",
+    )
     r.add_argument("--out", type=Path, help="write retrieved plasmid ids here")
     r.set_defaults(func=cmd_retrieval)
 

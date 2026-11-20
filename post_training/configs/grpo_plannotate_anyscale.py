@@ -6,7 +6,6 @@ Requires NCBI BLAST+ tools (installed via apt in entrypoint).
     CONFIG=grpo_plannotate_anyscale python infra/anyscale/run_anyscale.py
 """
 
-import os
 from pathlib import Path
 import sys
 
@@ -18,7 +17,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 config = PostTrainingConfig(
     # Model — dense kmer6, start from v2 motif checkpoint
-    model="<org>/PlasmidLM-kmer6",
+    model="McClain/PlasmidLM-kmer6",
     bf16=True,
     num_actors=1,
 
@@ -34,6 +33,9 @@ config = PostTrainingConfig(
     scorer_kwargs={
         "plannotate_db_path": str(DATA_DIR / "plannotate_db.parquet"),
         "motif_registry_path": str(DATA_DIR / "motif_registry_combined.parquet"),
+        # Pin the scorer used by the released step-800 checkpoint. The generic
+        # PlannotateScorer default was changed after this run.
+        "norm_score_cap": 5.0,
     },
 
     # Generation

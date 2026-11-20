@@ -42,7 +42,7 @@ only; we do not claim causal attribution to soft tokens.
 
 Data provenance
 ---------------
-Both runs live under `hf://buckets/<org>/PlasmidLMEval/runs/` and are
+Both runs live under `hf://buckets/McClain/PlasmidLMEval/runs/` and are
 identical to those consumed by `notebooks/base_vs_grpo_analysis.py`:
     grpo_plannotate_full_20260408/     (generated 2026-04-08, annotated 2026-04-09)
     base_kmer6_matched_20260420_1303/  (generated + annotated 2026-04-20)
@@ -75,8 +75,8 @@ def _(mo):
     # Soft-token conditioning — does the model use BB_ / COPY_ / SP_ / VEC_?
 
     **Paired design, same 1000 prompts.** Compares the pretrained base
-    (`<org>/PlasmidLM-kmer6`) against the post-trained
-    `<org>/PlasmidLM-kmer6-GRPO-plannotate`. The GRPO reward ignored soft
+    (`McClain/PlasmidLM-kmer6`) against the post-trained
+    `McClain/PlasmidLM-kmer6-GRPO-plannotate`. The GRPO reward ignored soft
     tokens — so the headline question is whether the **base** model
     conditions on them at all. Base-vs-GRPO deltas are a sanity check:
     expected null.
@@ -105,7 +105,7 @@ def _():
     from pathlib import Path
     import subprocess
 
-    BUCKET = "<org>/PlasmidLMEval"
+    BUCKET = "McClain/PlasmidLMEval"
     GRPO_RUN = "runs/grpo_plannotate_full_20260408"
     BASE_RUN = "runs/base_kmer6_matched_20260420_1303"
 
@@ -120,9 +120,9 @@ def _():
     ]
 
     # The notebook reads from a local cache of bucket files. Populate with
-    #   hf buckets sync hf://buckets/<org>/PlasmidLMEval/runs/grpo_plannotate_full_20260408 \
+    #   hf buckets sync hf://buckets/McClain/PlasmidLMEval/runs/grpo_plannotate_full_20260408 \
     #       /tmp/plasmidlm_eval_cache/runs__grpo_plannotate_full_20260408
-    #   hf buckets sync hf://buckets/<org>/PlasmidLMEval/runs/base_kmer6_matched_20260420_1303 \
+    #   hf buckets sync hf://buckets/McClain/PlasmidLMEval/runs/base_kmer6_matched_20260420_1303 \
     #       /tmp/plasmidlm_eval_cache/runs__base_kmer6_matched_20260420_1303
     def _ensure_local(run_key, wanted):
         local_run = CACHE / run_key.replace("/", "__")

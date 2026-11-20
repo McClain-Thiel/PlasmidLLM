@@ -8,7 +8,7 @@ Usage::
 
     # In a config file (post_training/configs/grpo_motif.py):
     config = PostTrainingConfig(
-        model="<org>/PlasmidLM-kmer6-MoE",
+        model="McClain/PlasmidLM-kmer6-MoE",
         algorithm="grpo",
         scorer="motif",
         ...
@@ -34,6 +34,7 @@ class PostTrainingConfig:
 
     # ── Model ─────────────────────────────────────────────────────────────
     model: str = "gpt2"
+    model_revision: Optional[str] = None
     bf16: bool = True
     seed: int = 42
 
@@ -94,6 +95,7 @@ class PostTrainingConfig:
     wandb_project: Optional[str] = None
     wandb_run_name: Optional[str] = None
     wandb_entity: Optional[str] = None
+    wandb_tags: list[str] = field(default_factory=lambda: ["plasmidrl", "post-training"])
 
     @property
     def wandb_enabled(self) -> bool:
@@ -149,6 +151,7 @@ class PostTrainingConfig:
             max_grad_norm=self.max_grad_norm,
             bf16=self.bf16,
             seed=self.seed,
+            model_revision=self.model_revision,
         )
 
     def generation_kwargs(self) -> dict[str, Any]:

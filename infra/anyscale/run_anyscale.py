@@ -55,10 +55,10 @@ def required_data_paths(cfg) -> list[Path]:
 
     paths = []
     for value in configured:
-        if not value:
+        if not isinstance(value, (str, os.PathLike)) or not value:
             continue
         path = Path(value).resolve()
-        if path.parent != DATA_DIR.resolve():
+        if not path.is_relative_to(DATA_DIR.resolve()):
             continue
         paths.append(path)
     return sorted(set(paths))
@@ -81,13 +81,15 @@ def main():
     cfg = load_config(config_path)
 
     # ── Install BLAST+ if BLAST-based scorer ──────────────────────────────
-    if "plannotate" in config_name:
+    if cfg.scorer.startswith("plannotate"):
         install_blast()
 
     # ── Download data ─────────────────────────────────────────────────────
     log.info("Downloading data from S3...")
     for local_path in required_data_paths(cfg):
-        s3_download(f"{s3_prefix}/data/{local_path.name}", local_path)
+        relative = local_path.relative_to(DATA_DIR.resolve())
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        s3_download(f"{s3_prefix}/data/{relative}", local_path)
     log.info("Data download complete.")
 
     # ── Resume from S3 checkpoint ────────────────────────────────────────
@@ -98,7 +100,7 @@ def main():
         cfg.model = resume_from
 
     # ── Set S3 checkpoint sync (runs on worker via ModelActor) ───────────
-    run_name = config_name.replace("_anyscale", "")
+    run_name = cfg.wandb_run_name or config_name.replace("_anyscale", "")
     cfg.s3_checkpoint_prefix = f"{checkpoint_prefix}/{run_name}"
 
     # ── Run post-training ─────────────────────────────────────────────────

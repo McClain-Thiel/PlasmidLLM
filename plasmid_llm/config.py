@@ -53,12 +53,20 @@ class PretrainingConfig:
 
     # Evaluation
     val_split: float = 0.05
+    validation_pairs: Optional[Path] = None
+    circular_rotation: bool = False
+    soft_token_dropout: float = 0.0
+    minority_target_fraction: float = 0.0
+    minority_max_weight: float = 4.0
+    save_total_limit: Optional[int] = 5
     eval_steps: int = 500
     save_steps: int = 5000
     logging_steps: int = 10
-    early_stopping_patience: int = 10
+    early_stopping_patience: Optional[int] = 10
+    load_best_model_at_end: bool = True
 
     # System
+    use_cpu: bool = False
     bf16: bool = False
     gradient_checkpointing: bool = False
     dataloader_num_workers: int = 4
@@ -77,6 +85,20 @@ class PretrainingConfig:
         self.training_pairs = Path(self.training_pairs)
         self.special_tokens = Path(self.special_tokens)
         self.output_dir = Path(self.output_dir)
+        if self.validation_pairs is not None:
+            self.validation_pairs = Path(self.validation_pairs)
+            if not self.validation_pairs.is_file():
+                raise FileNotFoundError(f"validation_pairs not found: {self.validation_pairs}")
+        if not 0 <= self.soft_token_dropout <= 1:
+            raise ValueError("soft_token_dropout must be in [0, 1]")
+        if not 0 <= self.minority_target_fraction < 1 or self.minority_max_weight < 1:
+            raise ValueError("Invalid minority sampling parameters")
+        if self.early_stopping_patience is not None:
+            if self.early_stopping_patience < 1 or not self.load_best_model_at_end:
+                raise ValueError("Early stopping requires positive patience and best-model loading")
+        if (self.circular_rotation or self.soft_token_dropout or self.minority_target_fraction
+                ) and self.validation_pairs is None:
+            raise ValueError("Augmentation/rebalancing requires an explicit validation partition")
 
         if not self.training_pairs.exists():
             raise FileNotFoundError(f"training_pairs not found: {self.training_pairs}")
@@ -93,6 +115,16 @@ class PretrainingConfig:
             "special_tokens_hash": _compute_file_hash(self.special_tokens),
             "max_seq_len": self.max_seq_len,
             "val_split": self.val_split,
+            "validation_pairs": str(self.validation_pairs) if self.validation_pairs else None,
+            "validation_pairs_hash": (_compute_file_hash(self.validation_pairs)
+                                      if self.validation_pairs else None),
+            "circular_rotation": self.circular_rotation,
+            "soft_token_dropout": self.soft_token_dropout,
+            "minority_target_fraction": self.minority_target_fraction,
+            "minority_max_weight": self.minority_max_weight,
+            "gradient_accumulation_steps": self.gradient_accumulation_steps,
+            "load_best_model_at_end": self.load_best_model_at_end,
+            "early_stopping_patience": self.early_stopping_patience,
 
             # Architecture
             "hidden_size": self.hidden_size,

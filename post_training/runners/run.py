@@ -154,8 +154,30 @@ def _run_eval(
     return metrics
 
 
-def run(cfg: PostTrainingConfig) -> None:
+def _run(cfg: PostTrainingConfig) -> None:
     """Execute a full post-training run from a config."""
+
+    from plasmid_llm.provenance import write_run_provenance
+
+    output = Path(cfg.checkpoint_dir)
+    if output.exists() and any(output.iterdir()):
+        raise FileExistsError(f"Refusing to reuse nonempty run directory: {output}")
+    if cfg.s3_checkpoint_prefix:
+        import boto3
+        from urllib.parse import urlparse
+
+        destination = urlparse(cfg.s3_checkpoint_prefix)
+        if destination.scheme != "s3" or not destination.netloc or not destination.path.strip("/"):
+            raise ValueError("Checkpoints require a named s3://bucket/run-prefix destination")
+        existing = boto3.client("s3").list_objects_v2(
+            Bucket=destination.netloc, Prefix=destination.path.lstrip("/").rstrip("/") + "/",
+            MaxKeys=1,
+        )
+        if existing.get("KeyCount", 0):
+            raise FileExistsError(f"S3 run prefix already exists: {cfg.s3_checkpoint_prefix}")
+    inputs = [Path(p) for p in (cfg.prompts_parquet, cfg.eval_parquet) if p]
+    inputs.extend(Path(v) for k, v in cfg.scorer_kwargs.items() if k.endswith("_path"))
+    manifest, source = write_run_provenance(cfg, output, inputs)
 
     # ── wandb ──────────────────────────────────────────────────────────────
     wandb_run = None
@@ -167,8 +189,13 @@ def run(cfg: PostTrainingConfig) -> None:
             name=cfg.wandb_run_name,
             entity=cfg.wandb_entity,
             config=cfg.to_wandb_config(),
+            tags=cfg.wandb_tags,
         )
         log.info("wandb run: %s/%s", wandb_run.project, wandb_run.name)
+        artifact = wandb.Artifact(f"{wandb_run.id}-provenance", type="provenance")
+        artifact.add_file(str(manifest))
+        artifact.add_file(str(source))
+        wandb_run.log_artifact(artifact).wait()
 
     ray.init(ignore_reinit_error=True)
 
@@ -250,13 +277,18 @@ def run(cfg: PostTrainingConfig) -> None:
     ray.get(actors[0].save_checkpoint.remote(final, s3_dest=s3_final))
     log.info("Training complete. Final model → %s", final)
 
-    # ── Cleanup ────────────────────────────────────────────────────────────
-    if wandb_run is not None:
-        import wandb
+def run(cfg: PostTrainingConfig) -> None:
+    failed = True
+    try:
+        _run(cfg)
+        failed = False
+    finally:
+        ray.shutdown()
+        if cfg.wandb_enabled:
+            import wandb
 
-        wandb.finish()
-
-    ray.shutdown()
+            if wandb.run is not None:
+                wandb.finish(exit_code=int(failed))
 
 
 def main():

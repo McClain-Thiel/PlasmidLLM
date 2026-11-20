@@ -64,6 +64,43 @@ CLASS_RULES = {
 }
 
 
+def complete_protein_ids(proteins: Path) -> set[str]:
+    """Require explicit Prodigal completeness and an unambiguous translation."""
+    from Bio import SeqIO
+
+    complete = set()
+    for record in SeqIO.parse(str(proteins), "fasta"):
+        partial = re.search(r"\bpartial=([01]{2})\b", record.description)
+        if partial is None:
+            raise ValueError(f"Missing Prodigal partial flag for {record.id}")
+        peptide = str(record.seq).removesuffix("*")
+        if partial.group(1) == "00" and re.fullmatch("[ACDEFGHIKLMNPQRSTVWY]+", peptide):
+            complete.add(record.id)
+    return complete
+
+
+def is_intact_hit(row: dict[str, str], complete: set[str], coverage: float = 90.0) -> bool:
+    """Conservative intact endpoint; partial/HMM-only hits stay in legacy recall."""
+    if "Method" not in row:
+        raise ValueError("AMRFinder output missing columns: ['Method']")
+    coverage_col = next(
+        (col for col in ("% Coverage of reference", "% Coverage of reference protein") if col in row),
+        None,
+    )
+    if coverage_col is None:
+        raise ValueError("AMRFinder output missing columns: ['% Coverage of reference']")
+    pid = row.get("Protein id") or row.get("Protein identifier")
+    if pid is None:
+        raise ValueError("AMRFinder output lacks protein identifiers")
+    method = row["Method"]
+    if method not in {"ALLELE", "EXACT", "BLAST", "ALLELEP", "EXACTP", "BLASTP"} or pid not in complete:
+        return False
+    value = row[coverage_col]
+    if value in {"NA", ""}:
+        return False
+    return float(value) >= coverage
+
+
 def tokens_for(symbol: str, klass: str) -> set[str]:
     for pat, toks in SYMBOL_RULES:
         if pat.search(symbol or ""):
@@ -76,12 +113,20 @@ def main() -> None:
     ap.add_argument("--amr", type=Path, required=True)
     ap.add_argument("--generations", type=Path, required=True)
     ap.add_argument("--label", default="run")
+    ap.add_argument("--intact-only", action="store_true")
+    ap.add_argument("--proteins", type=Path, help="Prodigal FASTA with partial=00 header flags")
+    ap.add_argument("--output", type=Path, help="Per-generation parquet for paired statistics")
     args = ap.parse_args()
+    if args.intact_only and args.proteins is None:
+        ap.error("--intact-only requires --proteins")
+    complete = complete_protein_ids(args.proteins) if args.intact_only else set()
 
     detected: dict[str, set[str]] = collections.defaultdict(set)
     unmapped: collections.Counter = collections.Counter()
     with open(args.amr) as fh:
         for row in csv.DictReader(fh, delimiter="\t"):
+            if args.intact_only and not is_intact_hit(row, complete):
+                continue
             pid = row.get("Protein id") or row.get("Protein identifier") or ""
             seq_id = pid.rsplit("_", 1)[0]
             toks = tokens_for(row.get("Element symbol", ""), row.get("Class", ""))
@@ -90,11 +135,15 @@ def main() -> None:
             else:
                 unmapped[row.get("Element symbol", "")] += 1
 
-    prompts = [r[0] for r in duckdb.sql(f"select prompt from '{args.generations}'").fetchall()]
+    prompts = [r[0] for r in duckdb.read_parquet(str(args.generations)).project("prompt").fetchall()]
+    unknown = set(detected) - {f"gen_{i}" for i in range(len(prompts))}
+    if unknown:
+        raise ValueError(f"AMRFinder sequence IDs absent from generations: {sorted(unknown)[:5]}")
 
     recalls, n_req, n_any = [], 0, 0
     per_token_req: collections.Counter = collections.Counter()
     per_token_hit: collections.Counter = collections.Counter()
+    records = []
     for i, prompt in enumerate(prompts):
         req = set(AMR_TOKEN_RE.findall(prompt))
         if not req:
@@ -102,6 +151,9 @@ def main() -> None:
         det = detected.get(f"gen_{i}", set())
         n_req += 1
         hit = req & det
+        records.append(dict(sequence_id=f"gen_{i}", prompt=prompt, requested=sorted(req),
+                            detected=sorted(det), recall=len(hit) / len(req),
+                            all_requested=req <= det, intact_only=args.intact_only))
         n_any += bool(hit)
         recalls.append(len(hit) / len(req))
         for t in req:
@@ -109,7 +161,16 @@ def main() -> None:
             if t in det:
                 per_token_hit[t] += 1
 
+    if not n_req:
+        raise ValueError("No AMR-requesting prompts in the generation panel")
+    if args.output:
+        import pandas as pd
+
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open("xb") as output:
+            pd.DataFrame(records).to_parquet(output, index=False)
     print(f"\n=== {args.label} — AMRFinderPlus (independent of registry & pLannotate) ===")
+    print(f"  intact-only filtering            : {args.intact_only}")
     print(f"  prompts requesting >=1 AMR token : {n_req}")
     print(
         f"  token-pooled recall              : "

@@ -253,6 +253,7 @@ class PlannotateScorer(Scorer):
         db_dir: str | None = None,
         evalue: float = 1e-5,
         filter_db: bool = True,
+        norm_score_cap: float = 1.5,
     ):
         if plannotate_df is not None:
             plannotate_full = plannotate_df
@@ -269,6 +270,7 @@ class PlannotateScorer(Scorer):
             raise ValueError("Must provide motif_registry_path or motif_registry_df")
 
         self.evalue = evalue
+        self.norm_score_cap = norm_score_cap
         self._token_bridge = _build_token_bridge(
             self.motif_registry, plannotate_full
         )
@@ -532,7 +534,7 @@ class PlannotateScorer(Scorer):
         w_id: float = 0.4,
         w_cov: float = 0.35,
         w_norm: float = 0.25,
-        norm_score_cap: float = 1.5,
+        norm_score_cap: float | None = None,
         sharpness: float = 2.0,
         recall_floor: float = 0.5,
         **kwargs,
@@ -552,7 +554,7 @@ class PlannotateScorer(Scorer):
         w_id: float = 0.4,
         w_cov: float = 0.35,
         w_norm: float = 0.25,
-        norm_score_cap: float = 1.5,
+        norm_score_cap: float | None = None,
         sharpness: float = 2.0,
         recall_floor: float = 0.5,
         **kwargs,
@@ -572,7 +574,7 @@ class PlannotateScorer(Scorer):
         return self._compute_composite(
             expected_tokens, best_per_token,
             w_id=w_id, w_cov=w_cov, w_norm=w_norm,
-            norm_score_cap=norm_score_cap,
+            norm_score_cap=self.norm_score_cap if norm_score_cap is None else norm_score_cap,
             sharpness=sharpness, recall_floor=recall_floor,
         )
 
@@ -583,7 +585,7 @@ class PlannotateScorer(Scorer):
         w_id: float = 0.4,
         w_cov: float = 0.35,
         w_norm: float = 0.25,
-        norm_score_cap: float = 1.5,
+        norm_score_cap: float | None = None,
         sharpness: float = 2.0,
         recall_floor: float = 0.5,
         **kwargs,
@@ -616,7 +618,7 @@ class PlannotateScorer(Scorer):
             result = self._compute_composite(
                 expected, per_token,
                 w_id=w_id, w_cov=w_cov, w_norm=w_norm,
-                norm_score_cap=norm_score_cap,
+                norm_score_cap=self.norm_score_cap if norm_score_cap is None else norm_score_cap,
                 sharpness=sharpness, recall_floor=recall_floor,
             )
             rewards.append(result["reward"])

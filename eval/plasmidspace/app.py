@@ -59,7 +59,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL_ID = "<org>/PlasmidLM-kmer6-GRPO-plannotate"
+MODEL_ID = "McClain/PlasmidLM-kmer6-GRPO-plannotate"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 FUNCTIONAL_PREFIXES = frozenset(
@@ -862,7 +862,7 @@ with gr.Blocks(title="PlasmidSpace", theme=encode_theme, css=_CUSTOM_CSS) as dem
         "# \U0001F9EC PlasmidSpace\n"
         "*Design synthetic plasmids from natural language using "
         "[PlasmidLM]"
-        "(https://huggingface.co/<org>/PlasmidLM-kmer6-GRPO-plannotate)*"
+        "(https://huggingface.co/McClain/PlasmidLM-kmer6-GRPO-plannotate)*"
     )
 
     with gr.Row(equal_height=False):

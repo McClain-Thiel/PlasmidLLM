@@ -10,22 +10,27 @@ import argparse
 import json
 import logging
 import math
+import os
 import shutil
 import sys
 from pathlib import Path
 
 import torch
+from accelerate import PartialState
 from transformers import (
     EarlyStoppingCallback,
     Trainer,
     TrainerCallback,
     TrainingArguments,
+    set_seed,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from plasmid_llm.config import PretrainingConfig
-from plasmid_llm.data import PlasmidDataset, train_val_split
+from plasmid_llm.data import (
+    PlasmidDataset, minority_sampling_weights, train_val_split, validate_disjoint,
+)
 from plasmid_llm.models.hf_plasmid_lm import (
     PlasmidKmerTokenizer,
     PlasmidLMConfig,
@@ -158,6 +163,31 @@ class PerplexityCallback(TrainerCallback):
             logs.update(extra)
 
 
+class WandbCheckpointCallback(TrainerCallback):
+    """Upload before Trainer can rotate local checkpoints."""
+
+    def on_save(self, args, state, control, **kwargs):
+        if state.is_world_process_zero:
+            import wandb
+
+            artifact = wandb.Artifact(f"{wandb.run.id}-checkpoints", type="model")
+            artifact.add_dir(str(Path(args.output_dir) / f"checkpoint-{state.global_step}"))
+            wandb.run.log_artifact(artifact).wait()
+
+
+class RebalancedTrainer(Trainer):
+    def __init__(self, *args, sampling_weights: torch.Tensor, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sampling_weights = sampling_weights
+
+    def _get_train_sampler(self, train_dataset=None):
+        # Accelerate shards the common sampled stream across ranks.
+        return torch.utils.data.WeightedRandomSampler(
+            self.sampling_weights, len(self.sampling_weights), replacement=True,
+            generator=torch.Generator().manual_seed(self.args.seed),
+        )
+
+
 def _build_run_name(config: PretrainingConfig) -> str:
     """Build a descriptive W&B run name from config."""
     parts = []
@@ -175,7 +205,9 @@ def _build_run_name(config: PretrainingConfig) -> str:
 
 def _build_wandb_tags(config: PretrainingConfig) -> list[str]:
     """Build descriptive tags for W&B run."""
-    tags = ["pretraining", config.tokenizer_type]
+    tags = ["plasmidrl", "pretraining", config.tokenizer_type]
+    if config.validation_pairs:
+        tags.extend(["cluster-disjoint-v2", "baseline"])
     if config.use_moe:
         tags.append("moe")
     else:
@@ -195,13 +227,18 @@ def build_tokenizer(config: PretrainingConfig) -> PlasmidLMTokenizer | PlasmidKm
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     if config.tokenizer_type == "kmer":
+        PlasmidKmerTokenizer.register_for_auto_class("AutoTokenizer")
         vocab = build_kmer_vocab(special_tokens, k=config.kmer_k)
         vocab_file = config.output_dir / "vocab.json"
-        with open(vocab_file, "w") as f:
-            json.dump(vocab, f, indent=2)
+        if int(os.environ.get("RANK", "0")) == 0:
+            with open(vocab_file, "w") as f:
+                json.dump(vocab, f, indent=2)
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
         log.info(f"Created k-mer vocab with {len(vocab)} tokens (k={config.kmer_k}, stride={config.kmer_stride})")
         return PlasmidKmerTokenizer(str(vocab_file), k=config.kmer_k, stride=config.kmer_stride)
     else:
+        PlasmidLMTokenizer.register_for_auto_class("AutoTokenizer")
         vocab = {token: idx for idx, token in enumerate(special_tokens)}
         next_id = len(vocab)
         for base in "ATCGNatcgn":
@@ -209,8 +246,11 @@ def build_tokenizer(config: PretrainingConfig) -> PlasmidLMTokenizer | PlasmidKm
                 vocab[base] = next_id
                 next_id += 1
         vocab_file = config.output_dir / "vocab.json"
-        with open(vocab_file, "w") as f:
-            json.dump(vocab, f, indent=2)
+        if int(os.environ.get("RANK", "0")) == 0:
+            with open(vocab_file, "w") as f:
+                json.dump(vocab, f, indent=2)
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
         log.info(f"Created char vocab with {len(vocab)} tokens at {vocab_file}")
         return PlasmidLMTokenizer(str(vocab_file))
 
@@ -220,7 +260,7 @@ def main():
     parser.add_argument("config", type=Path, help="Path to Python config file")
     args = parser.parse_args()
 
-    load_env_file()
+    load_env_file(Path(__file__).resolve().parents[1])
 
     log.info(f"Loading config from {args.config}")
     config = load_config(args.config)
@@ -230,15 +270,27 @@ def main():
         )
     log.info(f"Config: {config.training_pairs.name}, output: {config.output_dir}")
 
+    distributed = PartialState(cpu=config.use_cpu)
+    if distributed.is_main_process and config.output_dir.exists() and any(config.output_dir.iterdir()):
+        raise FileExistsError(f"Refusing to reuse nonempty output directory: {config.output_dir}")
+    distributed.wait_for_everyone()
+    set_seed(config.seed)
+
     # Build tokenizer
     tokenizer = build_tokenizer(config)
 
     # Load dataset
     log.info(f"Loading dataset from {config.training_pairs}")
     dataset = PlasmidDataset(
-        str(config.training_pairs), tokenizer, max_seq_len=config.max_seq_len
+        str(config.training_pairs), tokenizer, max_seq_len=config.max_seq_len,
+        circular_rotation=config.circular_rotation, soft_token_dropout=config.soft_token_dropout,
     )
-    train_ds, val_ds = train_val_split(dataset, val_split=config.val_split, seed=config.seed)
+    if config.validation_pairs:
+        train_ds = dataset
+        val_ds = PlasmidDataset(str(config.validation_pairs), tokenizer, config.max_seq_len)
+        validate_disjoint(train_ds, val_ds)
+    else:
+        train_ds, val_ds = train_val_split(dataset, val_split=config.val_split, seed=config.seed)
     log.info(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
     # Build model
@@ -265,10 +317,21 @@ def main():
         kmer_stride=config.kmer_stride if config.tokenizer_type == "kmer" else None,
     )
     model = PlasmidLMForCausalLM(model_config)
+    if not config.use_moe:
+        # PlasmidDataset strictly right-pads and masks pad labels with -100;
+        # causal attention avoids future pad tokens without an O(S^2) float mask.
+        model.model.right_padded_causal = True
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Model: {n_params:,} params | vocab={padded_vocab}")
 
     # Tracking setup
+    from plasmid_llm.provenance import write_run_provenance
+
+    if distributed.is_main_process:
+        input_paths = [config.training_pairs, config.special_tokens, args.config]
+        if config.validation_pairs:
+            input_paths.append(config.validation_pairs)
+        provenance_files = write_run_provenance(config, config.output_dir, input_paths)
     report_to = []
     mlflow_active = setup_mlflow(config.mlflow_tracking_uri, config.mlflow_experiment)
     if mlflow_active:
@@ -276,20 +339,22 @@ def main():
 
     wandb_active = False
     if config.wandb_project:
-        try:
-            import wandb
+        import wandb
+        report_to.append("wandb")
+        wandb_active = True
+        if int(os.environ.get("RANK", "0")) == 0:
             run_name = config.wandb_run_name or _build_run_name(config)
             wandb.init(
-                project=config.wandb_project,
-                name=run_name,
-                config=config.to_mlflow_params(),  # reuse param dict
+                project=config.wandb_project, name=run_name,
+                config={**config.to_mlflow_params(), "git_commit": _get_git_commit()},
                 tags=_build_wandb_tags(config),
             )
-            report_to.append("wandb")
-            wandb_active = True
+            wandb.save(str(args.config.resolve()), base_path=str(args.config.resolve().parent))
+            artifact = wandb.Artifact(f"{wandb.run.id}-provenance", type="provenance")
+            for path in provenance_files:
+                artifact.add_file(str(path))
+            wandb.run.log_artifact(artifact).wait()
             log.info(f"W&B: project={config.wandb_project}, run={run_name}")
-        except Exception as e:
-            log.warning(f"W&B setup failed: {e} — continuing without W&B")
 
     if not report_to:
         report_to = ["none"]
@@ -306,6 +371,7 @@ def main():
         weight_decay=config.weight_decay,
         lr_scheduler_type="cosine",
         bf16=config.bf16,
+        use_cpu=config.use_cpu,
         eval_strategy="steps",
         eval_steps=config.eval_steps,
         save_strategy="steps",
@@ -314,44 +380,82 @@ def main():
         max_grad_norm=config.max_grad_norm,
         dataloader_num_workers=config.dataloader_num_workers,
         seed=config.seed,
-        load_best_model_at_end=True,
+        load_best_model_at_end=config.load_best_model_at_end,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        save_total_limit=5,
+        save_total_limit=config.save_total_limit,
         report_to=report_to,
         remove_unused_columns=False,
         gradient_checkpointing=config.gradient_checkpointing,
+        torch_compile=bool(
+            not config.use_cpu
+            and torch.cuda.is_available()
+            and os.environ.get("PLASMID_PRETRAIN_COMPILE", "1") == "1"
+        ),
+        dataloader_pin_memory=bool(not config.use_cpu and torch.cuda.is_available()),
+        dataloader_persistent_workers=bool(config.dataloader_num_workers > 0),
     )
 
     # Callbacks
     callbacks = [
-        EarlyStoppingCallback(early_stopping_patience=config.early_stopping_patience),
         PerplexityCallback(),
         CheckpointEnrichCallback(),
     ]
+    if config.early_stopping_patience is not None:
+        callbacks.append(EarlyStoppingCallback(
+            early_stopping_patience=config.early_stopping_patience,
+        ))
     if mlflow_active:
         callbacks.append(MLflowExtrasCallback(config))
+    if wandb_active:
+        callbacks.append(WandbCheckpointCallback())
 
     # Train
-    trainer = Trainer(
+    trainer_class = RebalancedTrainer if config.minority_target_fraction else Trainer
+    sampler_kwargs = {}
+    if config.minority_target_fraction:
+        sampler_kwargs["sampling_weights"] = minority_sampling_weights(
+            train_ds.prompts, config.minority_target_fraction, config.minority_max_weight,
+        )
+    trainer = trainer_class(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        processing_class=tokenizer,
         callbacks=callbacks,
+        **sampler_kwargs,
     )
 
     log.info("Starting training...")
-    trainer.train()
+    result = trainer.train()
 
     # Save final model + tokenizer
     final_dir = config.output_dir / "final"
     log.info(f"Saving final model to {final_dir}")
     trainer.save_model(str(final_dir))
-    tokenizer.save_pretrained(str(final_dir))
-    model.config.save_pretrained(str(final_dir))
+    if trainer.is_world_process_zero():
+        tokenizer.save_pretrained(str(final_dir))
+        model.config.save_pretrained(str(final_dir))
+        report = dict(
+            global_step=trainer.state.global_step, requested_steps=config.max_steps,
+            selection="best_validation_loss" if config.load_best_model_at_end else "last_step",
+            best_model_checkpoint=trainer.state.best_model_checkpoint,
+            metrics=result.metrics, log_history=trainer.state.log_history,
+        )
+        if wandb_active:
+            report.update(wandb_run_id=wandb.run.id, wandb_url=wandb.run.url)
+        with (final_dir / "training_report.json").open("x") as f:
+            json.dump(report, f, indent=2)
+            f.write("\n")
+
+    if wandb_active and trainer.is_world_process_zero():
+        artifact = wandb.Artifact(f"{wandb.run.id}-final", type="model")
+        artifact.add_dir(str(final_dir))
+        wandb.run.log_artifact(artifact).wait()
+        wandb.finish()
 
     if mlflow_active:
         import mlflow

@@ -13,6 +13,7 @@ SCORER_REGISTRY = {
     ),
     "motif": ("post_training.scorers.motif", "MotifScorer"),
     "plannotate": ("post_training.scorers.plannotate", "PlannotateScorer"),
+    "plannotate_v2": ("post_training.scorers.plannotate_v2", "PlannotateV2Scorer"),
     "valid": ("post_training.scorers.valid", "ValidPlasmidScorer"),
 }
 
