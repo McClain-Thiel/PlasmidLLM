@@ -76,3 +76,16 @@ External bioinformatics binaries (`blastn`, `makeblastdb`, `dustmasker`, `pLanno
 | External baselines | `python eval/scripts/score_cluster_v3_baselines.py --help` | `external_baselines_summary.{json,csv}` |
 | Auxiliary paper diagnostics | `python experiments/neurips_rebuttal/manuscript_diagnostics.py` | `manuscript_diagnostics.json` (Tables 1/5/6/7/9, virulence screen) |
 | Publication figures | `python eval/scripts/generate_figures.py --out-dir eval/figures/paper` | Figures 1 & 3–9 (`.pdf`/`.png`) |
+
+## Citation
+
+```bibtex
+@article{thiel2026plasmidlm,
+  title   = {{PlasmidLM}: A Promptable {DNA} Language Model via Verifiable-Reward Post-Training},
+  author  = {Thiel, McClain and Barnes, Chris P.},
+  journal = {bioRxiv},
+  year    = {2026},
+  doi     = {10.64898/2026.05.19.725242},
+  url     = {https://doi.org/10.64898/2026.05.19.725242},
+}
+```

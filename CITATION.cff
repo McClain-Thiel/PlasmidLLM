@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "PlasmidLM: A Promptable DNA Language Model via Verifiable-Reward Post-Training"
+message: "If you use this software or its models, please cite the accompanying paper."
+type: software
+authors:
+  - family-names: Thiel
+    given-names: McClain
+    orcid: "https://orcid.org/0000-0002-5633-6115"
+    affiliation: University College London
+  - family-names: Barnes
+    given-names: Chris P.
+    affiliation: University College London
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "PlasmidLM: A Promptable DNA Language Model via Verifiable-Reward Post-Training"
+  authors:
+    - family-names: Thiel
+      given-names: McClain
+      orcid: "https://orcid.org/0000-0002-5633-6115"
+    - family-names: Barnes
+      given-names: Chris P.
+  journal: "bioRxiv"
+  year: 2026
+  doi: "10.64898/2026.05.19.725242"
+  url: "https://doi.org/10.64898/2026.05.19.725242"
