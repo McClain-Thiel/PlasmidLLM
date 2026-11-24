@@ -1,7 +1,6 @@
 """Tests for k-mer tokenizer."""
 
 import json
-import tempfile
 import pytest
 import sys
 from pathlib import Path

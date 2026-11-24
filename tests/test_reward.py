@@ -9,8 +9,6 @@ pytest.importorskip("Bio")
 pytest.importorskip("pandas")
 
 from post_training.scorers.alignment import (
-    _extract_category,
-    build_category_index,
     AlignmentScorer,
     load_motif_lookup,
     parse_hard_tokens,

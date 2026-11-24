@@ -83,7 +83,7 @@ class MotifScorer(Scorer):
     @staticmethod
     def _clean_seq(seq):
         lines = seq.strip().split("\n")
-        lines = [l for l in lines if not l.startswith(">")]
+        lines = [line for line in lines if not line.startswith(">")]
         cleaned = "".join(lines).upper()
         cleaned = re.sub(r"[^ATGCNRYSWKMBDHV]", "", cleaned)
         return cleaned

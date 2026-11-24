@@ -59,7 +59,7 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(rf"""
+    mo.md(r"""
     # Base vs GRPO-plannotate — paired analysis
 
     **Paired design.** Same 1000 prompts for both models, matched sampling config,

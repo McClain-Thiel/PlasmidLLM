@@ -1,149 +1,50 @@
 # pretraining
 
-Causal language modeling on plasmid DNA sequences. Trains a transformer decoder from scratch to generate plasmid sequences conditioned on categorical tokens describing the desired functional elements.
+Causal language modeling and sequence-cluster-disjoint data partitioning for **PlasmidLM**.
 
-## Quick start
+## Quick Start
 
 ```bash
-# Smoke test (100 steps, verifies pipeline end-to-end)
+# 1. Smoke test (100 steps, verifies pipeline end-to-end)
 python -m pretraining.train pretraining/configs/p4_smoke_test.py
 
-# Full training run (reproduces the released `McClain/PlasmidLM-kmer6` base checkpoint)
-python -m pretraining.train pretraining/configs/p4_kmer6_s3.py
+# 2. Build and audit the sequence-cluster-disjoint split (cluster_v3)
+python -m pretraining.build_cluster_split --help
+python -m pretraining.refine_cluster_split --help
+python -m pretraining.verify_cluster_split --help
+
+# 3. Pretrain the released v2.0 base checkpoint (McClain/PlasmidLM-kmer6)
+PLASMID_SPLIT_DIR=data/cluster_v3 \
+PLASMID_SPLIT_AUDIT=data/cluster_v3/audit/report.json \
+PLASMID_RUN_ID=cluster_base \
+  python -m pretraining.train pretraining/configs/cluster_disjoint_v2.py
 ```
 
-## How it works
+## Certified Sequence-Cluster-Disjoint Split
 
-Each training example is a single string:
+Source-plasmid-ID splitting alone leaves near-identical vector backbones across train and test splits. The clustering pipeline eliminates backbone leakage:
 
-```
-<BOS><AMR_KANAMYCIN><ORI_COLE1><PROM_T7><SEP>ATCGATCG...TACG<EOS>
-```
+1. `build_cluster_split.py` filters records containing non-`ACGTN` ambiguity codes (`777` plasmids / `4,901` pairs), canonicalizes circular DNA sequences, runs `MMseqs2` at `>= 90%` identity and `>= 90%` bidirectional coverage, and assigns connected components to `train` / `validation` (`5%`) / `test` (`5%`).
+2. `refine_cluster_split.py` runs fixed-point `megablast` closure over cross-split edges (`3` iterations) to merge any missed circularly equivalent backbones into `11,352` disjoint clusters (`93,900` train / `4,728` val / `4,939` test pairs).
+3. `verify_cluster_split.py` runs an independent `BLAST+ v2.17.0` cross-split audit (`0` hits allowed at `>= 90%` identity and `>= 90%` circular coverage) and writes `audit/report.json` with exact partition SHA-256 digests enforced at training startup by `cluster_disjoint_v2.py`.
 
-The categorical tokens before `<SEP>` describe what the plasmid should contain (resistance genes, origins of replication, promoters, etc.). The DNA sequence after `<SEP>` is the actual plasmid. The model learns to generate the sequence conditioned on the token prompt via standard next-token prediction, with prompt tokens masked from the loss.
+## Sequence Format, Tokenization, and Augmentation
 
-## Model
+Each row is formatted with unordered special tokens before `<SEQ>` followed by DNA sequence:
 
-Transformer decoder (`plasmid_llm/models/hf_plasmid_lm/`) with:
-
-- RoPE positional embeddings
-- RMSNorm
-- Optional Mixture-of-Experts (MoE) feed-forward layers
-- HuggingFace-compatible — works with `transformers`, `vLLM`, `trl`
-
-Typical configurations range from ~7M params (baseline dense) to ~46M total / ~23M active (k-mer + MoE).
-
-## Tokenization
-
-Two tokenizer modes, selected via `tokenizer_type` in the config:
-
-| Mode | Description | Effective context |
-|------|-------------|-------------------|
-| `char` | One token per DNA base (A/T/C/G/N) + special tokens | 4096 bp at `max_seq_len=4096` |
-| `kmer` | Non-overlapping or strided k-mers (e.g. 6-mer stride 3) + special tokens | ~12K bp at `max_seq_len=4096` with k=6, stride=3 |
-
-Both modes share the same special token vocabulary. The tokenizer is built dynamically from `special_tokens.txt` at training time, and saved into the output directory as `vocab.json` for reproducibility.
-
-## Configuration
-
-Training is fully config-driven using Python dataclasses (`plasmid_llm.config.PretrainingConfig`). No command-line flags — everything lives in a config file:
-
-```python
-from plasmid_llm.config import PretrainingConfig
-from pathlib import Path
-
-config = PretrainingConfig(
-    # Data
-    training_pairs=Path("data/training_pairs_v4.parquet"),
-    special_tokens=Path("data/special_tokens.txt"),
-
-    # Architecture
-    hidden_size=384,
-    num_hidden_layers=10,
-    num_attention_heads=8,
-    intermediate_size=1536,
-    max_seq_len=4096,
-
-    # Tokenizer
-    tokenizer_type="kmer",
-    kmer_k=6,
-    kmer_stride=3,
-
-    # MoE (optional)
-    use_moe=True,
-    num_experts=6,
-    num_experts_per_tok=2,
-    moe_intermediate_size=1536,
-    aux_loss_coef=0.01,
-
-    # Training
-    output_dir=Path("output/my_run"),
-    per_device_train_batch_size=16,
-    gradient_accumulation_steps=4,
-    learning_rate=3e-4,
-    max_steps=100_000,
-    warmup_steps=1000,
-    weight_decay=0.1,
-
-    # Tracking
-    wandb_project="PlasmidLLM",
-)
+```text
+<BOS><VEC_...><SP_...><COPY_...><AMR_...><ORI_...><PROM_...>...<SEQ>ATG...TAA<EOS>
 ```
 
-See `pretraining/configs/` for ready-to-use examples covering baseline, k-mer, MoE, and combined configurations.
-
-### Key config fields
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `training_pairs` | — | Parquet file with `full_text` column |
-| `special_tokens` | — | Text file listing all special tokens, one per line |
-| `tokenizer_type` | `"char"` | `"char"` or `"kmer"` |
-| `kmer_k` / `kmer_stride` | 6 / 3 | K-mer size and stride (only used when `tokenizer_type="kmer"`) |
-| `use_moe` | `False` | Enable Mixture-of-Experts |
-| `num_experts` / `num_experts_per_tok` | 6 / 2 | MoE routing parameters |
-| `bf16` | `False` | BFloat16 mixed precision |
-| `gradient_checkpointing` | `False` | Trade compute for memory |
-| `early_stopping_patience` | 10 | Eval steps without improvement before stopping |
-| `wandb_project` | `None` | Set to enable W&B logging |
-| `mlflow_tracking_uri` | `None` | Set to enable MLflow logging |
-
-## Input data
-
-**Required files:**
-
-1. **`training_pairs.parquet`** — Parquet file with a `full_text` column containing formatted sequences (`<BOS><tokens><SEP>SEQUENCE<EOS>`). Alternative column names `prompt`/`sequence` or `token_prompt`/`token_completion` are also supported (the dataset class handles both).
-
-2. **`special_tokens.txt`** — One token per line, defining the full vocabulary of categorical tokens plus control tokens (`<PAD>`, `<BOS>`, `<EOS>`, `<SEP>`, `<UNK>`).
-
-Large datasets are external and gitignored. Download the artifact snapshot or
-place compatible inputs under `data/`; see `data/README.md`.
-
-## Experiment tracking
-
-Supports both MLflow and W&B. Each run automatically logs:
-
-- Input file paths + SHA256 hashes (for data lineage)
-- Full model architecture and hyperparameters
-- Training metrics (loss, token accuracy, perplexity)
-- Checkpoints as MLflow artifacts when MLflow is enabled
-
-## Output
-
-The training script saves:
-
-- Checkpoints at `save_steps` intervals (keeps last 5)
-- Final model to `{output_dir}/final/` with model weights, config, tokenizer, and vocab
-- The final checkpoint is fully self-contained and loadable with `AutoModelForCausalLM.from_pretrained()`
+- **Vocabulary (`4,202` active / `4,208` padded):** `4,096` overlapping `6`-mers with stride `3` (`3` bp per token; `4,096`-token context spans `~12.3 kb`) plus `106` special tokens (`57` verifiable hard parts, `42` contextual soft metadata tags, `7` structural tokens).
+- **Architecture:** `10`-layer Llama-style causal Transformer (`d = 384`, `8` heads, `1,536` GELU FFN, RMSNorm `1e-5`, RoPE `theta = 10,000`, tied embeddings, `19,318,656` parameters).
+- **Pretraining regime (`cluster_disjoint_v2.py`):** Cross-entropy loss over DNA + `<EOS>` (prompt tokens masked at `-100`) for `100,000` steps (`effective batch = 64`, AdamW `lr = 3e-4`, cosine schedule with `1,000` warmup steps, weight decay `0.1`, `bfloat16`), random circular cut-point rotation, independent `0.2` dropout on `<SP_*>` / `<VEC_*>` context tags, and inverse-square-root minority oversampling (target fraction `0.1`, cap `4.0x`) across `<ORI_P15A>`, `<ORI_PSC101>`, `<AMR_CHLORAMPHENICOL>`, and `<COPY_LOW>`.
 
 ## Configs
 
-| Config | Description |
-|--------|-------------|
-| `p4_smoke_test.py` | 100-step pipeline test |
-| `p4_kmer6_s3.py` | 6-mer tokenizer, stride 3, dense FFN — the released base model |
-| `pretrain_g6big.py` | Single-GPU dense baseline with environment-configurable paths |
-
-All included configs default to the gitignored repository `data/` directory.
-Override `PLASMID_DATA_DIR` or the more specific path variables documented in
-each config when running elsewhere.
+| Config | Purpose | Status |
+|---|---|---|
+| `configs/cluster_disjoint_v2.py` | Released `v2.0` `100k`-step `cluster_v3` base model (`McClain/PlasmidLM-kmer6`) | **Current primary** |
+| `configs/p4_kmer6_s3.py` | Archived `v1.0` `65k`-step `6`-mer stride-`3` base on `training_pairs_v4.parquet` | Legacy `v1.0` (`v1` branch) |
+| `configs/p4_smoke_test.py` | `100`-step end-to-end smoke test | Smoke test |
+| `configs/pretrain_g6big.py` | Single-GPU dense baseline (`char` or `kmer`) | Experimental |

@@ -192,7 +192,7 @@ def main():
 
     print(f"Checkpoint: {checkpoint}")
     print(f"Repo: {args.repo}")
-    print(f"Files to upload:")
+    print("Files to upload:")
     total_size = 0
     for f in UPLOAD_FILES:
         size = (checkpoint / f).stat().st_size

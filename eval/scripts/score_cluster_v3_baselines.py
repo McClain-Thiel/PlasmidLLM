@@ -20,22 +20,17 @@ from __future__ import annotations
 
 import argparse
 import collections
-import hashlib
 import json
 import os
 import random
 import statistics
 import sys
-import tempfile
 import warnings
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
 from joblib import Parallel, delayed
 
 warnings.filterwarnings("ignore")
@@ -48,8 +43,6 @@ from experiments.neurips_rebuttal.common import (  # noqa: E402
     TOKEN_RE,
     detect,
     is_viable,
-    load_annotations,
-    wilson,
 )
 from eval.scripts.build_negative_controls import (  # noqa: E402
     dinucleotide_shuffle,
@@ -467,7 +460,6 @@ def main() -> None:
         results["Dinucleotide-shuffled"] = shuf_summary
 
     # Real held-out reference control
-    main_ids = set(main_panel["sample_id"].astype(str))
     main_idx = np.flatnonzero(panel_df["panel_main"].to_numpy())
     ref_raw = json.loads(ref_json.read_text())
     ref_by_id = {str(r["seq_id"]): r for r in ref_raw}

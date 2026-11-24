@@ -7,6 +7,15 @@ from post_training.algorithms.base import Algorithm, Scorer
 from post_training.algorithms.grpo import GRPOAlgorithm
 from post_training.algorithms.ppo import PPOAlgorithm
 
+__all__ = [
+    "ALGORITHM_REGISTRY",
+    "Algorithm",
+    "GRPOAlgorithm",
+    "PPOAlgorithm",
+    "Scorer",
+    "build_algorithm",
+]
+
 ALGORITHM_REGISTRY: dict[str, type[Algorithm]] = {
     "ppo": PPOAlgorithm,
     "grpo": GRPOAlgorithm,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Optional, Tuple
 
 import torch
@@ -239,9 +238,9 @@ class PlasmidLMModel(PlasmidLMPreTrainedModel):
             past_kv = past_key_values[i] if past_key_values else None
             if self.gradient_checkpointing and self.training:
                 # Gradient checkpointing recomputes activations on backward — no past_kv during training
-                def make_ckpt_fn(l):
+                def make_ckpt_fn(layer_module):
                     def fn(h, cos, sin):
-                        out, kv, aux = l(h, cos, sin, None, 0)
+                        out, kv, aux = layer_module(h, cos, sin, None, 0)
                         return out, kv[0], kv[1], aux
                     return fn
                 hidden_states, k, v, layer_aux = torch.utils.checkpoint.checkpoint(

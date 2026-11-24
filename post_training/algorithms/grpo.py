@@ -11,7 +11,7 @@ import logging
 import ray
 import torch
 
-from post_training.algorithms.base import Algorithm, Scorer
+from post_training.algorithms.base import Algorithm
 from post_training.common.utils import timer, wandb_log
 
 log = logging.getLogger(__name__)

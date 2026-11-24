@@ -35,9 +35,6 @@ from post_training.common.losses import LOSS_REGISTRY
 # instead of downloading (potentially stale) remote code from HuggingFace.
 from plasmid_llm.models.hf_plasmid_lm.configuration_plasmid_lm import PlasmidLMConfig
 from plasmid_llm.models.hf_plasmid_lm.modeling_plasmid_lm import PlasmidLMForCausalLM
-
-AutoConfig.register("plasmid_lm", PlasmidLMConfig)
-AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 from post_training.common.objects import (
     BackwardResult,
     EntropyResult,
@@ -45,6 +42,9 @@ from post_training.common.objects import (
     LogitsResult,
     LogProbResult,
 )
+
+AutoConfig.register("plasmid_lm", PlasmidLMConfig)
+AutoModelForCausalLM.register(PlasmidLMConfig, PlasmidLMForCausalLM)
 
 log = logging.getLogger(__name__)
 

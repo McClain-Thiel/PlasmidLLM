@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -174,7 +173,7 @@ def compute_prompt_fidelity(run_dir: Path, motif_registry: Path | None = None) -
     print(f"Prompt fidelity: {overall_fidelity:.1%} overall "
           f"(per-seq rows: {len(per_seq_df)}, rows with any hard tokens: "
           f"{int((per_seq_df['n_requested'] > 0).sum())})")
-    print(f"  Per category:")
+    print("  Per category:")
     for cat, r in sorted(category_rates.items()):
         print(f"    {cat}: {r['hit_rate']:.1%} ({r['n_found']}/{r['n_requested']})")
 
@@ -249,7 +248,6 @@ def compute_codon_usage(run_dir: Path) -> dict:
     from Bio import SeqIO
     from Bio.Seq import Seq
 
-    protein_path = run_dir / "orfs" / "prodigal_proteins.faa"
     gff_path = run_dir / "orfs" / "prodigal.gff"
 
     if not gff_path.exists():
@@ -350,7 +348,6 @@ def compute_codon_usage(run_dir: Path) -> dict:
             aa_codons[aa].append(codon)
 
     # Jensen-Shannon divergence between generated and E. coli codon usage
-    from scipy.stats import entropy
     from scipy.spatial.distance import jensenshannon
 
     # Per-amino-acid JSD

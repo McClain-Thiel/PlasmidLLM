@@ -103,7 +103,8 @@ def best_of_k(per_seed: list[pd.DataFrame], K: int,
 
 
 def rate_ci(vec: np.ndarray) -> tuple[float, float, float]:
-    k = int(vec.sum()); n = len(vec)
+    k = int(vec.sum())
+    n = len(vec)
     lo, hi = proportion_confint(k, n, alpha=0.05, method="wilson")
     return k / n, float(lo), float(hi)
 

@@ -120,7 +120,6 @@ def main():
     disc = json.load(open(run / "metrics" / "discriminator.json"))
 
     ref_metrics = pd.read_csv(ref_dir / "addgene_reference_metrics.csv")
-    ref_seqs = pd.read_csv(ref_dir / "addgene_reference_500.csv")
 
     # Load baselines
     baseline_t1 = {}

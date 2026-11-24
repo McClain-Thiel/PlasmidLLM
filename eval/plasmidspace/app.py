@@ -53,6 +53,7 @@ from bokeh.resources import CDN as BOKEH_CDN
 from plannotate.annotate import annotate as _plannotate_annotate
 from plannotate.bokeh_plot import get_bokeh as _plannotate_bokeh
 from plannotate import resources as _plannotate_rsc
+import transformers as _tf
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ---------------------------------------------------------------------------
@@ -257,7 +258,6 @@ for _tok in SPECIAL_TOKENS:
     _cat = _tok.strip("<>").split("_", 1)[0]
     TOKEN_BY_CATEGORY.setdefault(_cat, []).append(_tok)
 
-import transformers as _tf
 print(f"Ready: {len(SPECIAL_TOKENS)} tokens, device={DEVICE}, "
       f"transformers={_tf.__version__}, torch={torch.__version__}")
 

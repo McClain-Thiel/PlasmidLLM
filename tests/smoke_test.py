@@ -7,36 +7,53 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_data_files():
-    """Test that data files exist and are valid."""
+    """Test that tracked vocabulary files exist and local parquets have expected schemas."""
+    import json
     from pathlib import Path
     import pyarrow.parquet as pq
-    
+
     data_dir = Path(__file__).parent.parent / "data"
-    
+
     print("✓ Checking data files...")
-    
-    # Check special tokens
+
+    # Check special tokens (tracked in Git)
     special_tokens_path = data_dir / "special_tokens.txt"
     assert special_tokens_path.exists(), "Missing special_tokens.txt"
     with open(special_tokens_path) as f:
         tokens = [line.strip() for line in f if line.strip()]
-    assert len(tokens) > 0, "special_tokens.txt is empty"
+    assert len(tokens) == 106, f"Expected 106 special tokens, got {len(tokens)}"
     print(f"  ✓ special_tokens.txt: {len(tokens)} tokens")
-    
-    # Check training pairs
-    training_pairs_path = data_dir / "training_pairs_sample.parquet"
-    assert training_pairs_path.exists(), "Missing training_pairs_sample.parquet"
-    table = pq.read_table(training_pairs_path)
-    assert "full_text" in table.column_names
-    print(f"  ✓ training_pairs_sample.parquet: {len(table)} rows")
-    
-    # Check motif registry
-    motif_path = data_dir / "motif_registry.parquet"
-    assert motif_path.exists(), "Missing motif_registry.parquet"
-    table = pq.read_table(motif_path)
-    assert "token" in table.column_names
-    assert "sequence" in table.column_names
-    print(f"  ✓ motif_registry.parquet: {len(table)} rows")
+
+    # Check token vocabulary mapping (tracked in Git)
+    vocab_path = data_dir / "token_vocabulary_v4.json"
+    assert vocab_path.exists(), "Missing token_vocabulary_v4.json"
+    with open(vocab_path) as f:
+        vocab = json.load(f)
+    assert len(vocab) == 106, f"Expected 106 vocabulary entries, got {len(vocab)}"
+    print(f"  ✓ token_vocabulary_v4.json: {len(vocab)} entries")
+
+    # Check external training/validation parquet when downloaded locally
+    training_candidates = [
+        data_dir / "cluster_v3" / "validation.parquet",
+        data_dir / "training_pairs_v4.parquet",
+    ]
+    training_pairs_path = next((p for p in training_candidates if p.exists()), None)
+    if training_pairs_path is not None:
+        table = pq.read_table(training_pairs_path)
+        assert "full_text" in table.column_names
+        print(f"  ✓ {training_pairs_path.relative_to(data_dir)}: {len(table)} rows")
+
+    # Check external motif registry parquet when downloaded locally
+    motif_candidates = [
+        data_dir / "motif_registry_combined.parquet",
+        data_dir / "motif_registry.parquet",
+    ]
+    motif_path = next((p for p in motif_candidates if p.exists()), None)
+    if motif_path is not None:
+        table = pq.read_table(motif_path)
+        assert "token" in table.column_names
+        assert "sequence" in table.column_names
+        print(f"  ✓ {motif_path.relative_to(data_dir)}: {len(table)} rows")
 
 
 def test_tokenizer():
@@ -77,7 +94,7 @@ def test_tokenizer():
         ids = tokenizer.encode(seq)
         decoded = tokenizer.decode(ids)
         assert decoded == seq, f"Roundtrip failed: {seq} != {decoded}"
-        print(f"  ✓ DNA encoding/decoding works")
+        print("  ✓ DNA encoding/decoding works")
         
     finally:
         import os

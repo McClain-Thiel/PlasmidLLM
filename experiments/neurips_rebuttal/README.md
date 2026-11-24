@@ -1,99 +1,47 @@
-# NeurIPS 2026 rebuttal analyses
+# Rigor Evaluation & Rebuttal Analyses
 
-This directory contains the final analysis code used to answer reviewer concerns about
-benchmark leakage, reward/evaluator coupling, retrieval, specificity, and sequence reuse.
-It intentionally excludes machine-specific launch wrappers, generated outputs, and failed
-or superseded experiments. The exact historical runtime bundle is preserved with the
-external artifacts.
+This directory contains the evaluation, statistical inference, orthogonal validation, and sequence-reuse scripts for **PlasmidLM**.
 
-## Evidence ledger
+## 1. Sequence-Cluster-Disjoint Three-Seed Study (`cluster_v3` / `rigor_20261116`, Paper Primary Benchmark)
 
-| question | final evidence | main limitation |
-|---|---|---|
-| Does the GRPO effect survive a new source set? | Useful rate 30.0% → 39.8% on 1,000 source-plasmid-ID-disjoint prompts; paired delta +9.8 pp, 95% CI [+5.8, +13.8], McNemar p=2e-6 | The sources are not sequence-cluster-disjoint from pretraining |
-| Does GRPO recover motifs hidden from its reward? | Exact held-out registry recovery 8.56% → 10.34%; +1.79 pp, 95% CI [+1.16, +2.41], all four decoding seeds positive | Reward and evaluation still use pLAnnotate-style annotations; this is not wet-lab validation |
-| Could retrieval solve the submitted metric? | Directly annotated retrieval is 98.6% viable, 95.7% mean faithful, and 98.6% useful | It retrieves existing plasmids and therefore has no novelty |
-| Does an independent AMR annotator confirm the gain? | AMRFinderPlus delta +1.0 pp, 95% CI [-1.17, +3.27], p=0.30 | Covers AMR only and is underpowered for the registry-sized effect |
-| Does GRPO improve selectivity? | Conditional precision is flat; unrequested components increase from 2.28 to 3.05 per sequence in the blind-registry comparison | pLAnnotate calls are proxies for biological components |
-| How much output sequence is reused from training? | At ≥90% identity, median all-subject union coverage is 42.18% base, 60.55% GRPO, and 96.26% for real held-out controls; best-subject medians are 39.38%, 56.85%, and 83.46% | “Less than real controls” is not “no memorization”; GRPO reuses more training DNA than base |
+Replaces source-plasmid-ID splits with an independently audited circular `MMseqs2` + fixed-point `megablast` split (`11,352` clusters; `0` cross-split BLAST hits at `>= 90%` identity and `>= 90%` bidirectional coverage) and compares `PlasmidLM (supervised base)` (`cluster_base_s42`) against three independent GRPO-v2 post-training seeds (`exp2_v2_s42..44`) on `n = 468` held-out clusters (`frozen_panel_v3`) across `4` decoding seeds (`42–45`):
 
-The first benchmark excludes exact pretraining plasmid IDs, not close relatives. An
-exhaustive source-to-training check found that, at ≥90% identity, the median best training
-subject covers 84.59% of an evaluation source and 37.6% of sources have ≥90% coverage from
-one training plasmid. Use **source-plasmid-ID-disjoint**, never “fully disjoint” or
-“cluster-disjoint.”
+- **Primary yield (`T = 0.5`):** useful-plasmid rate rises from `47.7%` to `58.0% +- 0.7%` (`+10.3 pp`, `p_Holm = 0.0012`), reaching `74.7% +- 0.9%` at Best-of-`2` and `85.5% +- 0.8%` at Best-of-`4` (`99.2% +- 0.4%` viable).
+- **Orthogonal protein validation (`Prodigal v2.6.3` + `NCBI AMRFinderPlus v4.2.7`):** intact bacterial resistance-gene recovery increases from `55.2%` to `61.0% +- 0.2%` across all `11` classes (`p_Holm = 0.0012`) and `58.9%` to `65.0% +- 0.3%` across the `9` bacterial classes covered by AMRFinderPlus (`82.7%` at Best-of-`4`); `0` virulence hits (`--plus`) across `7,488` evaluated generations.
+- **Unseen combinations & sequence novelty:** consistent gains on both seen (`n = 360`: `48.7% -> 58.9%`) and unseen (`n = 108`: `44.4% -> 54.9%`, `p = 0.0004`) hard-token specifications; exhaustive `megablast` against all `18,895` unique training plasmids confirms `81.1% +- 0.9%` novelty (`< 90%` bidirectional coverage) for post-GRPO vs. `72.2%` for base and `0.0%` for retrieval.
+- **Clean-prompt sensitivity & failure modes:** masking noisy upstream `<ELEM_IRES>`/`<ELEM_TRACRRNA>` prompt labels raises the held-out Addgene `Mean F` ceiling from `75.8%` to `100.0%` and post-GRPO exact `T = 1.00` usefulness from `17.0%` to `23.6%` (`p = 0.0002`); rare origins (`<ORI_P15A>` `7.4%`, `<ORI_PSC101>` `13.1%`), `<COPY_LOW>` (`1.9%` compatible alone), peptide tags (`+1.8 pp`, `p = 0.4452`), and `4,096`-token length drift (`70.8%` cap hits) remain documented bottlenecks.
 
-## Files
+### Key Scripts (`cluster_v3`)
 
-| file | purpose |
+| File | Purpose |
 |---|---|
-| `common.py` | Shared prompt parsing, pLAnnotate detection, viability, and paired statistics |
-| `build_benchmark.py` | Reconstruct prompts from source plasmids whose IDs are absent from pretraining |
-| `score.py` | Useful rate, faithfulness, precision, extras, and paired model comparison |
-| `score_bestofk.py` | Paper-compatible oracle best-of-K scoring |
-| `baselines.py` | Prompt-Jaccard retrieval and unconditional-generation baselines |
-| `orthogonal.py` | AMRFinderPlus scoring independent of the reward registry |
-| `build_registry_split.py` | Within-token connected-component split of reward and held-out motif references |
-| `verify_registry_split.py` | Exhaustive BLAST verification of the registry split |
-| `heldout_registry_multiseed.py` | Four-seed exact held-out-reference endpoint |
-| `multiseed_generation_guardrails.py` | Paired viability, faithfulness, precision, and extra-component endpoints |
-| `exhaustive_training_mosaic.py` | Exhaustive generation/control BLAST against every training plasmid |
-| `summarize_exhaustive_blast_thresholds.py` | Identity-threshold sensitivity analysis, including zero-hit queries |
+| `summarize_rigor_evaluation.py` | Main summary, Best-of-`K`, paired `10,000`-resample cluster+seed bootstrap CIs, Holm–Bonferroni tests, CSV tables, and `REPORT.md` |
+| `manuscript_diagnostics.py` | Reproduces clean-prompt sensitivity (Table 6), complete BoK-2/4 orthogonal metrics (Tables 1 & 5), Table 7 AMR-11 SDs, `<EOS>` stratification (Table 9A), Seen/Unseen split (Table 9B), virulence screen (Sec. 6), and exhaustive `megablast` novelty (Table 9C) |
+| `orthogonal.py` | `Prodigal` + `NCBI AMRFinderPlus` intact resistance-gene scoring |
+| `common.py` | Shared token parsing, `pLannotate` detection, viability rules, and paired bootstrap statistics |
 
-## Reproduction
-
-Install the analysis dependencies and external command-line tools:
+Archived outputs: [`hf://buckets/McClain/PlasmidLMEval/rigor_20261116/`](https://huggingface.co/buckets/McClain/PlasmidLMEval) (verified by `eval/runs/rigor_20261116/SHA256SUMS`).
 
 ```bash
-uv sync --extra rebuttal
-# Also required on PATH: blastn, makeblastdb, pLAnnotate, Prodigal, AMRFinderPlus.
+uv run --extra rebuttal python experiments/neurips_rebuttal/manuscript_diagnostics.py
 ```
 
-Set `REBUTTAL_ROOT` to the downloaded `neurips_2026_rebuttal` snapshot (`hf://buckets/McClain/PlasmidLMEval/neurips_2026_rebuttal/`):
+---
 
-```bash
-export REBUTTAL_ROOT=/path/to/neurips_2026_rebuttal/s3/neurips_rebuttal
-```
+## 2. Historical `v1.0` Source-ID-Disjoint & Blind-Registry Archive (`neurips_2026_rebuttal`)
 
-For the three-seed sequence-cluster-disjoint rigor study (`frozen_panel_v3`), see:
-- `pretraining/build_cluster_split.py`, `pretraining/refine_cluster_split.py`, `pretraining/verify_cluster_split.py`
-- `pretraining/configs/cluster_disjoint_v2.py`
-- `post_training/scorers/plannotate_v2.py` and `post_training/configs/grpo_reward_ablation.py`
-- `experiments/neurips_rebuttal/summarize_rigor_evaluation.py` and `experiments/neurips_rebuttal/orthogonal.py`
-- Archived outputs: `hf://buckets/McClain/PlasmidLMEval/rigor_20261116/`
+Preserved for provenance alongside `hf://buckets/McClain/PlasmidLMEval/neurips_2026_rebuttal/`. Because source-plasmid-ID splitting (`v1.0`) leaves near-identical backbones across splits (`84.59%` median best training-subject coverage), all primary claims in the paper supersede this earlier split with the certified `cluster_v3` partition above.
 
-The canonical blind-registry inputs and results are under
-`$REBUTTAL_ROOT/m13_blind_v2_g7e/`; checkpoints are under the sibling
-`$REBUTTAL_ROOT/grpo_m13_blind_v2_g7e_ckpt/`. The exhaustive BLAST inputs, raw TSVs,
-summaries, and checksums are under
-`$REBUTTAL_ROOT/exhaustive_training_mosaic_20260727/`.
+| File | Purpose |
+|---|---|
+| `build_benchmark.py` | Source-plasmid-ID-disjoint prompt reconstruction (`v1.0`) |
+| `score.py`, `score_bestofk.py`, `baselines.py` | Source-ID-disjoint scoring and retrieval baselines |
+| `build_registry_split.py`, `verify_registry_split.py`, `heldout_registry_multiseed.py` | Within-token blind-registry split (`8.56% -> 10.34%`) |
+| `multiseed_generation_guardrails.py` | Four-seed paired guardrail checks |
+| `exhaustive_training_mosaic.py`, `summarize_exhaustive_blast_thresholds.py` | Exhaustive BLAST sequence reuse on `v1.0` |
+| `reward_preflight.py` | Pre-run reward component sanity checks |
 
-For the original source-ID-disjoint comparison:
+## Methodology Notes
 
-```bash
-uv run --extra rebuttal python experiments/neurips_rebuttal/score.py \
-  --benchmark "$REBUTTAL_ROOT/artifacts/disjoint_benchmark.parquet" \
-  --panel "base=$REBUTTAL_ROOT/artifacts/gen_base/plannotate_results.json" \
-  --panel "grpo=$REBUTTAL_ROOT/artifacts/gen_grpo/plannotate_results.json" \
-  --paired base,grpo --precision
-```
-
-For the blind-registry endpoint, pass matched seeds 42–45 from the archived base and
-treatment annotation directories to `heldout_registry_multiseed.py`; the script rejects
-missing or unmatched seeds. For exhaustive sequence reuse, run
-`exhaustive_training_mosaic.py` first and then
-`summarize_exhaustive_blast_thresholds.py`, explicitly adding any zero-length/zero-hit
-queries reported by generation.
-
-## Superseded analyses
-
-- Any BLAST analysis using `-max_target_seqs 5` is invalid for corpus-wide mosaic
-  coverage and must not be cited.
-- The initial novel-combination “0% full specification” result was confounded by component
-  producibility. In the producible subset, novel-context component recovery is roughly
-  half of matched familiar-context recovery, not zero.
-- Prompt-conditional lift distinguishes prompted from unconditional generation, but a
-  prompt-matched retrieval baseline has still higher lift. It is a diagnostic, not
-  evidence of superiority over retrieval.
-- Failed CFG and targeted-GRPO repair attempts are retained in the external historical
-  archive for provenance, not in this release directory.
+- Always use full-corpus `-max_target_seqs |train|` for exhaustive `megablast` mosaic coverage (`-max_target_seqs 5` is invalid).
+- Failed historical CFG and targeted-GRPO pilots remain in external provenance storage only.

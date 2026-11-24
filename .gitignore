@@ -8,6 +8,7 @@ data/*
 !eval/reference/*.csv
 !eval/config/*.csv
 *.log
+eval/figures/
 eval/scorers/cache/
 eval/runs/
 # eval/baselines FASTA files are generated locally, not tracked in git
@@ -80,6 +81,8 @@ wandb/
 .paper-audit/
 .claude/
 .licenses/
+.ruff_cache/
+.uv-cache/
 infra/anyscale/eval_plans/
 infra/anyscale/workflow_*.json
 notebooks/__marimo__/

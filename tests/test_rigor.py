@@ -555,7 +555,6 @@ def test_sharded_verify_split_passes_clean_and_catches_rotated_leak(tmp_path):
 def test_refine_cluster_split_resolves_multi_hsp_insert_leakage(tmp_path):
     import hashlib
     import json
-    from pathlib import Path
     from pretraining.build_cluster_split import sha256_file
     from pretraining.refine_cluster_split import refine_split
     from pretraining.verify_cluster_split import verify_split

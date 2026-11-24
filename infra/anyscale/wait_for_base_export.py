@@ -6,7 +6,6 @@ import argparse
 import json
 import time
 from collections.abc import Callable
-from pathlib import Path
 from urllib.parse import urlparse
 
 import boto3

@@ -12,7 +12,6 @@ import base64
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -27,7 +26,6 @@ from plasmid_llm.provenance import s3_readback_sha256
 
 @ray.remote(num_gpus=1)
 def verify_cuda_equivalence() -> dict:
-    import torch.nn.functional as F
     from plasmid_llm.models.hf_plasmid_lm import PlasmidLMConfig, PlasmidLMForCausalLM
 
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
@@ -159,7 +157,10 @@ def benchmark_pretraining_microbatch(split_prefix: str, microbatch: int, steps: 
         stride = max(1, tbl.num_rows // 4096)
         pq.write_table(tbl.take(list(range(0, tbl.num_rows, stride))[:4096]), sub_path)
 
-        vocab = build_kmer_vocab([l.strip() for l in Path("data/special_tokens.txt").read_text().splitlines() if l.strip()], k=6)
+        vocab = build_kmer_vocab(
+            [line.strip() for line in Path("data/special_tokens.txt").read_text().splitlines() if line.strip()],
+            k=6,
+        )
         vocab_path = work / "vocab.json"
         vocab_path.write_text(json.dumps(vocab))
         tok = PlasmidKmerTokenizer(str(vocab_path), k=6, stride=3)
@@ -260,7 +261,7 @@ def main() -> None:
         raise FileExistsError(f"Benchmark output already exists: {output_uri}")
 
     install_blast()
-    run = wandb.init(
+    wandb.init(
         project="PlasmidLLM",
         name=os.environ.get("PLASMID_RUN_ID", "rigor_20261116_fast_path_benchmark_s42"),
         tags=["plasmidrl", "benchmark", "fast-path"],

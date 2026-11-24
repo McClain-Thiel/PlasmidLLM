@@ -19,10 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
-import sys
-import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -69,7 +66,6 @@ def parse_prodigal_gff(gff_path: str) -> dict[str, list[dict]]:
             attrs = parts[8]
 
             # Check for valid start/stop
-            has_start = "start_type=" in attrs
             partial = "partial=10" in attrs or "partial=01" in attrs or "partial=11" in attrs
 
             orfs_by_seq[seq_id].append({
@@ -375,7 +371,7 @@ def compute_memorization(run_dir: Path, ref_dir: Path) -> pd.DataFrame:
 
     # Search against training
     search_out = metrics_dir / "memorization_search.csv"
-    result = subprocess.run([
+    subprocess.run([
         "sourmash", "search",
         str(gen_sig), str(training_sig),
         "--containment", "--threshold", "0.3",
@@ -407,7 +403,6 @@ def compute_discriminator(run_dir: Path, ref_dir: Path) -> dict:
 
     metrics_dir = run_dir / "metrics"
     tier1_path = metrics_dir / "tier1_distributional.parquet"
-    tier3_path = metrics_dir / "tier3_essentials.parquet"
 
     if not tier1_path.exists():
         raise FileNotFoundError(
@@ -419,7 +414,6 @@ def compute_discriminator(run_dir: Path, ref_dir: Path) -> dict:
     gen_t1["label"] = 1  # generated
 
     # Build features for real sequences from reference
-    ref_metrics = pd.read_csv(ref_dir / "addgene_reference_metrics.csv")
     ref_seqs = pd.read_csv(ref_dir / "addgene_reference_500.csv")
 
     # Compute matching features for real sequences
@@ -500,7 +494,7 @@ def compute_discriminator(run_dir: Path, ref_dir: Path) -> dict:
         plt.tight_layout()
         plt.savefig(metrics_dir / "shap_summary.png", dpi=150)
         plt.close()
-        print(f"Discriminator: SHAP plot saved")
+        print("Discriminator: SHAP plot saved")
     except Exception as e:
         print(f"Discriminator: SHAP plot failed: {e}")
 

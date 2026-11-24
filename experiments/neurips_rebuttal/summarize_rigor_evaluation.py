@@ -31,7 +31,6 @@ from experiments.neurips_rebuttal.common import (  # noqa: E402
     category_of,
     detect,
     is_viable,
-    load_annotations,
     summarize_paired_training_seeds,
     wilson,
 )

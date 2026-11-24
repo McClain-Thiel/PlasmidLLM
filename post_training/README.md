@@ -34,8 +34,9 @@ The actor never imports an algorithm. The algorithm never subclasses the actor. 
 post_training/
 ├── config.py           # PostTrainingConfig dataclass
 ├── configs/
-│   ├── grpo_plannotate_anyscale.py             # produced the released checkpoint
-│   ├── grpo_plannotate_v3_anyscale.py          # adds length penalty, longer schedule
+│   ├── grpo_reward_ablation.py               # v2.0 three-seed GRPO-v2 (F1 + R_ORF + R_tag)
+│   ├── grpo_plannotate_anyscale.py           # legacy v1.0 recall-only reward config
+│   ├── grpo_plannotate_v3_anyscale.py        # adds length penalty, longer schedule
 │   └── grpo_plannotate_curriculum_anyscale.py  # motif→plannotate curriculum variant
 ├── common/
 │   ├── model.py        # ModelActor — Ray remote GPU worker
@@ -50,7 +51,8 @@ post_training/
 │   ├── base.py          # Scorer ABC (score_sequence / score_batch)
 │   ├── alignment.py     # AlignmentScorer — Smith-Waterman score-ratio
 │   ├── motif.py         # MotifScorer — CIGAR-based parasail alignment
-│   └── plannotate.py    # Batched BLAST scorer used by the released GRPO run
+│   ├── plannotate.py    # Legacy v1.0 batched BLAST scorer
+│   └── plannotate_v2.py # v2.0 specificity- and ORF-aware scorer (F1 + R_ORF + R_tag)
 └── runners/
     ├── run.py           # Config-driven runner (main entrypoint)
     └── run_grpo.py      # CLI wrapper for quick GRPO experiments
@@ -62,8 +64,8 @@ post_training/
 # Local smoke test (builds a temporary config from flags, toy scorer only)
 python -m post_training.runners.run_grpo --model gpt2 --steps 10
 
-# Reproducible pLAnnotate runs use a checked-in config and the Anyscale launcher.
-CONFIG=grpo_plannotate_anyscale bash infra/anyscale/submit.sh
+# Canonical v2.0 three-seed GRPO (F1 + R_ORF + R_tag)
+PLASMID_REWARD_VERSION=v2 PLASMID_SEED=44 python -m post_training.runners.run post_training/configs/grpo_reward_ablation.py
 ```
 
 ## Configuration
@@ -154,9 +156,10 @@ python -m post_training.runners.run post_training/configs/my_run.py
 
 | Config | Algorithm | Scorer | Model | Purpose |
 |--------|-----------|--------|-------|---------|
-| `grpo_plannotate_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Released checkpoint (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) |
-| `grpo_plannotate_v3_anyscale.py` | GRPO | plannotate | PlasmidLM-kmer6 | Adds length penalty to discourage sequence drift |
-| `grpo_plannotate_curriculum_anyscale.py` | GRPO | plannotate | binary_motif checkpoint | Motif→plannotate curriculum variant (ablation) |
+| `grpo_reward_ablation.py` | GRPO | `plannotate_v2` | `cluster_base_s42` (`PlasmidLM-kmer6` v2.0) | Released `v2.0` 3-seed GRPO-v2 (`McClain/PlasmidLM-kmer6-GRPO-plannotate`) |
+| `grpo_plannotate_anyscale.py` | GRPO | `plannotate` | `hf_base` (`v1.0`) | Legacy `v1.0` recall-only GRPO checkpoint (`v1` branch) |
+| `grpo_plannotate_v3_anyscale.py` | GRPO | `plannotate` | `PlasmidLM-kmer6` | Adds length penalty to discourage sequence drift |
+| `grpo_plannotate_curriculum_anyscale.py` | GRPO | `plannotate` | binary_motif checkpoint | Motif→plannotate curriculum variant (ablation) |
 
 The released step-800 checkpoint used `norm_score_cap=5.0` and no length penalty.
 `grpo_plannotate_anyscale.py` pins that historical value explicitly; later exploratory
@@ -213,7 +216,8 @@ Scorers are independent of the training infrastructure. They implement `score_se
 |-------------|-------------------|-------------|
 | `alignment` | `AlignmentScorer` | Smith-Waterman score-ratio using parasail. Scores DNA and protein (6-frame translation). Per-component scores capped at 1.0, optional EOS bonus. |
 | `motif`     | `MotifScorer`     | CIGAR-based semi-global alignment via parasail. Three-pass: k-mer pre-filter, score-only alignment, full trace. Composite score = quality x recall penalty. |
-| `plannotate` | `PlannotateScorer` | Batched nucleotide/protein BLAST against the pLAnnotate feature database through the motif-registry token bridge. |
+| `plannotate` | `PlannotateScorer` | Legacy `v1.0` batched nucleotide/protein BLAST against `motif_registry_combined.parquet`. |
+| `plannotate_v2` | `PlannotateV2Scorer` | **Primary `v2.0` reward** (`0.6 F1 + 0.3 R_ORF + 0.1 R_tag`) using parallel `blastn`/`blastx`/`blastp` (`90%` id, `80%` ref cov) + complete Table-11 circular ORFs & exact peptide tags. |
 | `binary_motif` / `fractional_motif` | Curriculum scorers | Exact or partial motif placement rewards used in ablations. |
 | `valid` | `ValidPlasmidScorer` | Sequence-level validity checks. |
 

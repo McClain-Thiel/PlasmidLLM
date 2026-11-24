@@ -10,7 +10,6 @@ Outputs FASTA files into eval/baselines/{random,shuffled,real}/.
 """
 
 import argparse
-import random
 from pathlib import Path
 
 import numpy as np
