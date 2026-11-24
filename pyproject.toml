@@ -1,8 +1,24 @@
 [project]
 name = "plasmid-llm"
 version = "0.1.0"
-description = "Language models for plasmid DNA sequence generation"
+description = "PlasmidLM: A Promptable DNA Language Model via Verifiable-Reward Post-Training"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "McClain Thiel" },
+    { name = "Chris P. Barnes" },
+]
+keywords = [
+    "plasmid",
+    "DNA",
+    "dna-language-model",
+    "reinforcement-learning",
+    "GRPO",
+    "synthetic-biology",
+    "genomics",
+    "bioinformatics",
+]
 dependencies = [
     "torch>=2.1,<2.10",
     "transformers>=4.38",
@@ -54,3 +70,12 @@ markers = ["integration: requires Ray + model download (may be slow)"]
 dev = [
     "marimo>=0.23.1",
 ]
+
+[project.urls]
+Homepage = "https://doi.org/10.64898/2026.05.19.725242"
+Repository = "https://github.com/McClain-Thiel/PlasmidLLM"
+Paper = "https://doi.org/10.64898/2026.05.19.725242"
+Models = "https://huggingface.co/McClain/PlasmidLM-kmer6-GRPO-plannotate"
+Dataset = "https://huggingface.co/datasets/McClain/PlasmidLM-Eval"
+Demo = "https://huggingface.co/spaces/McClain/PlasmidSpace"
+Issues = "https://github.com/McClain-Thiel/PlasmidLLM/issues"

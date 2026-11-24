@@ -8,6 +8,8 @@
 |---|---|---|
 | **PlasmidLM (supervised base)** | [`McClain/PlasmidLM-kmer6`](https://huggingface.co/McClain/PlasmidLM-kmer6) | `main` (`v2.0`): `100k`-step `cluster_v3` base (`v1` branch preserves `v1.0`) |
 | **PlasmidLM (post-GRPO)** | [`McClain/PlasmidLM-kmer6-GRPO-plannotate`](https://huggingface.co/McClain/PlasmidLM-kmer6-GRPO-plannotate) | `main` (`v2.0` seed `44`); `v2-seed{42,43,44}` & ablation branches archived |
+| **Benchmark Summaries & Vocabulary** | [`McClain/PlasmidLM-Eval`](https://huggingface.co/datasets/McClain/PlasmidLM-Eval) | `frozen_panel_v3` metrics CSV, 106-token vocabulary table, and SHA-256 checksums |
+| **Interactive Demo (Gradio Space)** | [`McClain/PlasmidSpace`](https://huggingface.co/spaces/McClain/PlasmidSpace) | Interactive plasmid design from part prompts with live `pLannotate` annotation |
 | **Evaluation & Rigor Archive** | [`hf://buckets/McClain/PlasmidLMEval`](https://huggingface.co/buckets/McClain/PlasmidLMEval) | `rigor_20261116/` (`frozen_panel_v3` outputs, SHA-256 verified) & `neurips_2026_rebuttal/` |
 | **Datasets & Certified Split** | [`hf://buckets/McClain/PlasmidRL`](https://huggingface.co/buckets/McClain/PlasmidRL) | `datasets/cluster_v3/` (`93,900` train / `4,728` val / `4,939` test pairs) & `datasets/v4/` |
 | **Training Logs** | [Weights & Biases (`mcclain/PlasmidLLM`)](https://wandb.ai/mcclain/PlasmidLLM) | Pretraining and three-seed GRPO telemetry |
