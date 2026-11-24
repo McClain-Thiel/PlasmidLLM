@@ -10,6 +10,7 @@ authors:
   - family-names: Barnes
     given-names: Chris P.
     affiliation: University College London
+repository-code: "https://github.com/McClain-Thiel/PlasmidLLM"
 license: Apache-2.0
 preferred-citation:
   type: article
